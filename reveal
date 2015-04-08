@@ -5,19 +5,24 @@ Created on Thu Oct  2 13:26:24 2014
 @author: jasperlinthorst
 """
 
+import sys
+if not sys.version_info[0] == 2:
+    print("Invalid version of python, use python 2.")
+    sys.exit(1)
+
 import math
 import logging
 import os
 import argparse
 import gzip
 import pickle
-import seqalign
 import xmlrpclib
 import uuid
 import glob
 import random
 import colorsys
-import sys
+
+import seqalign
 
 def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
         
@@ -538,7 +543,7 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
     return filename, nvars, ngaps, ninversions, nsvs
     
 
-def graph_aln(i, coordsystem=None, kseed=10000, pcutoff=1e-5, clipping=True, 
+def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=True, 
               minfrac=None, gapopen=-2, gapextend=-1):
     global totalignedseq
     
@@ -554,20 +559,28 @@ def graph_aln(i, coordsystem=None, kseed=10000, pcutoff=1e-5, clipping=True,
     tips=set()
     skip=set()
     
+    seeds=0
     while len(stack)>0:
+        if seeds==nseed:
+            logging.debug("Reached max number of seeds, stop seeding")
+            break
+        
         index=stack.pop(0)
         i=index
         if index==None: #received execute signal, break out of the loop
             break
         
-        logging.debug("Extracting all MUMs larger than %s to seed the alignment", kseed)
-        matches=index.get_mums(kseed)
-        
-        #check_colinearity(matches)
+        if kseed!=None:
+            logging.debug("Extracting all MUMs larger than %s to seed the alignment", kseed)
+            matches=index.get_mums(kseed)
+            #check_colinearity(matches)
+        else:
+            logging.debug("Extracting %s out of max. %s seeds", seeds, nseed)
+            matches=[index.get_mum()]
+            seeds+=1
         
         if matches==None:
-            logging.debug("No more MUMs larger than %s in global index, proceeding with single next largest MUM",kseed)
-            stack.append(index)
+            logging.debug("No more valid seeds in global index")
             break
         
         if len(matches)>1:
@@ -968,7 +981,6 @@ def graph_aln(i, coordsystem=None, kseed=10000, pcutoff=1e-5, clipping=True,
                         if v.input_origin==1:
                             v.indexed=2
                 
-                #print [(v.id, v.indexed, v.input_origin) for v,o in bubble]
                 bi=bitmp.extract(set([v for v,o in bubble]))
                 
                 del(bitmp)
@@ -1374,18 +1386,18 @@ def check_index(index):
                 continue
             
             if T[SA[i]:SA[i]+l]!=T[SA[i-1]:SA[i-1]+l]:
-                print 'INVALID SA/LCP --> LCP too large', index.n, index.LCP, i
+                #print 'INVALID SA/LCP --> LCP too large', index.n, index.LCP, i
                 printSA(index,start=i-10)
                 assert(True==False)
                 
             if T[SA[i]+l]==T[SA[i-1]+l] and (T[SA[i]+l]!='$' and T[SA[i-1]+l]!='$'):
-                print 'INVALID SA/LCP --> LCP too small', index.n, index.LCP, i
+                #print 'INVALID SA/LCP --> LCP too small', index.n, index.LCP, i
                 printSA(index,start=i-1,n=3)
                 assert(True==False)
     
-    if len(np.unique(SA))!=len(SA):
-        print 'SA',SA
-        print 'uSA',np.unique(SA)
+    #if len(np.unique(SA))!=len(SA):
+    #    print 'SA',SA
+    #    print 'uSA',np.unique(SA)
     
     assert(len(np.unique(SA))==len(SA))
     
@@ -1393,7 +1405,8 @@ def check_index(index):
     
     for s in SA:
         if TIiv[s]==None:
-            print s
+            #print s
+            pass
         assert(TIiv[s]!=None)
         tmp.append(TIiv[s].id)
         assert(s<len(SAi))
@@ -1417,7 +1430,8 @@ def check_index(index):
         
     for i,c in enumerate(SA):
         if (SAi[c]!=i):
-            print c,i,SAi[c]
+            #print c,i,SAi[c]
+            pass
         
         assert(SAi[c]==i)
 
@@ -1633,21 +1647,22 @@ def plot_graph(index):
 
 #-l10 -n --noclipping -k1000 -c /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/PacBioCHM1_bychromosome/targets_for_chr1.fasta
 def main():
-    usage = "usage: reveal.py [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
+    usage = "reveal [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
     parser = argparse.ArgumentParser(usage)
     parser.add_argument('graphs', nargs='*', help='Fasta or gfasta files specifying either assembly/alignment graphs (.gfasta) or sequences (.fasta). When only one gfasta file is supplied, variants are called within the gfasta file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     parser.add_argument("-n", "--norc", action="store_false", dest="rcindex", default=True, help="Whether to index reverse complements of nodes/contigs as well.")
-    parser.add_argument("-k", dest="kseed", type=int, default=10000, help="MUMs over this size will be aligned throughout the graphs to start up the alignment process (default 10000).")
-    parser.add_argument("-p", dest="pcutoff", type=float, default=1e-5, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped.")
-    parser.add_argument("--gapopen", dest="gapopen", type=int, default=-5, help="Gap open penalty")
-    parser.add_argument("--gapextend", dest="gapextend", type=int, default=-1, help="Gap extension penalty.")
-    parser.add_argument("-f", dest="minfrac", type=float, default=None, help="If the fraction of MUM over the sequence aligned in a bubble is larger than this value, skip p-value calculation. Allows skipping p-value calculation for smaller bubbles, smaller bubbles means more variant calls.")
-    parser.add_argument("-c", "--coordinate-system", dest="coordsystem", default=None, help="The name (*** so not the actual file) of the input file to be used to keep track of locations of variations, such that they can be annotated later on.")
+    parser.add_argument("-s", dest="nseed", type=int, default=1, help="Max number of seeds to start up the alignment process (default 1).")
+    parser.add_argument("-k", dest="kseed", type=int, default=None, help="MUMs over this size will be used to seed the alignment process, overrides -s if specified.")
+    parser.add_argument("-p", dest="pcutoff", type=float, default=1e-5, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-5).")
+    parser.add_argument("--gapopen", dest="gapopen", type=int, default=-5, help="Gap open penalty (default -5).")
+    parser.add_argument("--gapextend", dest="gapextend", type=int, default=-1, help="Gap extension penalty (default -1).")
+    parser.add_argument("-f", dest="minfrac", type=float, default=None, help="If the fraction of exact matching sequence over all sequence in a bubble is larger than this value, skip p-value calculation. Allows skipping significance calculation for smaller bubbles, smaller bubbles means more fine-grained variant calling.")
+    parser.add_argument("-c", "--coordinate-system", dest="coordsystem", default=None, help="The name (so not the actual file!) of the input file to be used to keep track of locations of variations, such that they can be annotated later on.")
     parser.add_argument("-l", "--log-level", dest="loglevel", default=20, type=int, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal")
     parser.add_argument("--clipping", action="store_true", dest="clipping", default=False, help="Whether or not to clip off tip nodes after the alignment")
     parser.add_argument("--64", dest="large", action="store_true", default=False, help="Whether we need a 64 bit integers to store suffix array")
-    parser.add_argument("--cytoscape", dest="cytoscaperpcloc", default=None, help="The address and port of a cytoscape-rpc server for plotting the resulting alignment graph (e.g. localhost:9000)")
+    parser.add_argument("--cytoscape", dest="cytoscaperpcloc", default=None, help="The address and port of a cytoscape-xmlrpc server for plotting the resulting alignment graph (e.g. localhost:9000)")
     parser.add_argument("--vcfmin", dest="minvarsize", default=0, type=int, help="The min size of a variant for it be written to the vcf.")
     parser.add_argument("--vcfmax", dest="maxvarsize", default=None, type=int, help="The max size of a variant for it to be written to the vcf.")
     parser.add_argument("--invmin", dest="minnwsize", default=10, type=int, help="The min inversion detection size, inversions smaller than this threshold will not be reported in the vcf INFO field 'INVERSION'.")
@@ -1693,6 +1708,7 @@ def main():
     
     global identity
     identity=[]
+    
     #align specified graphs/sequences
     for i in range(1,len(args.graphs)):
         if (i==1):
@@ -1732,11 +1748,13 @@ def main():
                 index.graph=rindex.graph
                 #for every subgraph, do graph align
                 g=graph_aln(index,coordsystem=args.coordsystem,
+                                nseed=args.nseed,
                                 kseed=args.kseed,
                                 pcutoff=args.pcutoff, clipping=args.clipping,
                                 minfrac=args.minfrac)
         else:
             g=graph_aln(rindex,coordsystem=args.coordsystem,
+                                nseed=args.nseed,
                                 kseed=args.kseed,
                                 pcutoff=args.pcutoff, clipping=args.clipping,
                                 minfrac=args.minfrac, gapextend=args.gapextend,
@@ -1793,16 +1811,9 @@ def main():
         
         n=len(g.origins)
         
-        #d=dict()
         for v in g.vertices.values():
             l=v.contig_end-v.contig_start
             allseq+=l
-            
-            #if d.has_key(len(v.origin)):
-            #    d[len(v.origin)]+=l
-            #else:
-            #    d[len(v.origin)]=l
-            
             if len(v.origin)==n: #node is common to all input genomes
                 commonseq+=l
         
