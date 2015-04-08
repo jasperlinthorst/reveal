@@ -31,17 +31,17 @@ If libdivsufsort is installed, REVEAL can be installed by executing the followin
 
 ##RUN
 
-To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:
+To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:  
 
-**reveal -k1000 tests/1a.fa tests/1b.fa**
-
-If everything is correctly installed, the produced output should end with the following lines:
-
-...
-03/03/2015 01:15:01 PM Identity (tot\_aligned\_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 75.70%.
-03/03/2015 01:15:01 PM 0 out of 318681 bases are not aligned.
-03/03/2015 01:15:01 PM 0 vertices are not aligned.
-03/03/2015 01:15:01 PM All graphs/sequences are aligned.
+**reveal -k1000 tests/1a.fa tests/1b.fa**  
+  
+If everything is correctly installed, the produced output should end with the following lines:  
+  
+...  
+03/03/2015 01:15:01 PM Identity (tot\_aligned\_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 75.70%.  
+03/03/2015 01:15:01 PM 0 out of 318681 bases are not aligned.  
+03/03/2015 01:15:01 PM 0 vertices are not aligned.  
+03/03/2015 01:15:01 PM All graphs/sequences are aligned.  
 
 The following files should now have been produced:
 - 1a\_1b.gfasta.gz - containing the alignment graph
