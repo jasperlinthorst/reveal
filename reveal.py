@@ -19,118 +19,6 @@ import random
 import colorsys
 import sys
 
-#def group_mums(mums):
-    
-    
-
-def check_colinearity(mums):
-    matches=dict()
-    for i,m in enumerate(mums):
-        n1=m[3]
-        n2=m[4]
-        n1start=m[0]
-        n2start=m[1]
-        l=m[2]
-        n1end=n1start+l
-        n2end=n2start+l
-        rc=m[5]
-        if matches.has_key(n1):
-            matches[n1].append(((n1start,n1end),(n2,n2start,n2end,i)))
-        else:
-            matches[n1]=[((n1start,n1end),(n2,n2start,n2end,i))]
-        if matches.has_key(n2):
-            matches[n2].append(((n2start,n2end),(n1,n1start,n1end,i)))
-        else:
-            matches[n2]=[((n2start,n2end),(n1,n1start,n1end,i))]
-    
-    for v in matches.keys(): #for every node check if MUMS are colinear
-        mv=sorted(matches[v],key=lambda match: match[0][0]) #sort by start in v
-        v1e=mv[0][0][0]
-        v2=mv[0][1][0]
-        v2e=mv[0][1][2]
-        p=set()
-        for m in mv[1:]:
-            print m
-            start1=m[0][0]
-            end1=m[0][1]
-            start2=m[1][1]
-            end2=m[1][2]
-            node=m[1][0]
-            if m[1][0] in p:
-                raise Exception("1 No colinearity in seeds, use larger k for seeding the alignment.")
-            if start1<v1e:
-                raise Exception("2 No colinearity in seeds, use larger k for seeding the alignment.")
-            if node!=v2: #different node?
-                p.add(v2)
-                v2=m[1][0]
-                v1e=end1
-                v1b=start1
-                v2e=end2
-                v2b=start2
-                continue
-            if start2<v2e:
-                raise Exception("3 No colinearity in seeds, use larger k for seeding the alignment. %s %s",v2e,m[1][1])
-            v1e=m[0][1]
-            v2e=m[1][2]
-    return True
-
-
-def cluster_contigs(index, minmum=1):
-    #index=GSA.index('JJZE01.1.fsa_nt_JLAX01.1.fsa_nt.gfasta.gz','../../data/TBC/JJUZ01.1.fsa_nt',1)
-    import networkx
-    mums=index.get_mums(minmum) #get mums!
-    
-    #use networkx to recreate the graph, so its easy to extract the connected components
-    g1=networkx.Graph()
-    for v in index.graph.vertices.values():
-        g1.add_node(v,seqlen=v.contig_end-v.contig_start)
-    for e in index.graph.edges:
-        g1.add_edge(e.source, e.target)
-    
-    g=networkx.Graph() #graph where connected components are nodes
-    mapping={}
-    for i,c in enumerate(networkx.connected_components(g1)):
-        for n in c: #for every node in the connected component
-            mapping[n]=i
-        g.add_node(i,contigs=c,totalseq=sum([v.contig_end-v.contig_start for v in c]))
-    
-    print "Initial graph consists of",i,"connected components"
-    
-    for mum in mums:
-        #lookup the connected components for a mum
-        cc1=mapping[mum[3]]
-        cc2=mapping[mum[4]]
-        if not(g.has_edge(cc1,cc2)):
-            g.add_edge(cc1,cc2,weight=mum[2],mums=[mum],n=1)
-        else:
-            g[cc1][cc2]['weight']+=mum[2]
-            g[cc1][cc2]['n']+=1
-            g[cc1][cc2]['mums'].append(mum)
-    
-    #filter out repetitive nodes
-    
-    remove=[]
-    for e in g.edges(data=True):
-        if e[2]['weight']<10000:
-            remove.append((e[0],e[1]))
-    
-    for e in remove:
-        g.remove_edge(e[0],e[1])
-    
-    nc=0
-    for c in networkx.connected_components(g): #again extract connected components
-        if len(c)>1:
-            #extract from rindex and add to graph_aln stack
-            vertices_to_extract=set()
-            for k in c:
-                for v in g.node[k]['contigs']:
-                    vertices_to_extract.add(v)
-            yield vertices_to_extract
-            nc+=1
-    
-    print "Grouped inputs into",nc,"connected components"
-
-
 def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
         
         assert(v1.contig_start>=0)
@@ -452,8 +340,6 @@ def search(g, startv, set_of_nodes_with_false_condition, maxdegree=None, idirect
 def iscommon(s,v):
     return not(s.origin.issubset(v.origin))
 
-
-#NEED TO KNOW ALL SAMPLES IN THE GRAPH!
 def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, minnwsize=10, maxnwsize=10000):
     if compress:
         filename=outputfilename+'.vcf.gz'
@@ -651,83 +537,6 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
     
     return filename, nvars, ngaps, ninversions, nsvs
     
-def plot(g, keys=[], addseq=False):
-    uid=uuid.uuid4().get_hex()[0:5]
-    
-    if keys==[]:
-        keys=g.vertices.keys()
-    
-    nodes=[str(x)+"_"+uid for x in keys]
-    
-    server = xmlrpclib.ServerProxy("http://localhost:9000")
-    networkid = server.Cytoscape.createNetwork('tmp')
-    server.Cytoscape.createNodes(networkid, nodes)
-
-    edges_from=[]
-    edges_to=[]
-    edges_orientations=[]
-    
-    for e in g.edges:
-        if (e.source.id in keys) and (e.target.id in keys):
-            edges_from.append(str(e.source.id)+'_'+uid)
-            edges_to.append(str(e.target.id)+'_'+uid)
-            edges_orientations.append(e.orientation)
-    
-    edge_ids=server.Cytoscape.createEdges(networkid, edges_from, edges_to)
-    
-    #for att in ['orientation']:
-    d=dict(zip(edge_ids,edges_orientations))
-    server.Cytoscape.addEdgeAttributes("orientation", "INTEGER", d)
-    
-    seqlengths=[ g.vertices[k].attributes['seqlen'] for k in keys ]
-    if addseq:
-        for att in ['seq']:
-            d=dict( zip(nodes, [ str(g.vertices[k].attributes[att]).upper() for k in keys ] ) )
-            server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
-        for att in ['seqlen']:
-            d=dict( zip(nodes, seqlengths ) )
-            server.Cytoscape.addNodeAttributes(att, "INTEGER", d, True)
-        for att in ['rcseq']:
-            d=dict( zip(nodes, [ str(g.vertices[k].attributes[att]) for k in keys ] ) )
-            server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
-    
-    for att in ['coord_origin','coord_contig','contig_start','contig_end','saoffset','input_origin']:
-        d=dict( zip(nodes, [ str( eval('g.vertices[k].'+att) ) for k in keys ] ) )
-        server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
-    
-    for att in ['origin','contig_origin']:
-        d=dict( zip(nodes, [ str( sorted(eval('g.vertices[k].'+att)) ) for k in keys ] ) )
-        server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
-    
-    d=dict( zip(nodes, [ len(eval('g.vertices[k].origin')) for k in keys ] ) )
-    server.Cytoscape.addNodeAttributes('nroforigins', "INTEGER", d, True)
-    
-    color_mapping=dict()
-    for key in keys:
-        mapname=str(sorted(g.vertices[key].origin))
-        if color_mapping.has_key(mapname):
-            color_mapping[mapname].append(key)
-        else:
-            color_mapping[mapname]=[key]
-    
-    colors={}
-    step=360/float(len(color_mapping))
-    i=0
-    for mapname in color_mapping.keys():
-        hue = i/360.
-        lightness = (50 + random.random() * 10)/100.
-        saturation = (90 + random.random() * 10)/100.
-        colors[mapname]=colorsys.hls_to_rgb(hue, lightness, saturation)
-        i+=step
-    
-    for mapname in color_mapping.keys():
-        color=colors[mapname]
-        group=color_mapping[mapname]
-        server.Cytoscape.setNodeFillColor(networkid, [str(x)+"_"+uid for x in group], int(color[0]*255), int(color[1]*255), int(color[2]*255))
-    
-    server.Cytoscape.createContinuousMapper('default','seqlen','Node Size', [1., 10., 500.], [10.,10.,50.,100.,200.])
-    #server.Cytoscape.getLayoutNames()
-    #server.Cytoscape.performLayout(networkid,'hierarchical')
 
 def graph_aln(i, coordsystem=None, kseed=10000, pcutoff=1e-5, clipping=True, 
               minfrac=None, gapopen=-2, gapextend=-1):
@@ -1277,16 +1086,6 @@ def calc_pvalue(l,m,n,p=0.25, leading_gap=None, trailing_gap=None, gapopen=-2,
     assert(p<=1-gumbel_cdf)
     return p
 
-def printSA(i,start=0,n=100,width=None):
-    sa=i.SA[start:start+n]
-    lcp=i.LCP[start:start+n]
-    sep=i.sep
-    if width==None:
-        width=max(lcp)+1
-    t=i.T
-    for i,s in enumerate(sa):
-        line="{: >10} {} {} {}".format(s,t[s:s+width],lcp[i],s>sep)
-        logging.debug(line)
 
 def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5, 
                tip=False, minfrac=None, gapopen=-2, gapextend=-1):
@@ -1541,7 +1340,7 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
         
         if len(vertices)>1: #anything left-over in the index?
             logging.debug("Vertices %s left over in bubble after alignment, could not be segmented...")
-            #stack.append((index,None,None,vertices)) #TODO: consider if this is wise!! Does not guarantee that alignment stays co-linear
+            #stack.append((index,None,None,vertices)) #consider if this is wise!! Does not guarantee that alignment stays co-linear
         
         run+=1
     
@@ -1550,7 +1349,16 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
 def isnotmerged(s,v):
     return not(v.input_origin==2) #saoffset field is -1 when vertex gets merged..
 
-processes=[]
+def printSA(i,start=0,n=100,width=None):
+    sa=i.SA[start:start+n]
+    lcp=i.LCP[start:start+n]
+    sep=i.sep
+    if width==None:
+        width=max(lcp)+1
+    t=i.T
+    for i,s in enumerate(sa):
+        line="{: >10} {} {} {}".format(s,t[s:s+width],lcp[i],s>sep)
+        logging.debug(line)
 
 def check_index(index):
     import numpy as np
@@ -1672,6 +1480,84 @@ def save(g, outputfile, index, compress=True):
     f.close()
     return filename
 
+def plot(g, keys=[], addseq=False):
+    uid=uuid.uuid4().get_hex()[0:5]
+    
+    if keys==[]:
+        keys=g.vertices.keys()
+    
+    nodes=[str(x)+"_"+uid for x in keys]
+    
+    server = xmlrpclib.ServerProxy("http://localhost:9000")
+    networkid = server.Cytoscape.createNetwork('tmp')
+    server.Cytoscape.createNodes(networkid, nodes)
+
+    edges_from=[]
+    edges_to=[]
+    edges_orientations=[]
+    
+    for e in g.edges:
+        if (e.source.id in keys) and (e.target.id in keys):
+            edges_from.append(str(e.source.id)+'_'+uid)
+            edges_to.append(str(e.target.id)+'_'+uid)
+            edges_orientations.append(e.orientation)
+    
+    edge_ids=server.Cytoscape.createEdges(networkid, edges_from, edges_to)
+    
+    #for att in ['orientation']:
+    d=dict(zip(edge_ids,edges_orientations))
+    server.Cytoscape.addEdgeAttributes("orientation", "INTEGER", d)
+    
+    seqlengths=[ g.vertices[k].attributes['seqlen'] for k in keys ]
+    if addseq:
+        for att in ['seq']:
+            d=dict( zip(nodes, [ str(g.vertices[k].attributes[att]).upper() for k in keys ] ) )
+            server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
+        for att in ['seqlen']:
+            d=dict( zip(nodes, seqlengths ) )
+            server.Cytoscape.addNodeAttributes(att, "INTEGER", d, True)
+        for att in ['rcseq']:
+            d=dict( zip(nodes, [ str(g.vertices[k].attributes[att]) for k in keys ] ) )
+            server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
+    
+    for att in ['coord_origin','coord_contig','contig_start','contig_end','saoffset','input_origin']:
+        d=dict( zip(nodes, [ str( eval('g.vertices[k].'+att) ) for k in keys ] ) )
+        server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
+    
+    for att in ['origin','contig_origin']:
+        d=dict( zip(nodes, [ str( sorted(eval('g.vertices[k].'+att)) ) for k in keys ] ) )
+        server.Cytoscape.addNodeAttributes(att, "STRING", d, True)
+    
+    d=dict( zip(nodes, [ len(eval('g.vertices[k].origin')) for k in keys ] ) )
+    server.Cytoscape.addNodeAttributes('nroforigins', "INTEGER", d, True)
+    
+    color_mapping=dict()
+    for key in keys:
+        mapname=str(sorted(g.vertices[key].origin))
+        if color_mapping.has_key(mapname):
+            color_mapping[mapname].append(key)
+        else:
+            color_mapping[mapname]=[key]
+    
+    colors={}
+    step=360/float(len(color_mapping))
+    i=0
+    for mapname in color_mapping.keys():
+        hue = i/360.
+        lightness = (50 + random.random() * 10)/100.
+        saturation = (90 + random.random() * 10)/100.
+        colors[mapname]=colorsys.hls_to_rgb(hue, lightness, saturation)
+        i+=step
+    
+    for mapname in color_mapping.keys():
+        color=colors[mapname]
+        group=color_mapping[mapname]
+        server.Cytoscape.setNodeFillColor(networkid, [str(x)+"_"+uid for x in group], int(color[0]*255), int(color[1]*255), int(color[2]*255))
+    
+    server.Cytoscape.createContinuousMapper('default','seqlen','Node Size', [1., 10., 500.], [10.,10.,50.,100.,200.])
+    #server.Cytoscape.getLayoutNames()
+    #server.Cytoscape.performLayout(networkid,'hierarchical')
+
 def plot_variant_by_position(g,T,pos,degree=10):
     for v in g.vertices.values():
         if v.contig_end==pos-1: #variants are one-based
@@ -1747,7 +1633,7 @@ def plot_graph(index):
 
 #-l10 -n --noclipping -k1000 -c /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/PacBioCHM1_bychromosome/targets_for_chr1.fasta
 def main():
-    usage = "usage: galn.py [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
+    usage = "usage: reveal.py [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
     parser = argparse.ArgumentParser(usage)
     parser.add_argument('graphs', nargs='*', help='Fasta or gfasta files specifying either assembly/alignment graphs (.gfasta) or sequences (.fasta). When only one gfasta file is supplied, variants are called within the gfasta file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -1907,7 +1793,7 @@ def main():
         
         n=len(g.origins)
         
-        d=dict()
+        #d=dict()
         for v in g.vertices.values():
             l=v.contig_end-v.contig_start
             allseq+=l
@@ -1922,31 +1808,12 @@ def main():
         
         logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
         identity.append(commonseq/float(allseq))
-        
-#        if len(v.edges_from)<=1 and len(v.edges_to)<=1 and len(v.origin)==1:
-#            if len(v.edges_from)>0 or len(v.edges_to)>0:
-#                for eto,efrom in zip(v.edges_from,v.edges_to):
-#                    if len(eto.target.edges_to)<=1 and len(efrom.target.edges_from)<=1:
-#                        totunalignedbases+=l
-#                        totunalignedvertices+=1
-#                        logging.info("Vertex %s is not part of the alignment (tip)",v.id)
-#            else:
-#                totunalignedbases+=l
-#                totunalignedvertices+=1
-#                logging.info("Vertex %s is not part of the alignment (unconnected)",v.id)
-#    
-#    logging.info("%s out of %s bases are not part of the alignment.",totunalignedbases,rindex.orgn)
-#    logging.info("%s vertices are not part of the alignment.",totunalignedvertices)
-    
+            
     if args.cytoscaperpcloc!=None:
         logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
         plot_graph(rindex)
     
     logging.info("All graphs/sequences are aligned.")
         
-#-l10 DRR002013.p3.preprocessed.gfasta DRR002014.p3.preprocessed.gfasta
-#-l10 /Users/jasperlinthorst/Documents/phd/data/e.coli/de-novo/DRR002013.p3.preprocessed.gfasta /Users/jasperlinthorst/Documents/phd/data/e.coli/de-novo/DRR002014.p3.preprocessed.gfasta
-#/Users/jasperlinthorst/Documents/phd/data/HLA/A_gen.000.fasta /Users/jasperlinthorst/Documents/phd/data/HLA/A_gen.001.fasta
-#../../data/e.coli/de-novo/DRR002013.p5.fq.gz ../../data/e.coli/de-novo/DRR002014.p5.fq.gz
 if __name__ == "__main__":
     main()
