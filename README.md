@@ -8,8 +8,8 @@ REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole gen
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
 
-It also depends on the following 3d party package:
-	- libdivsufsort 2.0.1
+It also depends on the libdivsufsort 2.0.1 package.
+
 
 1) Build and install libdivsufsort 2.0.1
 To build and install libdivsufsort you need to have CMAKE. After that's installed do the following:
