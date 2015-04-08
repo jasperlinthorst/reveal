@@ -1,17 +1,17 @@
 
-REVEAL v0.1 alpha
+#REVEAL v0.1 alpha
 -----------------
 
 REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole genomes.
 
-**INSTALL**
+##INSTALL
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
 
 It also depends on the libdivsufsort 2.0.1 package.
 
 
-1) Build and install libdivsufsort 2.0.1
+1. Build and install libdivsufsort 2.0.1
 To build and install libdivsufsort you need to have CMAKE. After that's installed do the following:
 
 - wget https://libdivsufsort.googlecode.com/files/libdivsufsort-2.0.1.tar.gz
@@ -24,11 +24,11 @@ To build and install libdivsufsort you need to have CMAKE. After that's installe
 
 Libdivsufsort should now be installed into your default installation directory (most likely /usr/local/lib).
 
-2) Build and install REVEAL 
+2. Build and install REVEAL 
 If libdivsufsort is installed, REVEAL can be installed by executing the following command:
 - python setup.py install
 
-**RUN**
+##RUN
 
 To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:
 
@@ -44,6 +44,6 @@ If everything is correctly installed, the produced output should end with the fo
 
 
 The following files should now have been produced:
-- 1a\_1b.gfasta.gz - containing the alignment graph
-- 1a\_1b.vcf.gz - containing variant calls in the vcf format (experimental)
+-1a\_1b.gfasta.gz - containing the alignment graph
+-1a\_1b.vcf.gz - containing variant calls in the vcf format (experimental)
 
