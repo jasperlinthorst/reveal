@@ -375,6 +375,7 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
     nsvs=0
     ninversions=0
     ngaps=0
+    altngaps=0
     nvars=0
     
     for v in g.vertices.values():
@@ -471,11 +472,11 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                         logging.error("Skipping variant at position %s with size %s, too big.",pos, varsize)
                         continue
                     
-                    if ref.count("N")>10000: #TODO: ucsc gap track has only annotates gaps larger than 10000 (smaller ones do exist!)
-                        gap=1
+                    if ref.count("N")==len(ref):
                         ngaps+=1
-                    else:
-                        gap=0
+                    
+                    if alt.count("N")==len(alt): #not ok for multiple sequence alignments!
+                        altngaps+=1
                     
                     if (len(ref)>minnwsize and len(ref)<maxnwsize) and (len(altVertices)==1 and (len(alt)>minnwsize and len(alt)<maxnwsize)):
                         inversionscore=seqalign.nw_align(ref,revcomp(alt))[2] - seqalign.nw_align(ref,alt)[2] #TODO: only works for one alt allele!
@@ -540,10 +541,10 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                     #        logging.info("found large insert (%s) at position: %s with length: %s", indelnode[0].id, min([v.contig_end,jn.contig_end]), indelnode[0].contig_end-indelnode[0].contig_start)
     vcffile.close()
     
-    return filename, nvars, ngaps, ninversions, nsvs
+    return filename, nvars, ngaps, altngaps, ninversions, nsvs
     
 
-def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=True, 
+def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-3, clipping=True, 
               minfrac=None, gapopen=-2, gapextend=-1):
     global totalignedseq
     
@@ -665,11 +666,14 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
                 index.relabel(r2nv)
             
             logging.debug("Updating index aFrom=%s bFrom=%s matchlength=%s vertexid=%s",aFrom, bFrom, matchlength, mergedv.id)
+            logging.debug("Reorder index with bubble sort.")
             index.update(aFrom, matchlength, mergedv)
+            logging.debug("Reorder index with bubble sort.")
             index.update(bFrom, matchlength, mergedv)
             
             if index.rcindex:
                 logging.debug("Updating reverse complement in index From=%s matchlength=%s vertexid=%s", bRCFrom, matchlength, mergedv.id)
+                logging.debug("Reorder index with bubble sort.")
                 index.update(bRCFrom, matchlength, mergedv)
             
             #get rid of the merged vertices and its suffixes
@@ -883,7 +887,7 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
         run+=1
     
     for v,o in tips:
-        logging.debug("Tip: %s, %s", v.id, o)
+        logging.info("Tip: %s, %s", v.id, o)
     
     skip=set()
     logging.info("Continue aligning %s tips.", len(tips))
@@ -921,7 +925,7 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
                 for v in bubble:
                     tmpbubble.add(v[0])
                 
-                logging.debug("Extracting vertices %s from index.",[v.id for v in tmpbubble])
+                logging.debug("Extracting vertices %s from index (both orientations).",[v.id for v in tmpbubble])
                 bitmp=i.extract(tmpbubble)
                 #make sure that within the local alignment the orientation of the nodes is fixed
                 for v,o in bubble:
@@ -939,6 +943,8 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
                     if cnt==2: #vertex occurs in both orientations...
                         logging.info("Vertex %s occurs in both orientations in clean bubble!",v.id)
                         v.indexed=2
+                
+                logging.debug("Extracting vertices %s from index (one orientation).",[v.id for v in tmpbubble])
                 bi=bitmp.extract(set([v for v,o in bubble]))
                 del(bitmp)
             else:
@@ -961,6 +967,7 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
                 for v in bubble:
                     tmpbubble.add(v[0])
 
+                logging.debug("Extracting vertices %s from index (both orientations).",[v.id for v in tmpbubble])
                 bitmp=i.extract(tmpbubble)
                 
                 #make sure that within the local alignment the orientation of the nodes is fixed
@@ -981,8 +988,8 @@ def graph_aln(i, coordsystem=None, nseed=1, kseed=None, pcutoff=1e-5, clipping=T
                         if v.input_origin==1:
                             v.indexed=2
                 
+                logging.debug("Extracting vertices %s from index (one orientation).",[v.id for v in tmpbubble])
                 bi=bitmp.extract(set([v for v,o in bubble]))
-                
                 del(bitmp)
             else:
                 bi=i.extract([v for v,o in bubble])
@@ -1128,7 +1135,8 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
                 right_aligned=True
                 match=index.get_scored_mum(left_aligned=True, right_aligned=True,
                                            gap_open=gapopen, gap_extend=gapextend) #returns best scoring MUM, considering GAP penalties for both prefix and suffix
-            else: #determine whether the two sequences are left or right aligned!
+            elif (True): #make optional?!
+                #determine whether the two sequences are left or right aligned!
                 if source!=None:
                     if (source[0].saoffset<min([v.saoffset for v in vertices])):
                         left_aligned=True
@@ -1147,6 +1155,9 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
                 logging.debug("Extracting scored MUM from tip (left_aligned=%s, right_aligned=%s)",left_aligned, right_aligned)
                 match=index.get_scored_mum(left_aligned=left_aligned, right_aligned=right_aligned,
                                            gap_open=gapopen, gap_extend=gapextend)
+            else:
+                logging.debug("Extracting un-penalized MUM from tip")
+                match=index.get_mum()
         else:
             logging.debug("Extracting un-penalized MUM, because there are more than two nodes in the bubble or no source and sink!")
             match=index.get_mum()
@@ -1231,10 +1242,13 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
             index.relabel(r2nv)
         
         #update the order of the suffixes
+        logging.debug("Reorder index with bubble sort.")
         index.update(aFrom, matchlength, mergedv)
+        logging.debug("Reorder index with bubble sort.")
         index.update(bFrom, matchlength, mergedv)
         
         if index.rcindex==1:
+            logging.debug("Reorder index with bubble sort.")
             index.update(bRCFrom, matchlength, mergedv)
         
         vertices.discard(aV)
@@ -1651,14 +1665,14 @@ def main():
     parser = argparse.ArgumentParser(usage)
     parser.add_argument('graphs', nargs='*', help='Fasta or gfasta files specifying either assembly/alignment graphs (.gfasta) or sequences (.fasta). When only one gfasta file is supplied, variants are called within the gfasta file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    parser.add_argument("-n", "--norc", action="store_false", dest="rcindex", default=True, help="Whether to index reverse complements of nodes/contigs as well.")
+    parser.add_argument("-c", "--indexrc", action="store_true", dest="rcindex", default=False, help="Whether to index reverse complements of nodes/contigs/unitigs as well.")
     parser.add_argument("-s", dest="nseed", type=int, default=1, help="Max number of seeds to start up the alignment process (default 1).")
     parser.add_argument("-k", dest="kseed", type=int, default=None, help="MUMs over this size will be used to seed the alignment process, overrides -s if specified.")
-    parser.add_argument("-p", dest="pcutoff", type=float, default=1e-5, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-5).")
+    parser.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser.add_argument("--gapopen", dest="gapopen", type=int, default=-5, help="Gap open penalty (default -5).")
     parser.add_argument("--gapextend", dest="gapextend", type=int, default=-1, help="Gap extension penalty (default -1).")
-    parser.add_argument("-f", dest="minfrac", type=float, default=None, help="If the fraction of exact matching sequence over all sequence in a bubble is larger than this value, skip p-value calculation. Allows skipping significance calculation for smaller bubbles, smaller bubbles means more fine-grained variant calling.")
-    parser.add_argument("-c", "--coordinate-system", dest="coordsystem", default=None, help="The name (so not the actual file!) of the input file to be used to keep track of locations of variations, such that they can be annotated later on.")
+    parser.add_argument("-f", dest="minfrac", type=float, default=None, help="If the fraction of exact matching sequence over all sequence in a bubble is larger than this value, skip p-value calculation. Allows skipping significance calculation for smaller bubbles, smaller bubbles means more fine-grained variant calling (default 1).")
+    parser.add_argument("-r", "--reference", "--coordinate-system", dest="coordsystem", default=None, help="The name (so not the actual file!) of the input file to be used to keep track of positions of variations, such that they can be annotated later on.")
     parser.add_argument("-l", "--log-level", dest="loglevel", default=20, type=int, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal")
     parser.add_argument("--clipping", action="store_true", dest="clipping", default=False, help="Whether or not to clip off tip nodes after the alignment")
     parser.add_argument("--64", dest="large", action="store_true", default=False, help="Whether we need a 64 bit integers to store suffix array")
@@ -1680,7 +1694,13 @@ def main():
     if len(args.graphs)==1:
         args.graphs = glob.glob(args.graphs[0])
     
-    base_filename='_'.join([os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs])
+    basenames=set([os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs])
+    
+    if len(basenames)!=len(args.graphs):
+        logging.fatal("Filenames aren't unique, make sure filenames are unique throughout all genomes!")
+        sys.exit(1)
+    
+    base_filename='_'.join(basenames)
     if args.output==None:
         args.output=base_filename
     
@@ -1694,7 +1714,7 @@ def main():
         logging.info("Specify at least 2 (g)fasta files for alignment.")
         logging.info("Calling variants in %s...",args.graphs[0])
         rindex=GSA.index(args.graphs[0])
-        vcffile,nvars,ngaps,ninversions,nsvs=bubbles(rindex.graph, rindex.T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
+        vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(rindex.graph, rindex.T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
         logging.info("Variants written to %s.",vcffile)
         
         if args.cytoscaperpcloc!=None: #if cytoscape is specified plot the graph
@@ -1786,9 +1806,9 @@ def main():
         
         T=rindex.T
         logging.info("Calling variations in graph...")
-        vcffile,nvars,ngaps,ninversions,nsvs=bubbles(g, T, tvcf, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
+        vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, tvcf, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
         logging.info("Variant calling done and written to %s.",vcffile)
-        logging.info("Called %s variants of which %s closed gaps, %s inversions and %s large (>50bp) indels.",nvars,ngaps,ninversions,nsvs)
+        logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
         graphname=save(g, tgraph, rindex, compress=True)
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
         
