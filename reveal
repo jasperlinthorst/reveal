@@ -1679,8 +1679,8 @@ def main():
     parser.add_argument("--cytoscape", dest="cytoscaperpcloc", default=None, help="The address and port of a cytoscape-xmlrpc server for plotting the resulting alignment graph (e.g. localhost:9000)")
     parser.add_argument("--vcfmin", dest="minvarsize", default=0, type=int, help="The min size of a variant for it be written to the vcf.")
     parser.add_argument("--vcfmax", dest="maxvarsize", default=None, type=int, help="The max size of a variant for it to be written to the vcf.")
-    parser.add_argument("--invmin", dest="minnwsize", default=10, type=int, help="The min inversion detection size, inversions smaller than this threshold will not be reported in the vcf INFO field 'INVERSION'.")
-    parser.add_argument("--invmax", dest="maxnwsize", default=1000, type=int, help="The max inversion detection size, inversions larger than this threshold will not be reported in the vcf INFO field 'INVERSION'.")
+    parser.add_argument("--invmin", dest="minnwsize", default=25, type=int, help="The min size for inversion detection, no testing for inversions smaller than this threshold (default 25).")
+    parser.add_argument("--invmax", dest="maxnwsize", default=1000, type=int, help="The max size for inversion detection, no testing for inversions larger than this threshold (default 1000, consider memory usage!).")
     
     args = parser.parse_args()
     global g, rindex, mums, totalignedseq, extractedvertices
