@@ -22,9 +22,9 @@ To build and install libdivsufsort you need to have CMAKE. After that's installe
 - cmake -DBUILD\_DIVSUFSORT64:BOOL=ON -DCMAKE\_BUILD\_TYPE="Release" -DCMAKE\_INSTALL\_PREFIX="/usr/local" ..
 - make install
 
-Libdivsufsort should now be installed into your default installation directory (most likely /usr/local/lib).
+Libdivsufsort should now be installed into your default installation directory (most likely /usr/local/lib)..
 
-2 - Build and install REVEAL 
+2 - Build and install REVEAL..
 If libdivsufsort is installed, REVEAL can be installed by executing the following command:
 
 **python setup.py install**
