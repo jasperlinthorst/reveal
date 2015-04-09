@@ -1,5 +1,5 @@
 
-#REVEAL v0.1 alpha
+#REVEAL
 -----------------
 
 REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole genomes.
