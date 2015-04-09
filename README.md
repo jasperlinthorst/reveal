@@ -33,17 +33,18 @@ If libdivsufsort is installed, REVEAL can be installed by executing the followin
 
 To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:  
 
-**reveal -k1000 tests/1a.fa tests/1b.fa**  
+**reveal tests/1a.fa tests/1b.fa**  
   
 If everything is correctly installed, the produced output should end with the following lines:  
   
 ...  
-03/03/2015 01:15:01 PM Identity (tot\_aligned\_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 75.70%.  
-03/03/2015 01:15:01 PM 0 out of 318681 bases are not aligned.  
-03/03/2015 01:15:01 PM 0 vertices are not aligned.  
-03/03/2015 01:15:01 PM All graphs/sequences are aligned.  
+04/09/2015 09:59:37 AM Identity (tot_aligned_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 76.63%.
+04/09/2015 09:59:37 AM Identity genome/graph 1a.fa: ((tot_aligned_sequence/2)/len(s1)) is 67.71%.
+04/09/2015 09:59:37 AM Identity genome/graph 1b.fa: ((tot_aligned_sequence/2)/len(s2)) is 88.26%.
+04/09/2015 09:59:37 AM 62.12% of the sequence in the graph is common to all input genomes
+04/09/2015 09:59:37 AM All graphs/sequences are aligned.
 
-The following files should now have been produced:
+The following files should now have been created:
 - 1a\_1b.gfasta.gz - containing the alignment graph
-- 1a\_1b.vcf.gz - containing variant calls in the vcf format (experimental)
+- 1a\_1b.vcf.gz - containing variant calls in vcf format (experimental)
 
