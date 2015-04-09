@@ -11,7 +11,7 @@ REVEAL is written in Python and C code. To build it, it needs Python version 2.7
 It also depends on the libdivsufsort 2.0.1 package.
 
 
-1 - Build and install libdivsufsort 2.0.1
+1. Build and install libdivsufsort 2.0.1
 To build and install libdivsufsort you need to have CMAKE. After that's installed do the following:
 
 - wget https://libdivsufsort.googlecode.com/files/libdivsufsort-2.0.1.tar.gz
@@ -24,7 +24,7 @@ To build and install libdivsufsort you need to have CMAKE. After that's installe
 
 Libdivsufsort should now be installed into your default installation directory (most likely /usr/local/lib)..
 
-2 - Build and install REVEAL..
+2. Build and install REVEAL
 If libdivsufsort is installed, REVEAL can be installed by executing the following command:
 
 **python setup.py install**
