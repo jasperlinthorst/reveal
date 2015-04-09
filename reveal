@@ -478,10 +478,10 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                     if alt.count("N")==len(alt): #not ok for multiple sequence alignments!
                         altngaps+=1
                     
-                    if (len(ref)>minnwsize and len(ref)<maxnwsize) and (len(altVertices)==1 and (len(alt)>minnwsize and len(alt)<maxnwsize)):
-                        inversionscore=seqalign.nw_align(ref,revcomp(alt))[2] - seqalign.nw_align(ref,alt)[2] #TODO: only works for one alt allele!
-                    else:
-                        inversionscore=0
+                    inversionscore=0
+                    if (ref.count("N")==0) and (alt.count("N")==0): #only check if no gaps in bubble
+                        if (len(ref)>minnwsize and len(ref)<maxnwsize) and (len(altVertices)==1 and (len(alt)>minnwsize and len(alt)<maxnwsize)):
+                            inversionscore=seqalign.nw_align(ref,revcomp(alt))[2] - seqalign.nw_align(ref,alt)[2] #TODO: only works for one alt allele!
                     
                     if inversionscore>min([len(ref),len(alt)]): #TODO: only works for one alt allele!
                         inversion=1
