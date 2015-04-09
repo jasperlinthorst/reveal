@@ -38,11 +38,11 @@ To validate whether everything is correctly installed you can run a test alignme
 If everything is correctly installed, the produced output should end with the following lines:  
   
 ...  
-04/09/2015 09:59:37 AM Identity (tot_aligned_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 76.63%.
-04/09/2015 09:59:37 AM Identity genome/graph 1a.fa: ((tot_aligned_sequence/2)/len(s1)) is 67.71%.
-04/09/2015 09:59:37 AM Identity genome/graph 1b.fa: ((tot_aligned_sequence/2)/len(s2)) is 88.26%.
-04/09/2015 09:59:37 AM 62.12% of the sequence in the graph is common to all input genomes
-04/09/2015 09:59:37 AM All graphs/sequences are aligned.
+04/09/2015 09:59:37 AM Identity (tot_aligned_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 76.63%.  
+04/09/2015 09:59:37 AM Identity genome/graph 1a.fa: ((tot_aligned_sequence/2)/len(s1)) is 67.71%.  
+04/09/2015 09:59:37 AM Identity genome/graph 1b.fa: ((tot_aligned_sequence/2)/len(s2)) is 88.26%.  
+04/09/2015 09:59:37 AM 62.12% of the sequence in the graph is common to all input genomes  
+04/09/2015 09:59:37 AM All graphs/sequences are aligned.  
 
 The following files should now have been created:
 - 1a\_1b.gfasta.gz - containing the alignment graph
