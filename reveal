@@ -1694,9 +1694,9 @@ def main():
     if len(args.graphs)==1:
         args.graphs = glob.glob(args.graphs[0])
     
-    basenames=set([os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs])
+    basenames=[os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs]
     
-    if len(basenames)!=len(args.graphs):
+    if len(set(basenames))!=len(args.graphs):
         logging.fatal("Filenames aren't unique, make sure filenames are unique throughout all genomes!")
         sys.exit(1)
     
