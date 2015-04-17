@@ -360,6 +360,8 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
     vcffile.write("##INFO=<ID=SINKSIZE,Number=1,Type=Integer,Description=\"Length of the sequence defined on the sink node.\">\n")
     vcffile.write("##INFO=<ID=VARSIZE,Number=1,Type=Integer,Description=\"Max size of the variation in basepairs.\">\n")
     vcffile.write("##INFO=<ID=SV,Number=1,Type=Integer,Description=\"Whether the variant is considered a structural variant (e.g. VARSIZE>=50).\">\n")
+    vcffile.write("##INFO=<ID=SNP,Number=1,Type=Integer,Description=\"Whether the variant is considered a SNP.\">\n")
+    vcffile.write("##INFO=<ID=SNV,Number=1,Type=Integer,Description=\"Whether the variant is considered a SNV.\">\n")
     vcffile.write("##INFO=<ID=INDEL,Number=1,Type=Integer,Description=\"Whether the variant is considered an indel.\">\n")
     vcffile.write("##INFO=<ID=INSERT,Number=1,Type=Integer,Description=\"Whether the variant is considered an insertion.\">\n")
     vcffile.write("##INFO=<ID=DELETE,Number=1,Type=Integer,Description=\"Whether the variant is considered a deletion.\">\n")
@@ -499,7 +501,7 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                     altcontigs=",".join([",".join([contig for contig in v.contig_origin]) for av in altVertices])
                     qual='.'
                     filt='.'
-                    info='SOURCE={};SINK={};SOURCESIZE={};SINKSIZE={};VARSIZE={};SV={};INDEL={};INSERT={};DELETE={};INVERSION={};INVERSION_SCORE={};ALTCONTIGS={}'.format(v.id,jn.id,v.contig_end-v.contig_start,jn.contig_end-jn.contig_start,varsize,sv, (1 if indel else 0),(1 if insert else 0),(1 if delete else 0), inversion, inversionscore, altcontigs)
+                    info='SOURCE={};SINK={};SOURCESIZE={};SINKSIZE={};VARSIZE={};SV={};SNP={},INDEL={};INSERT={};DELETE={};INVERSION={};INVERSION_SCORE={};ALTCONTIGS={}'.format(v.id,jn.id,v.contig_end-v.contig_start,jn.contig_end-jn.contig_start,varsize,sv, (1 if len(ref)==len(alt)==1 else 0), (1 if indel else 0),(1 if insert else 0),(1 if delete else 0), inversion, inversionscore, altcontigs)
                     form='GT'
                     #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	  101-009-F
                     vcffile.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(chrom, pos, variantid, ref, alt, qual, filt, info, form))
@@ -1460,7 +1462,38 @@ def revcomp(s):
     letters.reverse()
     return ''.join(letters)
 
-#TODO: save graphs by specification of Heng Li's gfa -> http://lh3.github.io/2014/07/23/first-update-on-gfa/
+def saveGFA(g, outputfile, index, compress=True):
+    T=index.T
+    if compress:
+        filename=outputfile+'.gfa.gz'
+        f=gzip.open(filename,'wb')
+    else:
+        filename=outputfile+'.gfa'
+        f=open(filename,'w')
+    sep=';'
+    f.write('H VN:Z:1.0\n')
+    f.write('H SM:Z:')
+    for i,o in enumerate(g.origins): #which samples are contained in the graph
+        f.write(o+sep)
+    f.write('\n')
+    
+    for v in g.vertices.values():
+        origintag=sep.join([str(o) for o in v.origin])
+        f.write('S\t'+str(v.id)+'\t'+ 
+            T[v.saoffset:v.saoffset+(v.contig_end-v.contig_start)].upper()+
+            '\t*\tSM:Z:'+origintag+'\n')
+    
+    for e in g.edges:
+        if e.orientation==0:
+            f.write('L\t'+str(e.source.id)+'\t'+'+'+'\t'+str(e.target.id)+'\t+\t'+'0M\n')
+        elif e.orientation==1: # inny --> <--
+            f.write('L\t'+str(e.source.id)+'\t'+'+'+'\t'+str(e.target.id)+'\t-\t'+'0M\n')
+        else: #lif e.orientation==2: # outty <-- -->
+            f.write('L\t'+str(e.source.id)+'\t'+'-'+'\t'+str(e.target.id)+'\t+\t'+'0M\n')
+    
+    f.close()
+    return filename
+    
 def save(g, outputfile, index, compress=True):
     T=index.T
     if compress:
@@ -1658,13 +1691,12 @@ def plot_graph(index):
         g.vertices[v.id].attributes['seqlen']=l
     plot(g, keys=g.vertices.keys(), addseq=True)
 
-
-#-l10 -n --noclipping -k1000 -c /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/hg19/chr1.fa.gz /Users/jasperlinthorst/Documents/phd/data/CHM1/PacBioCHM1_bychromosome/targets_for_chr1.fasta
 def main():
     usage = "reveal [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
     parser = argparse.ArgumentParser(usage)
     parser.add_argument('graphs', nargs='*', help='Fasta or gfasta files specifying either assembly/alignment graphs (.gfasta) or sequences (.fasta). When only one gfasta file is supplied, variants are called within the gfasta file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
+    parser.add_argument("--GFA", dest="gfa", action="store_true", default=False, help="Output alignment graph in GFA format")
     parser.add_argument("-c", "--indexrc", action="store_true", dest="rcindex", default=False, help="Whether to index reverse complements of nodes/contigs/unitigs as well.")
     parser.add_argument("-s", dest="nseed", type=int, default=1, help="Max number of seeds to start up the alignment process (default 1).")
     parser.add_argument("-k", dest="kseed", type=int, default=None, help="MUMs over this size will be used to seed the alignment process, overrides -s if specified.")
@@ -1809,7 +1841,12 @@ def main():
         vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, tvcf, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
         logging.info("Variant calling done and written to %s.",vcffile)
         logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
-        graphname=save(g, tgraph, rindex, compress=True)
+
+        if args.gfa:
+            graphname=saveGFA(g, tgraph, rindex, compress=True)
+        else:
+            graphname=save(g, tgraph, rindex, compress=True)
+        
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
         
         logging.info("Pickling mums that were used for the alignment...")
