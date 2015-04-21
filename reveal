@@ -25,196 +25,196 @@ import colorsys
 import seqalign
 
 def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
-        
-        assert(v1.contig_start>=0)
-        assert(v2.contig_start>=0)
-        assert(aFrom<aTo)
-        assert(bFrom<bTo)
-        
-        v1prefixlength=aFrom-v1.saoffset
-        v1matchlength=aTo-aFrom
-        v1suffixlength=v1.saoffset+(v1.contig_end-v1.contig_start)-aTo
-        
-        v2prefixlength=bFrom-v2.saoffset
-        v2matchlength=bTo-bFrom
-        v2suffixlength=v2.saoffset+(v2.contig_end-v2.contig_start)-bTo
-        
-        assert(v1.indexed==0)
-        
-        mergedv=g.add_vertex(2, v1.indexed, v1.coord_origin, v1.coord_contig, \
-                                v1.contig_start+(aFrom-v1.saoffset), \
-                                v1.contig_start+(aTo-v1.saoffset), \
-                                aFrom, aFrom)
-        
-        for v in v1.origin.union(v2.origin):
-            mergedv.origin.add(v)
-        for v in v1.contig_origin.union(v2.contig_origin):
-            mergedv.contig_origin.add(v)
-        
-        #TODO: add extract by domain so we dont have to create this node in the first place
-        tmpv=g.add_vertex(2, v2.indexed, v2.coord_origin, v2.coord_contig, \
-                        v2.contig_start+(bFrom-v2.saoffset), \
-                        v2.contig_start+(bTo-v2.saoffset), \
-                        bFrom, v2.rcsaoffset+(v2.saoffset+(v2.contig_end-v2.contig_start))-bTo if v2.rcsaoffset>v2.saoffset else bFrom)
-        
-        l1nv, r1nv, l2nv, r2nv = None, None, None, None
-        
-        assert(v1.contig_end-v1.contig_start==v1prefixlength+v1matchlength+v1suffixlength)
-        
-        #create a vertex for the unaligned prefix of v1
-        #assert(v1.contig_start<=aFrom-v1.saoffset)
-        if aFrom!=v1.saoffset: 
-            l1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
-                                v1.contig_start, \
-                                v1.contig_start+(aFrom-v1.saoffset), \
-                                v1.saoffset, v1.saoffset)
-            for v in v1.origin:
-                l1nv.origin.add(v)
-            for v in v1.contig_origin:
-                l1nv.contig_origin.add(v)
+    
+    assert(v1.contig_start>=0)
+    assert(v2.contig_start>=0)
+    assert(aFrom<aTo)
+    assert(bFrom<bTo)
+    
+    v1prefixlength=aFrom-v1.saoffset
+    v1matchlength=aTo-aFrom
+    v1suffixlength=v1.saoffset+(v1.contig_end-v1.contig_start)-aTo
+    
+    v2prefixlength=bFrom-v2.saoffset
+    v2matchlength=bTo-bFrom
+    v2suffixlength=v2.saoffset+(v2.contig_end-v2.contig_start)-bTo
+    
+    assert(v1.indexed==0)
+    
+    mergedv=g.add_vertex(2, v1.indexed, v1.coord_origin, v1.coord_contig, \
+                            v1.contig_start+(aFrom-v1.saoffset), \
+                            v1.contig_start+(aTo-v1.saoffset), \
+                            aFrom, aFrom)
+    
+    for v in v1.origin.union(v2.origin):
+        mergedv.origin.add(v)
+    for v in v1.contig_origin.union(v2.contig_origin):
+        mergedv.contig_origin.add(v)
+    
+    #TODO: add extract by domain so we dont have to create this node in the first place
+    tmpv=g.add_vertex(2, v2.indexed, v2.coord_origin, v2.coord_contig, \
+                    v2.contig_start+(bFrom-v2.saoffset), \
+                    v2.contig_start+(bTo-v2.saoffset), \
+                    bFrom, v2.rcsaoffset+(v2.saoffset+(v2.contig_end-v2.contig_start))-bTo if v2.rcsaoffset>v2.saoffset else bFrom)
+    
+    l1nv, r1nv, l2nv, r2nv = None, None, None, None
+    
+    assert(v1.contig_end-v1.contig_start==v1prefixlength+v1matchlength+v1suffixlength)
+    
+    #create a vertex for the unaligned prefix of v1
+    #assert(v1.contig_start<=aFrom-v1.saoffset)
+    if aFrom!=v1.saoffset: 
+        l1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
+                            v1.contig_start, \
+                            v1.contig_start+(aFrom-v1.saoffset), \
+                            v1.saoffset, v1.saoffset)
+        for v in v1.origin:
+            l1nv.origin.add(v)
+        for v in v1.contig_origin:
+            l1nv.contig_origin.add(v)
 
-            for e in v1.edges_to:
-                if e.orientation==0:
-                    g.add_edge(e.source, l1nv, e.orientation) #reconnect the vertex
+        for e in v1.edges_to:
+            if e.orientation==0:
+                g.add_edge(e.source, l1nv, e.orientation) #reconnect the vertex
+            else:
+                if e.target==v1:
+                    g.add_edge(e.source, l1nv, e.orientation)
                 else:
-                    if e.target==v1:
-                        g.add_edge(e.source, l1nv, e.orientation)
-                    else:
-                        g.add_edge(l1nv, e.target, e.orientation)
-            g.add_edge(l1nv, mergedv, 0)
-        else: #if no new vertex nescessary reconnect to the old neighbors
-            for e in v1.edges_to:
-                if e.orientation==0:
+                    g.add_edge(l1nv, e.target, e.orientation)
+        g.add_edge(l1nv, mergedv, 0)
+    else: #if no new vertex nescessary reconnect to the old neighbors
+        for e in v1.edges_to:
+            if e.orientation==0:
+                g.add_edge(e.source, mergedv, e.orientation) # same=0, inny=1, outty=2
+            else:
+                if e.source==v1:
+                    g.add_edge(mergedv, e.target, e.orientation) # same=0, inny=1, outty=2
+                else:
                     g.add_edge(e.source, mergedv, e.orientation) # same=0, inny=1, outty=2
-                else:
-                    if e.source==v1:
-                        g.add_edge(mergedv, e.target, e.orientation) # same=0, inny=1, outty=2
-                    else:
-                        g.add_edge(e.source, mergedv, e.orientation) # same=0, inny=1, outty=2
+    
+    #create a vertex for the unaligned suffix of v1
+    assert(aTo-v1.saoffset<=v1.contig_end)
+    if aTo!=v1.saoffset+(v1.contig_end-v1.contig_start):
         
-        #create a vertex for the unaligned suffix of v1
-        assert(aTo-v1.saoffset<=v1.contig_end)
-        if aTo!=v1.saoffset+(v1.contig_end-v1.contig_start):
-            
-            r1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
-                    v1.contig_start+v1prefixlength+v1matchlength, \
-                    v1.contig_start+v1prefixlength+v1matchlength+v1suffixlength, \
-                    v1.saoffset+v1prefixlength+v1matchlength, v1.saoffset+v1prefixlength+v1matchlength)
-            for v in v1.origin:
-                r1nv.origin.add(v)
-            for v in v1.contig_origin:
-                r1nv.contig_origin.add(v)
-            
-            for e in v1.edges_from:
-                if e.orientation==0:
-                    g.add_edge(r1nv, e.target, e.orientation) #reconnect the vertex
+        r1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
+                v1.contig_start+v1prefixlength+v1matchlength, \
+                v1.contig_start+v1prefixlength+v1matchlength+v1suffixlength, \
+                v1.saoffset+v1prefixlength+v1matchlength, v1.saoffset+v1prefixlength+v1matchlength)
+        for v in v1.origin:
+            r1nv.origin.add(v)
+        for v in v1.contig_origin:
+            r1nv.contig_origin.add(v)
+        
+        for e in v1.edges_from:
+            if e.orientation==0:
+                g.add_edge(r1nv, e.target, e.orientation) #reconnect the vertex
+            else:
+                if e.source==v1:
+                    g.add_edge(r1nv, e.target, e.orientation) # same=0, inny=1, outty=2
                 else:
-                    if e.source==v1:
-                        g.add_edge(r1nv, e.target, e.orientation) # same=0, inny=1, outty=2
-                    else:
-                        g.add_edge(e.source, r1nv, e.orientation) # same=0, inny=1, outty=2
-            g.add_edge(mergedv, r1nv, 0)
+                    g.add_edge(e.source, r1nv, e.orientation) # same=0, inny=1, outty=2
+        g.add_edge(mergedv, r1nv, 0)
+    else:
+        for e in v1.edges_from:
+            if e.orientation==0:
+                g.add_edge(mergedv, e.target, e.orientation)
+            else:
+                if e.source==v1:
+                    g.add_edge(mergedv, e.target, e.orientation) # same=0, inny=1, outty=2
+                else:
+                    g.add_edge(e.source, mergedv, e.orientation) # same=0, inny=1, outty=2
+
+
+    #create a vertex for the unaligned prefix of v2
+    if bFrom!=v2.saoffset:
+        l2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
+                            v2.contig_start, \
+                            v2.contig_start+(bFrom-v2.saoffset), \
+                            v2.saoffset, v2.rcsaoffset+v2suffixlength+v2matchlength if v2.rcsaoffset>v2.saoffset else v2.saoffset)
+        for v in v2.origin:
+            l2nv.origin.add(v)
+        for v in v2.contig_origin:
+            l2nv.contig_origin.add(v)
+        
+        for e in v2.edges_to:
+            if e.orientation==0:
+                g.add_edge(e.source, l2nv, e.orientation) #reconnect the vertex
+            else:
+                if e.target==v2:
+                    g.add_edge(e.source, l2nv, e.orientation)
+                else:
+                    g.add_edge(l2nv, e.target, e.orientation)
+        if rcmatch:
+            g.add_edge(l2nv, mergedv, 1) #inny --><--
         else:
-            for e in v1.edges_from:
+            g.add_edge(l2nv, mergedv, 0)
+    else:
+        for e in v2.edges_to:
+            if rcmatch: #flip orientations of the edges
+                if e.orientation==0:
+                    g.add_edge(e.source, mergedv, 1)
+                else:
+                    if e.source==v2:
+                        g.add_edge(mergedv, e.target, 0)
+                    else:
+                        g.add_edge(mergedv, e.source, 0)
+            else:
+                if e.orientation==0:
+                    g.add_edge(e.source, mergedv, e.orientation)
+                else: #source and target have no meaning
+                    if e.source==v2:
+                        g.add_edge(mergedv, e.target, e.orientation)
+                    else:
+                        g.add_edge(e.source, mergedv, e.orientation)
+    
+    #create a vertex for the unaligned suffix of v2
+    assert(bTo-v2.saoffset<=v2.contig_end)
+    if bTo!=v2.saoffset+(v2.contig_end-v2.contig_start):
+        r2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
+                v2.contig_start+v2prefixlength+v2matchlength, \
+                v2.contig_start+v2prefixlength+v2matchlength+v2suffixlength, \
+                v2.saoffset+v2prefixlength+v2matchlength, v2.rcsaoffset)
+        for v in v2.origin:
+            r2nv.origin.add(v)
+        for v in v2.contig_origin:
+            r2nv.contig_origin.add(v)
+        
+        for e in v2.edges_from:
+            if e.orientation==0:
+                assert(e.target!=r2nv)
+                g.add_edge(r2nv, e.target, e.orientation) #reconnect the vertex
+            else:
+                if e.source==v2:
+                    g.add_edge(r2nv, e.target, e.orientation)
+                else:
+                    g.add_edge(e.source, r2nv, e.orientation)
+        if rcmatch:
+            g.add_edge(mergedv, r2nv, 2) #outty <-- -->
+        else:
+            g.add_edge(mergedv, r2nv, 0)
+    else:
+        for e in v2.edges_from:
+            if rcmatch:
+                if e.orientation==0:
+                    g.add_edge(mergedv, e.target, 2)
+                else:
+                    if e.source==v2:
+                        g.add_edge(e.target, mergedv, 0)
+                    else:
+                        g.add_edge(e.source, mergedv, 0)
+            else:
                 if e.orientation==0:
                     g.add_edge(mergedv, e.target, e.orientation)
                 else:
-                    if e.source==v1:
-                        g.add_edge(mergedv, e.target, e.orientation) # same=0, inny=1, outty=2
-                    else:
-                        g.add_edge(e.source, mergedv, e.orientation) # same=0, inny=1, outty=2
-
-
-        #create a vertex for the unaligned prefix of v2
-        if bFrom!=v2.saoffset:
-            l2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
-                                v2.contig_start, \
-                                v2.contig_start+(bFrom-v2.saoffset), \
-                                v2.saoffset, v2.rcsaoffset+v2suffixlength+v2matchlength if v2.rcsaoffset>v2.saoffset else v2.saoffset)
-            for v in v2.origin:
-                l2nv.origin.add(v)
-            for v in v2.contig_origin:
-                l2nv.contig_origin.add(v)
-            
-            for e in v2.edges_to:
-                if e.orientation==0:
-                    g.add_edge(e.source, l2nv, e.orientation) #reconnect the vertex
-                else:
-                    if e.target==v2:
-                        g.add_edge(e.source, l2nv, e.orientation)
-                    else:
-                        g.add_edge(l2nv, e.target, e.orientation)
-            if rcmatch:
-                g.add_edge(l2nv, mergedv, 1) #inny --><--
-            else:
-                g.add_edge(l2nv, mergedv, 0)
-        else:
-            for e in v2.edges_to:
-                if rcmatch: #flip orientations of the edges
-                    if e.orientation==0:
-                        g.add_edge(e.source, mergedv, 1)
-                    else:
-                        if e.source==v2:
-                            g.add_edge(mergedv, e.target, 0)
-                        else:
-                            g.add_edge(mergedv, e.source, 0)
-                else:
-                    if e.orientation==0:
-                        g.add_edge(e.source, mergedv, e.orientation)
-                    else: #source and target have no meaning
-                        if e.source==v2:
-                            g.add_edge(mergedv, e.target, e.orientation)
-                        else:
-                            g.add_edge(e.source, mergedv, e.orientation)
-        
-        #create a vertex for the unaligned suffix of v2
-        assert(bTo-v2.saoffset<=v2.contig_end)
-        if bTo!=v2.saoffset+(v2.contig_end-v2.contig_start):
-            r2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
-                    v2.contig_start+v2prefixlength+v2matchlength, \
-                    v2.contig_start+v2prefixlength+v2matchlength+v2suffixlength, \
-                    v2.saoffset+v2prefixlength+v2matchlength, v2.rcsaoffset)
-            for v in v2.origin:
-                r2nv.origin.add(v)
-            for v in v2.contig_origin:
-                r2nv.contig_origin.add(v)
-            
-            for e in v2.edges_from:
-                if e.orientation==0:
-                    assert(e.target!=r2nv)
-                    g.add_edge(r2nv, e.target, e.orientation) #reconnect the vertex
-                else:
                     if e.source==v2:
-                        g.add_edge(r2nv, e.target, e.orientation)
-                    else:
-                        g.add_edge(e.source, r2nv, e.orientation)
-            if rcmatch:
-                g.add_edge(mergedv, r2nv, 2) #outty <-- -->
-            else:
-                g.add_edge(mergedv, r2nv, 0)
-        else:
-            for e in v2.edges_from:
-                if rcmatch:
-                    if e.orientation==0:
-                        g.add_edge(mergedv, e.target, 2)
-                    else:
-                        if e.source==v2:
-                            g.add_edge(e.target, mergedv, 0)
-                        else:
-                            g.add_edge(e.source, mergedv, 0)
-                else:
-                    if e.orientation==0:
                         g.add_edge(mergedv, e.target, e.orientation)
                     else:
-                        if e.source==v2:
-                            g.add_edge(mergedv, e.target, e.orientation)
-                        else:
-                            g.add_edge(e.source, mergedv, e.orientation)
-        
-        g.remove_vertex(v1)
-        g.remove_vertex(v2)
-        
-        return l1nv, r1nv, l2nv, r2nv, mergedv, tmpv
+                        g.add_edge(e.source, mergedv, e.orientation)
+    
+    g.remove_vertex(v1)
+    g.remove_vertex(v2)
+    
+    return l1nv, r1nv, l2nv, r2nv, mergedv, tmpv
 
 
 def search(g, startv, set_of_nodes_with_false_condition, maxdegree=None, idirection=True, alg='bfs', condition=lambda s,e: True):
@@ -1462,14 +1462,10 @@ def revcomp(s):
     letters.reverse()
     return ''.join(letters)
 
-def saveGFA(g, outputfile, index, compress=True):
+def saveGFA(g, outputfile, index):
     T=index.T
-    if compress:
-        filename=outputfile+'.gfa.gz'
-        f=gzip.open(filename,'wb')
-    else:
-        filename=outputfile+'.gfa'
-        f=open(filename,'w')
+    filename=outputfile+'.gfa.gz'
+    f=gzip.open(outputfile,'wb')
     sep=';'
     f.write('H VN:Z:1.0\n')
     f.write('H SM:Z:')
@@ -1494,14 +1490,9 @@ def saveGFA(g, outputfile, index, compress=True):
     f.close()
     return filename
     
-def save(g, outputfile, index, compress=True):
+def save(g, outputfile, index):
     T=index.T
-    if compress:
-        filename=outputfile+'.gfasta.gz'
-        f=gzip.open(filename,'wb')
-    else:
-        filename=outputfile+'.gfasta'
-        f=open(filename,'w')
+    f=gzip.open(outputfile,'wb')
     sep="|"
     sep2=";"
     sep3=","
@@ -1539,7 +1530,6 @@ def save(g, outputfile, index, compress=True):
         f.write(str(v.contig_end)+'\n')
         f.write(T[v.saoffset:v.saoffset+(v.contig_end-v.contig_start)]+'\n')
     f.close()
-    return filename
 
 def plot(g, keys=[], addseq=False):
     uid=uuid.uuid4().get_hex()[0:5]
@@ -1691,6 +1681,23 @@ def plot_graph(index):
         g.vertices[v.id].attributes['seqlen']=l
     plot(g, keys=g.vertices.keys(), addseq=True)
 
+def define_merging_order(branch, to_merge, counter):
+    if branch.is_terminal():
+        return counter
+    if not branch.is_preterminal(): # if it is not preterminal, we first have to make it preterminal
+        counter = define_merging_order(branch.clades[0], to_merge, counter)
+        counter = define_merging_order(branch.clades[1], to_merge, counter)
+    a = str(branch.clades.pop().name)
+    if not(a.endswith('gfasta.gz')):
+        a += ".gfasta.gz"
+    b = str(branch.clades.pop().name)
+    if not(b.endswith('gfasta.gz')):
+        b += ".gfasta.gz"
+    branch.name = counter
+    tmp = (a, b, str(counter))
+    to_merge.append(tmp)
+    return counter + 1
+
 def main():
     usage = "reveal [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
     parser = argparse.ArgumentParser(usage)
@@ -1705,7 +1712,9 @@ def main():
     parser.add_argument("--gapextend", dest="gapextend", type=int, default=-1, help="Gap extension penalty (default -1).")
     parser.add_argument("-f", dest="minfrac", type=float, default=None, help="If the fraction of exact matching sequence over all sequence in a bubble is larger than this value, skip p-value calculation. Allows skipping significance calculation for smaller bubbles, smaller bubbles means more fine-grained variant calling (default 1).")
     parser.add_argument("-r", "--reference", "--coordinate-system", dest="coordsystem", default=None, help="The name (so not the actual file!) of the input file to be used to keep track of positions of variations, such that they can be annotated later on.")
+    parser.add_argument("-t", dest = "tree", default = None, help = "The name of the file that specifies a guide-tree for the multiple sequence alignment (in Newick format)")
     parser.add_argument("-l", "--log-level", dest="loglevel", default=20, type=int, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal")
+    parser.add_argument("-i", action="store_true", dest="intermediate", default=False, help="To keep intermediate alignment graphs.")
     parser.add_argument("--clipping", action="store_true", dest="clipping", default=False, help="Whether or not to clip off tip nodes after the alignment")
     parser.add_argument("--64", dest="large", action="store_true", default=False, help="Whether we need a 64 bit integers to store suffix array")
     parser.add_argument("--cytoscape", dest="cytoscaperpcloc", default=None, help="The address and port of a cytoscape-xmlrpc server for plotting the resulting alignment graph (e.g. localhost:9000)")
@@ -1723,7 +1732,7 @@ def main():
     T=""
 
     #maybe wildcard specification so try parsing it first
-    if len(args.graphs)==1:
+    if len(args.graphs)==1 and args.tree==None:
         args.graphs = glob.glob(args.graphs[0])
     
     basenames=[os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs]
@@ -1742,8 +1751,8 @@ def main():
     else:
         import GSA
     
-    if len(args.graphs)==1:
-        logging.info("Specify at least 2 (g)fasta files for alignment.")
+    if len(args.graphs)==1 and args.tree==None:
+        logging.info("Specify at least 2 (g)fasta files for alignment or a guide-tree.")
         logging.info("Calling variants in %s...",args.graphs[0])
         rindex=GSA.index(args.graphs[0])
         vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(rindex.graph, rindex.T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
@@ -1754,21 +1763,41 @@ def main():
             plot_graph(rindex)
         return
     
-    if len(args.graphs)==0:
-        parser.error("No (g)fasta files specified.")
+    if len(args.graphs)==0 and args.tree==None:
+        parser.error("No (g)fasta files or tree specified.")
         return
     
-    global identity
-    identity=[]
+    if args.tree!=None and len(args.graphs)>0:
+        parser.error("Don't specify (g)fasta files when a guide-tree is used.")
+        return
     
-    #align specified graphs/sequences
-    for i in range(1,len(args.graphs)):
-        if (i==1):
-            g1=args.graphs[0]
-            g2=args.graphs[i]
-        else:
-            g1=graphname
-            g2=args.graphs[i]
+    #determine the alignment order
+    to_merge = []
+    if (args.tree is not None):
+        from Bio import Phylo
+        tree = Phylo.read(args.tree, "newick")
+        counter = 0
+        define_merging_order(tree.root, to_merge, counter)
+    else:
+        for i in range(1,len(args.graphs)):
+            if (i==1):
+                g1=args.graphs[0]
+                g2=args.graphs[i]
+            else:
+                g1=tmp
+                g2=args.graphs[i]
+            if i==len(args.graphs)-1:
+                tmp=args.output
+            else:
+                tmp=str(i)+'.gfasta.gz'
+            to_merge.append((g1,g2,tmp))
+    
+    for i,now_merging in enumerate(to_merge):
+        g1=now_merging[0]
+        g2=now_merging[1]
+        tmpname=now_merging[2]
+        
+        logging.debug("Aligning: %s and %s",g1,g2)
         
         if not(os.path.isfile(g1)):
             parser.error("{} is not a file.".format(g1))
@@ -1826,33 +1855,20 @@ def main():
         if(eos.count(0)!=len(eos)):
             logging.error('Not all nodes in the alignment graph have same orientation!')
         
-        if i==len(args.graphs)-1: #last graph write to output
-            tgraph=args.output #final graph
-            tvcf=args.output #final graph
-            tmums=args.output
-        else:
-            tmpname='_'+os.path.basename(g2)
-            tgraph=tmpname #tmp graph
-            tvcf=tmpname #final graph
-            tmums=tmpname
-        
-        T=rindex.T
-        logging.info("Calling variations in graph...")
-        vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, tvcf, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
-        logging.info("Variant calling done and written to %s.",vcffile)
-        logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
-
         if args.gfa:
-            graphname=saveGFA(g, tgraph, rindex, compress=True)
+            graphname=saveGFA(g, tmpname, rindex)
         else:
-            graphname=save(g, tgraph, rindex, compress=True)
+            graphname=save(g, tmpname, rindex)
         
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
+
+        if not(args.intermediate) and i>0: #clean up
+            os.unlink(to_merge[i-1][2])
         
-        logging.info("Pickling mums that were used for the alignment...")
-        d['mums']=[(mum[0],mum[1],mum[2],mum[3].contig_origin.copy().pop(),mum[4].contig_origin.copy().pop(),mum[5]) for mum in mums]
-        pickle.dump(d, file(tmums+'.pickle', 'w'))
-        logging.info("Pickling done, written to %s.",tmums+'.pickle')
+#        logging.info("Pickling mums that were used for the alignment...")
+#        d['mums']=[(mum[0],mum[1],mum[2],mum[3].contig_origin.copy().pop(),mum[4].contig_origin.copy().pop(),mum[5]) for mum in mums]
+#        pickle.dump(d, file(tmums+'.pickle', 'w'))
+#        logging.info("Pickling done, written to %s.",tmums+'.pickle')
         
         input1len=rindex.sep
         input2len=(rindex.orgn-rindex.sep)/2 if rindex.rcindex else rindex.orgn-rindex.sep
@@ -1875,8 +1891,13 @@ def main():
                 commonseq+=l
         
         logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
-        identity.append(commonseq/float(allseq))
-            
+    
+    T=rindex.T
+    logging.info("Calling variations in graph...")
+    vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
+    logging.info("Variant calling done and written to %s.",vcffile)
+    logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
+    
     if args.cytoscaperpcloc!=None:
         logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
         plot_graph(rindex)
