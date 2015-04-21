@@ -93,6 +93,7 @@ static PyObject* update(GSA* self, PyObject* args, PyObject* kwds);
 static PyObject* updateVertex(GSA* self, PyObject* args, PyObject* kwds);
 static PyObject * Vertex_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 static idx_t loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC);
+static idx_t loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC);
 
 
 char comp[128]; //reverse complement translation table
@@ -1271,7 +1272,8 @@ GSA_init(GSA *self, PyObject *args, PyObject *kwds)
 		self->graph = (Graph *)Graph_New(&GraphType, NULL, NULL);
 		self->rcindex=1; //by default create T with reverse complements
 		
-		if (!(tmp=loadFile(self, input1, 0, tmp, self->rcindex))) {
+		//if (!(tmp=loadFile(self, input1, 0, tmp, self->rcindex))) {
+		if (!(tmp=loadGFA(self, input1, 0, tmp, self->rcindex))) {
 			PyErr_SetString(GSAError, "Failed to load graph.");
 			return -1;
 		}
@@ -2092,6 +2094,148 @@ static Vertex* parseHeader(GSA* self, int input_origin, int t, char *header, PyO
 	return vid;
 }
 
+static idx_t
+loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
+
+	FILE * fp;
+	char * line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	
+	fp = fopen(inputfile, "r");
+	if (fp == NULL){
+		return -1;
+	}
+
+	PyObject *mapping=PyDict_New(); //dict used to map between old and new ids for vertices
+	
+	const idx_t Tbufsize=10000; //TODO: use MACRO constant
+	idx_t Tsize=f+Tbufsize;
+
+	idx_t t=f;
+	self->T=realloc(self->T, Tsize*sizeof(char));
+	self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
+	
+	char *tmp;
+	tmp=strrchr(inputfile,'/');
+	inputfile= tmp ? tmp+1 : inputfile; //get rid of the path information in the graph
+
+	Vertex* vid;
+	char * seq;
+	idx_t seqlen;
+	char *ts;
+	char *te;
+	int i=0;
+	unsigned int oldid;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		//printf("Retrieved line of length %zu :\n", read);
+		//printf("%s", line);
+
+		if (line[0]=='S'){ //create Vertex
+
+			ts=strchr(line,'\t');
+			te=strchr(ts+1,'\t');
+			te[0]='\0';
+			
+			oldid=atoi(ts);
+			PyObject *id = Py_BuildValue("i",oldid);
+			if (id == NULL){
+				Py_DECREF(id);
+				fprintf(stderr,"Failed to read id %u.\n",oldid);
+				return -1;
+			}
+
+			ts=te+1;
+			te=strchr(ts,'\t');
+			te[0]='\0';
+			seq=ts;
+			seqlen=te-ts;
+	
+			//TODO: make parse tag function that handles all other tags
+			vid=add_vertex_c(self->graph, inputid, 0, inputfile, "coord_contig_stub", 0, seqlen, t, t+seqlen+1);
+
+			//update the mapping table so we can relate old nodes to new nodes
+			if (PyDict_SetItem(mapping, id, (PyObject *)vid) < 0) {
+				Py_DECREF(id);
+				fprintf(stderr,"Failed to add to mapping for id %u.\n",oldid);
+				return -1;
+			}
+			Py_DECREF(id);
+			
+			t=f+seqlen+1;
+			
+			if (t>=Tsize){
+				while (t>Tsize){Tsize=Tsize+Tbufsize;}
+				self->T=realloc(self->T, Tsize*sizeof(char));
+				self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
+			}
+			
+			for (i=0;i<seqlen;i++){
+				seq[i]=(char)toupper(seq[i]);
+			}
+			
+			if (self->T!=NULL){
+				memcpy(&self->T[f], seq, seqlen);
+				memcpy(&self->T[f+seqlen], "$", 1); //append $
+
+				if (useRC==1){
+					t=t+seqlen+1;
+
+					if (t>=Tsize){
+						while (t>Tsize){Tsize=Tsize+Tbufsize;}
+						self->T=realloc(self->T, Tsize*sizeof(char));
+						self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
+					}
+
+					rc(seq, seqlen);
+					memcpy(&self->T[f+seqlen+1], seq, seqlen); //append the reverse complement
+					memcpy(&self->T[t-1], "$", 1); //append $
+				}
+
+				for (; f<t; f++) { //keep a Vertex pointer for every suffix
+					self->TIiv[f]=vid;
+				}
+			} else {
+				f=t;
+			}
+
+			if (vid==NULL) {
+				PyErr_SetString(GSAError, "Failed to add vertex");
+				return -1;
+			}
+
+			continue;
+		}
+		if (line[0]=='L'){ //TODO: create Edge
+			continue;
+		}
+		if (line[0]=='H'){ //header line, if contains SM tag parse origins TODO: replace with parse_tag()
+			char * origins;
+			char * oe;
+			origins=strstr(line,"SM");
+			if (origins!=NULL){
+				origins=origins+5;
+				while (strchr(origins,';')!=NULL){
+					oe=strchr(origins,';');
+					oe[0]='\0';
+					PyObject* org=Py_BuildValue("s",origins);
+					PySet_Add(self->graph->origins, org);
+					Py_DECREF(org);
+					origins=oe+1;
+				}
+				
+			}
+			continue;
+		}
+	}
+
+	fclose(fp);
+	if (line)
+		free(line);
+	
+	return f+1;
+}
 
 static idx_t 
 loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
@@ -2310,7 +2454,7 @@ buildGSA(GSA *self, char *input1, char* input2){
 		return -1;
 	}
 
-	printf("building suffix array... ");
+	printf("indexing... ");
 	fflush(stdout);
 
 #if LARGEIDX == 1
@@ -2322,39 +2466,26 @@ buildGSA(GSA *self, char *input1, char* input2){
 		PyErr_SetString(GSAError, "SAIS-LCP failed");
 		return -1;
 	}
-	printf("done.\n");
 
-	printf("allocating memory for inverse of suffix array... ");
-	fflush(stdout);
 	self->SAi = malloc(sizeof(idx_t)*(self->n)); //inverse of SA
 	if (self->SAi==NULL){
 		fprintf(stderr,"Failed to allocate enough memory for SAi.\n");
 		return -1;
 	}
-	printf("done.\n");
 
-	printf("computing inverse of suffix array... ");
-	fflush(stdout);
 	//fill the inverse of SA
 	for (i=0; i<self->n; i++) {
 		self->SAi[self->SA[i]]=i;
 	}
-	printf("done.\n");
 
-	printf("allocating memory for lcp array... ");
-	fflush(stdout);
 	self->LCP=malloc(sizeof(int)*self->n);
 	if (self->LCP==NULL){
 		fprintf(stderr,"Failed to allocate enough memory for LCP.\n");
 		PyErr_SetString(GSAError, "Failed to allocate enough memory for LCP.");
 		return -1;
 	}
-	printf("done.\n");
 
-	printf("computing lcp array... ");
-	fflush(stdout);
 	compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
-	//compute_lcp2(self->T, self->SA, self->LCP, self->n);
 
 	self->LCP[0]=0;
 	
