@@ -1893,7 +1893,7 @@ def main():
         logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
     
     if not(args.intermediate): #clean up intermediate alignment graphs
-        for merge in enumerate(to_merge[:-1]):
+        for merge in to_merge[:-1]:
             os.unlink(merge[2])
     
     T=rindex.T
