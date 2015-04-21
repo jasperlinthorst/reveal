@@ -1746,7 +1746,10 @@ def main():
     
     base_filename='_'.join(basenames)
     if args.output==None:
-        args.output=base_filename
+        if args.tree:
+            args.output=args.tree.replace('.nwk','')
+        else:
+            args.output=base_filename
     
     if args.large:
         logging.info("Using 64-bit index")
@@ -1781,6 +1784,7 @@ def main():
         tree = Phylo.read(args.tree, "newick")
         counter = 0
         define_merging_order(tree.root, to_merge, counter)
+        to_merge[-1][2]=args.output+'.gfasta.gz' #final alignment graph
     else:
         for i in range(1,len(args.graphs)):
             if (i==1):
@@ -1800,7 +1804,7 @@ def main():
         g2=now_merging[1]
         tmpname=now_merging[2]
         
-        logging.debug("Aligning: %s and %s",g1,g2)
+        logging.info("Merging %s and %s into %s",g1,g2,tmpname)
         
         if not(os.path.isfile(g1)):
             parser.error("{} is not a file.".format(g1))
