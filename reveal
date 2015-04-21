@@ -1864,9 +1864,6 @@ def main():
             graphname=save(g, tmpname, rindex)
         
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
-
-        if not(args.intermediate) and i>0: #clean up
-            os.unlink(to_merge[i-1][2])
         
 #        logging.info("Pickling mums that were used for the alignment...")
 #        d['mums']=[(mum[0],mum[1],mum[2],mum[3].contig_origin.copy().pop(),mum[4].contig_origin.copy().pop(),mum[5]) for mum in mums]
@@ -1894,6 +1891,10 @@ def main():
                 commonseq+=l
         
         logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
+    
+    if not(args.intermediate): #clean up intermediate alignment graphs
+        for merge in enumerate(to_merge[:-1]):
+            os.unlink(merge[i-1][2])
     
     T=rindex.T
     logging.info("Calling variations in graph...")
