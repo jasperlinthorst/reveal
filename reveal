@@ -1894,7 +1894,7 @@ def main():
     
     if not(args.intermediate): #clean up intermediate alignment graphs
         for merge in enumerate(to_merge[:-1]):
-            os.unlink(merge[i-1][2])
+            os.unlink(merge[2])
     
     T=rindex.T
     logging.info("Calling variations in graph...")
