@@ -1697,7 +1697,7 @@ def define_merging_order(branch, to_merge, counter):
         b = str(b)+".gfasta.gz"
     
     branch.name = counter
-    tmp = (a, b, str(counter)+".gfasta.gz")
+    tmp = [a, b, str(counter)+".gfasta.gz"]
     to_merge.append(tmp)
     return counter + 1
 
