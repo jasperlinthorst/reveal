@@ -1272,8 +1272,8 @@ GSA_init(GSA *self, PyObject *args, PyObject *kwds)
 		self->graph = (Graph *)Graph_New(&GraphType, NULL, NULL);
 		self->rcindex=1; //by default create T with reverse complements
 		
-		//if (!(tmp=loadFile(self, input1, 0, tmp, self->rcindex))) {
-		if (!(tmp=loadGFA(self, input1, 0, tmp, self->rcindex))) {
+		if (!(tmp=loadFile(self, input1, 0, tmp, self->rcindex))) {
+		//if (!(tmp=loadGFA(self, input1, 0, tmp, self->rcindex))) {
 			PyErr_SetString(GSAError, "Failed to load graph.");
 			return -1;
 		}
