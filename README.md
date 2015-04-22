@@ -14,9 +14,8 @@ It also depends on the libdivsufsort 2.0.1 package.
 1 - Build and install libdivsufsort 2.0.1  
 To build and install libdivsufsort you need to have CMAKE. After that's installed do the following:  
 
-- wget https://libdivsufsort.googlecode.com/files/libdivsufsort-2.0.1.tar.gz
-- tar xvf libdivsufsort-2.0.1.tar.gz
-- cd libdivsufsort-2.0.1
+- git clone https://github.com/y-256/libdivsufsort.git (or wget https://github.com/y-256/libdivsufsort/archive/master.zip)
+- cd libdivsufsort
 - mkdir build
 - cd build
 - cmake -DBUILD\_DIVSUFSORT64:BOOL=ON -DCMAKE\_BUILD\_TYPE="Release" -DCMAKE\_INSTALL\_PREFIX="/usr/local" ..
