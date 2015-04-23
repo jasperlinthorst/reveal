@@ -431,9 +431,27 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                         edges=edges.union(bv.edges_from).union(bv.edges_to)
                         origins_in_bubble=origins_in_bubble.union(bv.origin)
                     
-                    if len(edges)!=(len(bubble)*2): #in a simple bubble, there are always twice as many edges as nodes
+                    if (direction==True):
+                        directneighbors=len(v.edges_from)
+                        if jn_sameorientation:
+                            directneighbors_r=len(v.edges_to)
+                        else:
+                            directneighbors_r=len(v.edges_from)
+                    else:
+                        directneighbors=len(v.edges_to)
+                        if jn_sameorientation:
+                            directneighbors_r=len(v.edges_from)
+                        else:
+                            directneighbors_r=len(v.edges_to)
+                    
+                    if len(bubble)==directneighbors==directneighbors_r:
+                        pass
+                    else:
                         logging.error("Complex bubble detected at %s, no call made in vcf.",pos)
                         continue
+                    
+                    if len(bubble)>2:
+                        logging.error("More than two alleles at %s.",pos)
                     
                     indel=False
                     insert=False
@@ -1190,7 +1208,6 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
             bFrom=tmpFrom
             bTo=tmpTo
         
-        
         if minfrac!=None and matchlength/float(min([(aV.contig_end-aV.contig_start),(bV.contig_end-bV.contig_start)]))>=minfrac:
             pvalue=0
         elif matchlength==aV.contig_end-aV.contig_start==bV.contig_end-bV.contig_start: #a match between two nodes of the same size, skip p-value check... TODO: check if they have same neighbors!
@@ -1359,14 +1376,15 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
         if source==None:
             logging.debug("Adding vertices %s to stack for tip alignment (sink).",sorted([v.id for v in vertices]))
             stack.append((index,None,(mergedv,sinksearchdirection),vertices,True))
-        
-        if sink==None:
+            continue
+        elif sink==None:
             logging.debug("Adding vertices %s to stack for tip alignment (source).",sorted([v.id for v in vertices]))
             stack.append((index,(mergedv,sourcesearchdirection),None,vertices,True))
+            continue
         
-        if len(vertices)>1: #anything left-over in the index?
-            logging.debug("Vertices %s left over in bubble after alignment, could not be segmented...")
-            #stack.append((index,None,None,vertices)) #consider if this is wise!! Does not guarantee that alignment stays co-linear
+        if len(vertices)>1: #anything left-over in the index? go again..
+            logging.debug("Vertices %s left over in bubble after alignment, could not be segmented...",sorted([v.id for v in vertices]))
+            stack.append((index,source,sink,vertices,tip))
         
         run+=1
     
@@ -1462,7 +1480,7 @@ def revcomp(s):
 
 def saveGFA(g, outputfile, index):
     T=index.T
-    filename=outputfile+'.gfa.gz'
+    outputfile=outputfile.replace('.gfasta','.gfa')
     f=gzip.open(outputfile,'wb')
     sep=';'
     f.write('H VN:Z:1.0\n')
@@ -1471,12 +1489,21 @@ def saveGFA(g, outputfile, index):
         f.write(o+sep)
     f.write('\n')
     
+    mapping=dict({'origin':'SM','contig_origin':'CS','contig_start':'CS',
+                  'contig_end':'CE', 'coord_origin':'CO'})
+    
     for v in g.vertices.values():
         origintag=sep.join([str(o) for o in v.origin])
         f.write('S\t'+str(v.id)+'\t'+ 
             T[v.saoffset:v.saoffset+(v.contig_end-v.contig_start)].upper()+
-            '\t*\tSM:Z:'+origintag+'\n')
-    
+            '\t*')
+        for key in mapping.keys():
+            val=eval('v.'+key)
+            if isinstance(val,list) or isinstance(val,set):
+                val=sep.join([str(o) for o in val])
+            f.write('\t'+mapping[key]+':Z:'+str(val))
+        f.write('\n')        
+        
     for e in g.edges:
         if e.orientation==0:
             f.write('L\t'+str(e.source.id)+'\t'+'+'+'\t'+str(e.target.id)+'\t+\t'+'0M\n')
@@ -1486,7 +1513,6 @@ def saveGFA(g, outputfile, index):
             f.write('L\t'+str(e.source.id)+'\t'+'-'+'\t'+str(e.target.id)+'\t+\t'+'0M\n')
     
     f.close()
-    return filename
 
 def save(g, outputfile, index):
     T=index.T
@@ -1792,7 +1818,7 @@ def main():
                 g1=tmp
                 g2=args.graphs[i]
             if i==len(args.graphs)-1:
-                tmp=args.output
+                tmp=args.output+'.gfasta.gz'
             else:
                 tmp=str(i)+'.gfasta.gz'
             to_merge.append((g1,g2,tmp))
