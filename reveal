@@ -1166,8 +1166,6 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
         
         if match==None:
             logging.debug("No more MUM in index.")
-            if index.n==678:
-                printSA(index,start=0,n=index.n,width=100)
             continue
         
         if len(match)==6:
@@ -1489,7 +1487,7 @@ def saveGFA(g, outputfile, index):
     
     f.close()
     return filename
-    
+
 def save(g, outputfile, index):
     T=index.T
     f=gzip.open(outputfile,'wb')
