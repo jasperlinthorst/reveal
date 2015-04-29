@@ -89,7 +89,6 @@ typedef struct {
 static Vertex * add_vertex_c(Graph *self, int input_origin, int indexed, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset);
 static Edge * add_edge_c(Graph *self, Vertex* source, Vertex* target, uint8_t orientation);
 static int buildGSA(GSA *self, char *input1, char* input2);
-static PyObject* split(GSA *self, PyObject *args);
 static GSA* extract(GSA *self, PyObject *args);
 static PyObject* relabel(GSA *self, PyObject *args);
 static PyObject* update(GSA* self, PyObject* args, PyObject* kwds);
@@ -1585,7 +1584,6 @@ GSA_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 static PyMethodDef gsa_methods[] = {
-    {"split", (PyCFunction) split, METH_VARARGS, "Split the index into two new GSA indices."},
     {"update", (PyCFunction) update, METH_VARARGS, "Updates the index such that the order of suffix complies after aligning."},
     {"updateVertex", (PyCFunction) updateVertex, METH_VARARGS, "Updates the index such that the order of suffix complies after extracting the specified vertex from the index."},
     {"extract", (PyCFunction) extract, METH_VARARGS, "Extract an index for the specified texts."},
