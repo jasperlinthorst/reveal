@@ -1740,11 +1740,10 @@ def define_merging_order(branch, to_merge, counter):
     return counter + 1
 
 def main():
-    usage = "reveal [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
+    usage = "reveal [options] <sequence1.(g)fa> <sequence2.(g)fa> ..."
     parser = argparse.ArgumentParser(usage)
     parser.add_argument('graphs', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-#    parser.add_argument("--GFA", dest="gfa", action="store_true", default=False, help="Output alignment graph in GFA format")
     parser.add_argument("-c", "--indexrc", action="store_true", dest="rcindex", default=False, help="Whether to index reverse complements of nodes/contigs/unitigs as well.")
     parser.add_argument("-s", dest="nseed", type=int, default=1, help="Max number of seeds to start up the alignment process (default 1).")
     parser.add_argument("-k", dest="kseed", type=int, default=None, help="MUMs over this size will be used to seed the alignment process, overrides -s if specified.")
