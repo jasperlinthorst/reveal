@@ -44,6 +44,6 @@ If everything is correctly installed, the produced output should end with the fo
 04/09/2015 09:59:37 AM All graphs/sequences are aligned.  
 
 The following files should now have been created:
-- 1a\_1b.gfa - containing the alignment graph
+- 1a\_1b.gfa - containing the alignment graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/))
 - 1a\_1b.vcf.gz - containing variant calls in vcf format (experimental)
 
