@@ -11,8 +11,11 @@
 
 KSEQ_INIT(gzFile, gzread)
 
-#define GRAPHEXT ".gfasta"
-#define GRAPHEXTGZ ".gfasta.gz"
+#define GRAPHEXT ".gfa"
+#define GRAPHEXTGZ ".gfa.gz"
+#define TBUFSIZE 100000
+#define EDGEBUFSIZE 10000
+
 
 #if LARGEIDX == 1
 	#include <divsufsort64.h>
@@ -39,7 +42,7 @@ typedef struct {
     unsigned int vi;
     unsigned int ei;
     PyObject* vertices; 	//Dict of vertices
-    PyObject* edges; 		//set of graph_Edge type objects TODO: check if this can be removed!?
+    PyObject* edges; 		//set of graph_Edge type objects
 	PyObject* origins;		//set containing filenames of the input samples
 } Graph;
 
@@ -57,8 +60,8 @@ typedef struct {
 	PyObject *attributes; 		//additional attributes (only for flexibility). Essential attributes should be in c struct, (TODO) should be removed at some point...
 	PyObject *originid_set; 	//set of originids pointing to graph->samples
 	PyObject *contigid_set; 	//set of contigids pointing to graph->contigs
-	PyObject *coord_origin; 	//id pointing to the file which was used for the coordinates used
-	PyObject *coord_contig; 	//id pointing to the contig that was used for the coordinates used
+	PyObject *coord_origin; 	//file which was used for the coordinates used
+	PyObject *coord_contig; 	//contig that was used for the coordinates used
 } Vertex;
 
 typedef struct {
@@ -83,7 +86,7 @@ typedef struct {
     PyObject * root; 		//reference to GSA type object that points to the root index (for access to TIiv and SAi in sub-indexes)
 } GSA;
 
-static Vertex * add_vertex_c(Graph *self, int input_origin, int indexed, char * coord_origin, char * coord_contig, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset);
+static Vertex * add_vertex_c(Graph *self, int input_origin, int indexed, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset);
 static Edge * add_edge_c(Graph *self, Vertex* source, Vertex* target, uint8_t orientation);
 static int buildGSA(GSA *self, char *input1, char* input2);
 static PyObject* split(GSA *self, PyObject *args);
@@ -91,9 +94,9 @@ static GSA* extract(GSA *self, PyObject *args);
 static PyObject* relabel(GSA *self, PyObject *args);
 static PyObject* update(GSA* self, PyObject* args, PyObject* kwds);
 static PyObject* updateVertex(GSA* self, PyObject* args, PyObject* kwds);
-static PyObject * Vertex_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
-static idx_t loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC);
-static idx_t loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC);
+
+static idx_t loadFasta(GSA *self, char * fastafilename, int inputid, idx_t f, int useRC);
+static idx_t loadGFA(GSA *self, char * gfafilename, int inputid, idx_t f, int useRC);
 
 
 char comp[128]; //reverse complement translation table
@@ -118,21 +121,6 @@ int endsWith (char* base, char* str) {
     int slen = strlen(str);
     return (blen >= slen) && (0 == strcmp(base + blen - slen, str));
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -164,27 +152,15 @@ Vertex_init(Vertex *self, PyObject *args, PyObject *kwds)
 
 
 static int
-Vertex_init_c(Vertex *self, unsigned int id, int input_origin, int indexed, char * coord_origin, char * coord_contig, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset)
+Vertex_init_c(Vertex *self, unsigned int id, int input_origin, int indexed, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset)
 {
     self->id=id;
-   	
 	self->input_origin=input_origin;
 	self->indexed=indexed;
-	
-	PyObject* co=Py_BuildValue("s",coord_origin);
-	self->coord_origin=co;
-	
-	PyObject* cc=Py_BuildValue("s",coord_contig);
-	self->coord_contig=cc;
-
     self->contig_start=contig_start;
-    
     self->contig_end=contig_end;
-    
     self->saoffset=saoffset;
-
     self->rcsaoffset=rcsaoffset;
-
     return 0;
 }
 
@@ -240,8 +216,12 @@ Vertex_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->saoffset=0;
 		self->rcsaoffset=0;
 		self->input_origin=0;
-		self->coord_origin=NULL;
-		self->coord_contig=NULL;
+		
+		Py_INCREF(Py_None);	
+		self->coord_origin=Py_None;
+
+		Py_INCREF(Py_None);
+		self->coord_contig=Py_None;
     }
     
     return (PyObject *)self;
@@ -334,7 +314,6 @@ static PyMethodDef Vertex_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-
 static PyObject *
 Vertex_getid(Vertex *self, void *closure)
 {
@@ -356,9 +335,6 @@ Vertex_getinputorigin(Vertex *self, void *closure)
     return org;
 }
 
-
-
-
 static PyObject *
 Vertex_getindexed(Vertex *self, void *closure)
 {
@@ -372,23 +348,14 @@ Vertex_setindexed(Vertex *self, PyObject *args, void *closure)
 		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
 		return -1;
 	}
-
 	if (! PyInt_Check(args)) {
 		PyErr_SetString(PyExc_TypeError,
 				"Must be an integer in the range 0 to 2");
 		return -1;
 	}
-	
-	
 	self->indexed=PyInt_AS_LONG(args);
-
 	return 0;
 }
-
-
-
-
-
 
 static PyObject *
 Vertex_getcontigorigin(Vertex *self, void *closure)
@@ -397,18 +364,60 @@ Vertex_getcontigorigin(Vertex *self, void *closure)
     return self->contigid_set;
 }
 
+
+
 static PyObject *
 Vertex_getcoordcontig(Vertex *self, void *closure)
 {
     Py_INCREF(self->coord_contig);
     return self->coord_contig;
 }
+static int
+Vertex_setcoordcontig(Vertex *self, PyObject *value, void *closure)
+{
+	if (value==NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyString_Check(value)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be a string value, describing a contig name.");
+		return -1;
+	}
+	Py_DECREF(self->coord_contig);
+	Py_INCREF(value);
+	self->coord_contig=value;
+	return 0;
+}
+
+
 static PyObject *
 Vertex_getcoordorigin(Vertex *self, void *closure)
 {
     Py_INCREF(self->coord_origin);
     return self->coord_origin;
 }
+static int
+Vertex_setcoordorigin(Vertex *self, PyObject *value, void *closure)
+{
+	if (value==NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyString_Check(value)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be a string value, describing a filename.");
+		return -1;
+	}
+	Py_DECREF(self->coord_origin);
+	Py_INCREF(value);
+	self->coord_origin=value;
+	return 0;
+}
+
+
+
+
 static PyObject *
 Vertex_getcontigstart(Vertex *self, void *closure)
 {
@@ -470,7 +479,6 @@ static PyGetSetDef Vertex_getseters[] = {
         (getter)Vertex_getinputorigin, NULL,
         "id of the file this sequence originates from (0 or 1 for now)",
         NULL},
-
 	{"indexed",
         (getter)Vertex_getindexed, (setter)Vertex_setindexed,
         "wheter the primary(0), the reverse complement (1) or both (2) sequences defined on this vertex are indexed",
@@ -480,14 +488,16 @@ static PyGetSetDef Vertex_getseters[] = {
         (getter)Vertex_getcontigorigin, NULL,
         "set of contig names this sequence originates from",
         NULL},
+
     {"coord_origin",
-        (getter)Vertex_getcoordorigin, NULL,
+        (getter)Vertex_getcoordorigin, (setter)Vertex_setcoordorigin,
         "Name of the file in which the contig resides that is used for locating the sequence",
         NULL},
     {"coord_contig",
-        (getter)Vertex_getcoordcontig, NULL,
+        (getter)Vertex_getcoordcontig, (setter)Vertex_setcoordcontig,
         "Name of the contig used for locating the sequence",
         NULL},
+
     {"contig_start",
         (getter)Vertex_getcontigstart, NULL,
         "start within the coord contig",
@@ -848,14 +858,12 @@ static PyObject * add_vertex(Graph *self, PyObject *args, PyObject *kwds) {
 
     idx_t contig_start, contig_end, rcsaoffset, saoffset;
 	int input_origin, indexed;
-	char * coord_origin;
-	char * coord_contig;
-    if (! PyArg_ParseTuple(args,"iiss" PYIDXTYPE PYIDXTYPE PYIDXTYPE PYIDXTYPE, &input_origin, &indexed, &coord_origin, &coord_contig, &contig_start, &contig_end, &saoffset, &rcsaoffset)) {
+    if (! PyArg_ParseTuple(args,"ii" PYIDXTYPE PYIDXTYPE PYIDXTYPE PYIDXTYPE, &input_origin, &indexed, &contig_start, &contig_end, &saoffset, &rcsaoffset)) {
         PyErr_SetString(PyExc_TypeError, "Cannot parse parameters");
         return NULL;
     }
     
-    Vertex *v = add_vertex_c(self, input_origin, indexed, coord_origin, coord_contig, contig_start, contig_end, saoffset, rcsaoffset);
+    Vertex *v = add_vertex_c(self, input_origin, indexed, contig_start, contig_end, saoffset, rcsaoffset);
     
     return (PyObject *)v;
 }
@@ -881,112 +889,42 @@ static int edge_exists(Vertex* v1, Vertex* v2, int o){
 	
 	
 	if (o==0) { //normal orientation, source and target have meaning
-		
 		while ( (edge=(Edge*)PyIter_Next(iterfrom)) ) {
 			//edges->source == v1
 			if (edge->source->id==v1->id && edge->target->id==v2->id){
 				conn=1;
 				break;
 			}
-			
 			Py_DECREF(edge);
 		}
-		
-		
 	} 
 	
 	if (o==1) { //trying to add an inny between source and target
-		
 		while ( (edge=(Edge*)PyIter_Next(iterfrom)) ) {
-			
 			if (edge->orientation==1) {
-			
 				if ( (edge->source->id==v1->id && edge->target->id==v2->id) || (edge->source->id==v2->id && edge->target->id==v1->id) ){
 					conn=1;
 					break;
 				}
-
 			}
-
 			Py_DECREF(edge);
 		}
-		
 	}
 
 	if (o==2) { //trying to add an outty between source and target
-		
 		while ( (edge=(Edge*)PyIter_Next(iterto)) ) {
-			
 			if (edge->orientation==2) {
-			
 				if ( (edge->source->id==v1->id && edge->target->id==v2->id) || (edge->source->id==v2->id && edge->target->id==v1->id) ){
 					conn=1;
 					break;
 				}
-
 			}
-
 			Py_DECREF(edge);
 		}
-		
 	}
-
 
 	Py_DECREF(iterfrom);
 	Py_DECREF(iterto);
-
-
-/*
-	while ( (edge=(Edge*)PyIter_Next(iter)) ) {
-		if (edge->orientation==0){
-			if (edge->target->id==v2->id){
-				conn=1;
-				break;
-			}
-		} else {
-			if (edge->source->id==v1->id){
-				if (edge->target->id==v2->id) {
-					conn=1;
-					break;
-				}
-			} else {
-				if (edge->source->id==v2->id) {
-					conn=1;
-					break;
-				}
-			}
-		}
-		
-		Py_DECREF(edge);
-	}
-	Py_DECREF(iter);
-
-	iter=PyObject_GetIter(v1->edges_to);
-	if (conn!=1) {
-		while ( (edge=(Edge*)PyIter_Next(iter)) ) {
-			if (edge->orientation==0){
-				if (edge->target->id==v2->id){
-					conn=1;
-					break;
-				}
-			} else {
-				if (edge->source->id==v1->id){
-					if (edge->target->id==v2->id) {
-						conn=1;
-						break;
-					}
-				} else {
-					if (edge->source->id==v2->id) {
-						conn=1;
-						break;
-					}
-				}
-			}
-			
-			Py_DECREF(edge);
-		}
-	}
-	Py_DECREF(iter);*/
 
 	return conn;
 }
@@ -1137,7 +1075,6 @@ static PyMethodDef Graph_methods[] = {
     {"add_vertex", (PyCFunction) add_vertex, METH_VARARGS, "Adds a vertex to the graph."},
     {"add_edge", (PyCFunction) add_edge, METH_VARARGS, "Adds an edge to the graph."},
     {"remove_vertex", (PyCFunction) remove_vertex, METH_VARARGS, "Removes a vertex from the graph, returns the number of removed edges."},
-    //{"bfs", (PyCFunction) bfs, METH_VARARGS, "Returns an iterator that performs a Breadth First search."},
     {NULL}  /* Sentinel */
 };
 
@@ -1271,9 +1208,8 @@ GSA_init(GSA *self, PyObject *args, PyObject *kwds)
 		
 		self->graph = (Graph *)Graph_New(&GraphType, NULL, NULL);
 		self->rcindex=1; //by default create T with reverse complements
-		
-		if (!(tmp=loadFile(self, input1, 0, tmp, self->rcindex))) {
-		//if (!(tmp=loadGFA(self, input1, 0, tmp, self->rcindex))) {
+
+		if (!(tmp=loadGFA(self, input1, 0, tmp, self->rcindex))) {
 			PyErr_SetString(GSAError, "Failed to load graph.");
 			return -1;
 		}
@@ -1917,183 +1853,6 @@ static PyTypeObject GSAType = {
 };
 
 
-
-
-/*
-
- Fasta header contains vertex information and edges. Parse it and return the created Vertex.
-
- */
-static Vertex* parseHeader(GSA* self, int input_origin, int t, char *header, PyObject *mapping, unsigned int** edges_from, unsigned int** edges_to, uint8_t** orientations, unsigned int * nrofedges, unsigned int * esize, int useRC){
-
-	Vertex* vid=NULL;
-
-	char *cur=header;
-	char *next;
-
-	next=strchr(cur,'|');
-	next[0]='\0';
-	//idx_t oldid=strtol(cur,NULL,10);
-	unsigned int oldid=atoi(cur);
-
-	int edgebuf=10000; //buffer size
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char *el=cur;
-
-	char *es=el;
-	char *ee=strchr(es,';');
-	while (ee!=NULL){
-		ee[0]='\0';
-		char *p=strchr(es,',');
-		uint8_t o=atoi(p+1);
-		p[0]='\0';
-		unsigned int target=atoi(es);//strtol(es,NULL,10);
-
-		if (o==0 || (o==2 && target>oldid)){
-			if (*nrofedges==*esize){
-				*esize=*esize+edgebuf;
-				unsigned int* tmpul;
-				uint8_t * tmpb;
-				tmpul=realloc(*edges_from,*esize*sizeof(unsigned int));
-				*edges_from=tmpul;
-
-				tmpul=realloc(*edges_to,*esize*sizeof(unsigned int));
-				*edges_to=tmpul;
-				
-				tmpb=realloc(*orientations,*esize*sizeof(uint8_t));
-				*orientations=tmpb;
-			}
-			(*edges_from)[(*nrofedges)]=target;
-			(*edges_to)[(*nrofedges)]=oldid;
-			(*orientations)[(*nrofedges)]=o;
-			(*nrofedges)++;
-		}
-		
-		es=ee+1;
-		ee=strchr(es,';');
-	}
-	
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char * er=cur;
-
-	es=er;
-	ee=strchr(es,';');
-	while (ee!=NULL){
-		ee[0]='\0';
-		char *p=strchr(es,',');
-		uint8_t o=atoi(p+1);
-		p[0]='\0';
-		unsigned int target=atoi(es);//strtol(es,NULL,10);
-
-		if (o==1 && target>oldid) {
-			if (*nrofedges==*esize){
-				*esize=*esize+edgebuf;
-
-				unsigned int* tmpul;
-				uint8_t * tmpb;
-
-				tmpul=realloc(*edges_from,*esize*sizeof(unsigned int));
-				*edges_from=tmpul;
-
-				tmpul=realloc(*edges_to,*esize*sizeof(unsigned int));
-				*edges_to=tmpul;
-				
-				tmpb=realloc(*orientations,*esize*sizeof(uint8_t));
-				*orientations=tmpb;
-			}
-
-			(*edges_from)[(*nrofedges)]=oldid;
-			(*edges_to)[(*nrofedges)]=target;
-			(*orientations)[(*nrofedges)]=o;
-			(*nrofedges)++;
-		}
-
-		es=ee+1;
-		ee=strchr(es,';');
-	}
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char * origin=cur;
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char * corigin=cur;
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char * coordorigin=cur;
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	char * coordcontig=cur;
-
-	cur=next+1;
-	next=strchr(cur,'|');
-	next[0]='\0';
-	//int cstart=atoi(cur);
-	idx_t cstart=strtol(cur,NULL,10);
-
-	cur=next+1;
-	//int cend=atoi(cur);
-	idx_t cend=strtol(cur,NULL,10);
-
-	vid=add_vertex_c(self->graph, input_origin, useRC==1 ? 2 : 0, coordorigin, coordcontig, cstart, cend, t, useRC==1 ? t+(cend-cstart)+1 : t);
-
-	PyObject* o;
-	char *token = strtok(origin,";");
-	while(token!=NULL)
-	{
-		o=Py_BuildValue("s",token);
-		if (PySet_Add(vid->originid_set,o)==-1){
-			fprintf(stderr,"Failed to add origin of node to set");
-			return NULL;
-		};
-		Py_DECREF(o);
-		token = strtok(NULL, ";");
-	}
-
-	token = strtok(corigin,";");
-	while(token!=NULL)
-	{
-		o=Py_BuildValue("s",token);
-		if (PySet_Add(vid->contigid_set,o)==-1){
-			fprintf(stderr,"Failed to add origin of node to set");
-			return NULL;
-		};
-		Py_DECREF(o);
-		token = strtok(NULL, ";");
-	}
-
-	//update the mapping table so we can relate old nodes to new nodes
-	//PyObject *id = PyInt_FromLong(oldid);
-	PyObject *id = Py_BuildValue("i",oldid);
-	//PyObject *id = PyInt_FromInt(oldid);
-	if (id == NULL){
-		Py_DECREF(id);
-		fprintf(stderr,"Failed to read id %u.\n",oldid);
-		return NULL;
-	}
-	
-	if (PyDict_SetItem(mapping, id, (PyObject *)vid) < 0) {
-		Py_DECREF(id);
-		fprintf(stderr,"Failed to add to mapping for id %u.\n",oldid);
-		return NULL;
-	}
-	Py_DECREF(id);
-	
-	return vid;
-}
-
 static idx_t
 loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 
@@ -2101,16 +1860,16 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 	char * line = NULL;
 	size_t len = 0;
 	ssize_t read;
-	
+
 	fp = fopen(inputfile, "r");
 	if (fp == NULL){
+		printf("Failed to open file %s\n", inputfile);
 		return -1;
 	}
 
 	PyObject *mapping=PyDict_New(); //dict used to map between old and new ids for vertices
 	
-	const idx_t Tbufsize=10000; //TODO: use MACRO constant
-	idx_t Tsize=f+Tbufsize;
+	idx_t Tsize=f+TBUFSIZE;
 
 	idx_t t=f;
 	self->T=realloc(self->T, Tsize*sizeof(char));
@@ -2120,7 +1879,7 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 	tmp=strrchr(inputfile,'/');
 	inputfile= tmp ? tmp+1 : inputfile; //get rid of the path information in the graph
 
-	Vertex* vid;
+	Vertex* v;
 	char * seq;
 	idx_t seqlen;
 	char *ts;
@@ -2128,16 +1887,18 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 	int i=0;
 	unsigned int oldid;
 
+	unsigned int esize=EDGEBUFSIZE;
+	unsigned int nrofedges=0;
+	unsigned int *edges_from=malloc(sizeof(int)*esize);
+	unsigned int *edges_to=malloc(sizeof(int)*esize);
+	uint8_t *orientations=malloc(sizeof(uint8_t)*esize);
+
 	while ((read = getline(&line, &len, fp)) != -1) {
-		//printf("Retrieved line of length %zu :\n", read);
-		//printf("%s", line);
 
 		if (line[0]=='S'){ //create Vertex
-
 			ts=strchr(line,'\t');
 			te=strchr(ts+1,'\t');
 			te[0]='\0';
-			
 			oldid=atoi(ts);
 			PyObject *id = Py_BuildValue("i",oldid);
 			if (id == NULL){
@@ -2145,32 +1906,114 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 				fprintf(stderr,"Failed to read id %u.\n",oldid);
 				return -1;
 			}
-
+			
 			ts=te+1;
 			te=strchr(ts,'\t');
 			te[0]='\0';
 			seq=ts;
 			seqlen=te-ts;
-	
-			//TODO: make parse tag function that handles all other tags
-			vid=add_vertex_c(self->graph, inputid, 0, inputfile, "coord_contig_stub", 0, seqlen, t, t+seqlen+1);
 
-			//update the mapping table so we can relate old nodes to new nodes
-			if (PyDict_SetItem(mapping, id, (PyObject *)vid) < 0) {
+			char *tags=te+1;
+			
+			v=add_vertex_c(self->graph, inputid, useRC==1 ? 2 : 0, 0, seqlen, t, useRC==1 ? t+seqlen+1 : t);
+
+			if (v==NULL) {
+				PyErr_SetString(GSAError, "Failed to create vertex");
+				return -1;
+			}
+
+			char *tag;
+			char *type;
+			char *val;
+			char *e;
+			char *next;
+			
+			if ((e=strchr(tags,'\n'))!=NULL)
+				*e='\0';
+
+			tag=strchr(tags,'\t');
+			tag++;
+
+			while (tag!=NULL){
+				type=strchr(tag,':');
+				val=strchr(type+1,':');
+				val++;
+				next=strchr(tag+1,'\t');
+				if (next!=NULL){ //last tag on line?
+					next[0]='\0';
+					next++;
+				}
+				type[0]='\0';
+
+				PyObject* o;
+				char *token;
+
+				if (strcmp(tag,"ORI")==0){ //parse origin
+					token = strtok(val,";");
+					while(token!=NULL)
+					{
+						o=Py_BuildValue("s",token);
+						if (PySet_Add(v->originid_set,o)==-1){
+							fprintf(stderr,"Failed to add origin of node to set");
+							return -1;
+						};
+						Py_DECREF(o);
+						token = strtok(NULL, ";");
+					}
+				} else if (strcmp(tag,"CTG")==0){ //parse contig origin
+					token = strtok(val,";");
+					while(token!=NULL)
+					{
+						o=Py_BuildValue("s",token);
+						if (PySet_Add(v->contigid_set,o)==-1){
+							fprintf(stderr,"Failed to add contig origin of node to set");
+							return -1;
+						};
+						Py_DECREF(o);
+						token = strtok(NULL, ";");
+					}
+				} else if (strcmp(tag,"CRD")==0){ //parse coord_origin
+					o=Py_BuildValue("s",val);
+					if (o==NULL){
+						PyErr_SetString(GSAError, "Failed to parse coord_origin.");
+						return -1;
+					}
+					Py_DECREF(v->coord_origin);
+					v->coord_origin=o;
+				} else if (strcmp(tag,"CRDCTG")==0){ //parse coord_contig
+					o=Py_BuildValue("s",val);
+					if (o==NULL){
+						PyErr_SetString(GSAError, "Failed to parse coord_origin.");
+						return -1;
+					}
+					Py_DECREF(v->coord_contig);
+					v->coord_contig=o;
+				} else if (strcmp(tag,"START")==0){ //parse contig_start
+					idx_t cstart=strtol(val,NULL,10);
+					v->contig_start=cstart;
+				} else if (strcmp(tag,"END")==0){ //parse contig_end
+					idx_t cend=strtol(val,NULL,10);
+					v->contig_end=cend;
+				}
+				tag=next;
+			}
+
+			//update the mapping table so we can map nodes in gfa between assigned new ids when drawing edges
+			if (PyDict_SetItem(mapping, id, (PyObject *)v) < 0) {
 				Py_DECREF(id);
 				fprintf(stderr,"Failed to add to mapping for id %u.\n",oldid);
 				return -1;
 			}
 			Py_DECREF(id);
-			
+
 			t=f+seqlen+1;
 			
 			if (t>=Tsize){
-				while (t>Tsize){Tsize=Tsize+Tbufsize;}
+				while (t>Tsize){Tsize=Tsize+TBUFSIZE;}
 				self->T=realloc(self->T, Tsize*sizeof(char));
 				self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
 			}
-			
+	
 			for (i=0;i<seqlen;i++){
 				seq[i]=(char)toupper(seq[i]);
 			}
@@ -2178,44 +2021,93 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 			if (self->T!=NULL){
 				memcpy(&self->T[f], seq, seqlen);
 				memcpy(&self->T[f+seqlen], "$", 1); //append $
-
+				
 				if (useRC==1){
 					t=t+seqlen+1;
-
+					
 					if (t>=Tsize){
-						while (t>Tsize){Tsize=Tsize+Tbufsize;}
+						while (t>Tsize){Tsize=Tsize+TBUFSIZE;}
 						self->T=realloc(self->T, Tsize*sizeof(char));
 						self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
 					}
-
+					
 					rc(seq, seqlen);
 					memcpy(&self->T[f+seqlen+1], seq, seqlen); //append the reverse complement
 					memcpy(&self->T[t-1], "$", 1); //append $
 				}
-
+				
 				for (; f<t; f++) { //keep a Vertex pointer for every suffix
-					self->TIiv[f]=vid;
+					self->TIiv[f]=v;
 				}
 			} else {
 				f=t;
 			}
-
-			if (vid==NULL) {
-				PyErr_SetString(GSAError, "Failed to add vertex");
-				return -1;
+			continue;
+		}
+		if (line[0]=='L'){ //create Edge
+			
+			if (nrofedges==esize){
+				esize=esize+EDGEBUFSIZE;
+				unsigned int* tmpul;
+				uint8_t * tmpb;
+				tmpul=realloc(edges_from,esize*sizeof(unsigned int));
+				edges_from=tmpul;
+				tmpul=realloc(edges_to,esize*sizeof(unsigned int));
+				edges_to=tmpul;
+				tmpb=realloc(orientations,esize*sizeof(uint8_t));
+				orientations=tmpb;
 			}
-
+			
+			char* fromid=strchr(line,'\t');
+			char* fromstrand=strchr(fromid+1,'\t');
+			char* toid=strchr(fromstrand+1,'\t');
+			char* tostrand=strchr(toid+1,'\t');
+			char* cigar=strchr(tostrand+1,'\t');
+			
+			fromid++;
+			fromstrand[0]='\0';
+			fromstrand++;
+			toid[0]='\0';
+			toid++;
+			tostrand[0]='\0';
+			tostrand++;
+			cigar[0]='\0';
+			cigar++;
+			
+			if (strncmp(cigar,"0M",2)!=0){ //reveal only handles graphs without overlaps!
+				continue;
+			}
+			
+			unsigned int from=atoi(fromid);
+			unsigned int to=atoi(toid);
+			
+			if (fromstrand[0]=='+' && tostrand[0]=='+'){
+				edges_from[nrofedges]=from;
+				edges_to[nrofedges]=to;		
+				orientations[nrofedges]=0;
+			} else if (fromstrand[0]=='+' && tostrand[0]=='-') {
+				edges_from[nrofedges]=from;
+				edges_to[nrofedges]=to;
+				orientations[nrofedges]=1; //inny
+			} else if (fromstrand[0]=='-' && tostrand[0]=='+') {
+				edges_from[nrofedges]=from;
+				edges_to[nrofedges]=to;
+				orientations[nrofedges]=2; //outty
+			} else { //reveal would never output this, but would mean both have same orientation, but switch to and from
+				edges_from[nrofedges]=to;
+				edges_to[nrofedges]=from;
+				orientations[nrofedges]=0;
+			}
+			
+			nrofedges++;
 			continue;
 		}
-		if (line[0]=='L'){ //TODO: create Edge
-			continue;
-		}
-		if (line[0]=='H'){ //header line, if contains SM tag parse origins TODO: replace with parse_tag()
+		if (line[0]=='H'){ //header line, if contains ORI tag parse origins
 			char * origins;
 			char * oe;
-			origins=strstr(line,"SM");
+			origins=strstr(line,"ORI");
 			if (origins!=NULL){
-				origins=origins+5;
+				origins=origins+6;
 				while (strchr(origins,';')!=NULL){
 					oe=strchr(origins,';');
 					oe[0]='\0';
@@ -2224,7 +2116,6 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 					Py_DECREF(org);
 					origins=oe+1;
 				}
-				
 			}
 			continue;
 		}
@@ -2233,18 +2124,43 @@ loadGFA(GSA *self, char * inputfile, int inputid, idx_t f, int useRC){
 	fclose(fp);
 	if (line)
 		free(line);
-	
-	return f+1;
+
+	unsigned int l=0;	
+	//Adding edges to graph
+	for (l=0; l<nrofedges; l++){
+		PyObject *oid1 = PyInt_FromLong(edges_from[l]);
+		Vertex *vFrom=(Vertex*) PyDict_GetItem(mapping,oid1);
+		if (vFrom==NULL){
+			Py_DECREF(oid1);
+			fprintf(stderr,"Failed to retrieve Vertex for id %u.\n",edges_from[l]);
+			return -1;
+		}
+		Py_DECREF(oid1);
+
+		PyObject *oid2 = PyInt_FromLong(edges_to[l]);
+		Vertex *vTo=(Vertex*) PyDict_GetItem(mapping,oid2);
+		if (vTo==NULL){
+			Py_DECREF(oid2);
+			fprintf(stderr,"Failed to retrieve Vertex for id %u.\n",edges_to[l]);
+			return -1;
+		}
+		Py_DECREF(oid2);
+
+		uint8_t o=orientations[l];
+		add_edge_c(self->graph, vFrom, vTo, o);
+	}
+	Py_DECREF(mapping);
+
+	free(edges_from);
+	free(edges_to);
+	free(orientations);
+
+	return f;
 }
 
 static idx_t 
-loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
+loadFasta(GSA *self, char * input1, int inputid, idx_t f, int useRC){
 
-	int isgraph1=0;
-	if (endsWith(input1, GRAPHEXT) || endsWith(input1, GRAPHEXTGZ))	{
-		isgraph1=1;
-	}
-	
 	gzFile fp1;
 	kseq_t *seq1;
 	int l;
@@ -2254,19 +2170,7 @@ loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
 	if (fp1==NULL) { return -1; }
 	seq1 = kseq_init(fp1);
 
-	unsigned int nrofedges=0;
-	PyObject *mapping1=PyDict_New(); //dict used to map between old and new ids for edges
-
-	const unsigned int edgebuf=10000; //TODO: use MACRO constant
-
-	const idx_t Tbufsize=10000; //TODO: use MACRO constant
-	idx_t Tsize=f+Tbufsize;
-
-	unsigned int esize=edgebuf;
-	unsigned int *edges_from=malloc(sizeof(int)*esize);
-	unsigned int *edges_to=malloc(sizeof(int)*esize);
-	uint8_t *orientations=malloc(sizeof(uint8_t)*esize);
-	
+	idx_t Tsize=f+TBUFSIZE;
 	self->T=realloc(self->T, Tsize*sizeof(char));
 	self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
 
@@ -2277,59 +2181,36 @@ loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
 	tmp=strrchr(input1,'/');
 	input1= tmp ? tmp+1 : input1; //hack to get rid of the path information in the graph
 
-	//if gfasta, first line contains all the samples that are contained in the graph
-	if (isgraph1!=0){
-		l = kseq_read(seq1);
-		
-		char *o=seq1->name.s;
-		char *oe=strchr(o,'|');
-		char *oide=NULL;
-		
-		while (oe!=NULL) {
-			oe[0]='\0';
-			oide=strchr(o,';');
-			oide[0]='\0';
-			
-			PyObject* org=Py_BuildValue("s",oide+1);
-			PySet_Add(self->graph->origins, org);
-			Py_DECREF(org);
+	PyObject* org=Py_BuildValue("s",input1);
+	PySet_Add(self->graph->origins, org);
+	Py_DECREF(org);
 
-			o=oe+1;
-			oe=strchr(o,'|');
-		}
-	} else {
-		PyObject* org=Py_BuildValue("s",input1);
-		PySet_Add(self->graph->origins, org);
-		Py_DECREF(org);
-	}
-	
 	while ((l = kseq_read(seq1)) >= 0) { 
 		//create vertex for this sequence
 		Vertex* vid;
-
-		if (isgraph1!=0){
-			vid=parseHeader(self, inputid, t, seq1->name.s, mapping1, &edges_from, &edges_to, &orientations, &nrofedges, &esize, useRC);
+		
+		if (useRC==1){
+			vid=add_vertex_c(self->graph, inputid, 2, 0, seq1->seq.l, t, t+seq1->seq.l+1);
 		} else {
-			if (useRC==1){
-				vid=add_vertex_c(self->graph, inputid, 2, input1, seq1->name.s, 0, seq1->seq.l, t, t+seq1->seq.l+1);
-			} else {
-				vid=add_vertex_c(self->graph, inputid, 0, input1, seq1->name.s, 0, seq1->seq.l, t, 0);
-			}
-
-			PyObject*org=Py_BuildValue("s",input1);
-			PySet_Add(vid->originid_set,org);
-			Py_DECREF(org);
-
-			//add i to vid->contigid_set
-			PyObject*con=Py_BuildValue("s",seq1->name.s);
-			PySet_Add(vid->contigid_set,con);
-			Py_DECREF(con);
+			vid=add_vertex_c(self->graph, inputid, 0, 0, seq1->seq.l, t, 0);
 		}
+		
+		PyObject*org=Py_BuildValue("s",input1);
+		PySet_Add(vid->originid_set,org);
+		
+		Py_DECREF(vid->coord_origin);
+		vid->coord_origin=org;
 
+		PyObject*con=Py_BuildValue("s",seq1->name.s);
+		PySet_Add(vid->contigid_set,con);
+		
+		Py_DECREF(vid->coord_contig);
+		vid->coord_contig=con;
+		
 		t=f+seq1->seq.l+1;
 		
 		if (t>=Tsize){
-			while (t>Tsize){Tsize=Tsize+Tbufsize;}
+			while (t>Tsize){Tsize=Tsize+TBUFSIZE;}
 			self->T=realloc(self->T, Tsize*sizeof(char));
 			self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
 		}
@@ -2346,7 +2227,7 @@ loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
 			  t=t+seq1->seq.l+1;
 
 			  if (t>=Tsize){
-				 while (t>Tsize){Tsize=Tsize+Tbufsize;}
+				 while (t>Tsize){Tsize=Tsize+TBUFSIZE;}
 				 self->T=realloc(self->T, Tsize*sizeof(char));
 				 self->TIiv=realloc(self->TIiv, Tsize*sizeof(PyObject*));
 			  }
@@ -2372,45 +2253,8 @@ loadFile(GSA *self, char * input1, int inputid, idx_t f, int useRC){
 	kseq_destroy(seq1);
 	gzclose(fp1);
 
-	//Adding edges to graph
-	if (isgraph1!=0){
-		for (l=0; l<nrofedges; l++){ //TODO: change l here to unsigned
-			PyObject *oid1 = PyInt_FromLong(edges_from[l]);
-			Vertex *vFrom=(Vertex*) PyDict_GetItem(mapping1,oid1);
-			if (vFrom==NULL){
-				Py_DECREF(oid1);
-				fprintf(stderr,"Failed to retrieve Vertex for id %u.\n",edges_from[l]);
-				return -1;
-			}
-			Py_DECREF(oid1);
-
-			PyObject *oid2 = PyInt_FromLong(edges_to[l]);
-			Vertex *vTo=(Vertex*) PyDict_GetItem(mapping1,oid2);
-			if (vTo==NULL){
-				Py_DECREF(oid2);
-				fprintf(stderr,"Failed to retrieve Vertex for id %u.\n",edges_to[l]);
-				return -1;
-			}
-			Py_DECREF(oid2);
-
-			uint8_t o=orientations[l];
-			add_edge_c(self->graph, vFrom, vTo, o);
-		}
-		Py_DECREF(mapping1);
-	}
-
-	free(edges_from);
-	free(edges_to);
-	free(orientations);
-
 	return f;
 }
-
-
-
-
-
-
 
 static int
 buildGSA(GSA *self, char *input1, char* input2){
@@ -2427,18 +2271,31 @@ buildGSA(GSA *self, char *input1, char* input2){
 	
 	idx_t i=0,f=0,n=0;
 
-	if (!(f=loadFile(self, input1, 0, f, 0))){
-		PyErr_SetString(GSAError, "Failed to load first (g)fasta file.");
-		return -1;
+	if (endsWith(input1, GRAPHEXT))	{
+		if (!(f=loadGFA(self, input1, 0, f, 0))) {
+			PyErr_SetString(GSAError, "Failed to load first gfa-file.");
+			return -1;
+		}
+	} else {
+		if (!(f=loadFasta(self, input1, 0, f, 0))){
+			PyErr_SetString(GSAError, "Failed to load first fasta file.");
+			return -1;
+		}
 	}
 	
 	self->sep=f-1; //-1 for the splitting on the last sentinel of input1
 
-	if (!(n=loadFile(self, input2, 1, f, self->rcindex==1 ? 1 : 0))){
-		PyErr_SetString(GSAError, "Failed to load second (g)fasta file.");
-		return -1;
+	if (endsWith(input2, GRAPHEXT))	{
+		if (!(n=loadGFA(self, input2, 1, f, self->rcindex==1 ? 1 : 0))){
+			PyErr_SetString(GSAError, "Failed to load first gfa-file.");
+			return -1;
+		}
+	} else {
+		if (!(n=loadFasta(self, input2, 1, f, self->rcindex==1 ? 1 : 0))){
+			PyErr_SetString(GSAError, "Failed to load second fasta file.");
+			return -1;
+		}
 	}
-	
 
 	self->n=n;
 	self->orgn=self->n;
@@ -2495,11 +2352,11 @@ buildGSA(GSA *self, char *input1, char* input2){
 	return 0;
 }
 
-static Vertex * add_vertex_c(Graph *self, int input_origin, int indexed, char * coord_origin, char * coord_contig, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset)
+static Vertex * add_vertex_c(Graph *self, int input_origin, int indexed, idx_t contig_start, idx_t contig_end, idx_t saoffset, idx_t rcsaoffset)
 {
     Vertex *v = (Vertex *)Vertex_new(&VertexType, NULL, NULL);
     
-    if (Vertex_init_c(v, self->vi, input_origin, indexed, coord_origin, coord_contig, contig_start, contig_end, saoffset, rcsaoffset)!=0){
+    if (Vertex_init_c(v, self->vi, input_origin, indexed, contig_start, contig_end, saoffset, rcsaoffset)!=0){
         Py_DECREF(v);
         return NULL;
     }
@@ -2713,21 +2570,7 @@ static GSA* extract(GSA *self, PyObject *args)
 	Vertex *v;
 	while ( (v=(Vertex*)PyIter_Next(iter)) )
 	{
-		//int o;
-
-		/*if (! PyArg_ParseTuple(tup, "O", &v)) {
-			PyErr_SetString(PyExc_TypeError, "Unable to parse tuple of vertex and orientation");
-			free(tmp);
-			Py_DECREF(iter);
-			Py_DECREF(nGSA);
-			return NULL;
-		}*/
-		
-		//orientation is the same, or we want both
-		//if (o==1 || o==2) {
 		if (v->indexed==0 || v->indexed==2) {
-
-			//printf("%lu --> Extracting normal from: %d to %d length: %d\n",v->id,v->saoffset,v->saoffset+(v->contig_end-v->contig_start),v->contig_end-v->contig_start);
 
 			assert(v->contig_start>=0);
 			assert(v->contig_end>=0);
@@ -2812,7 +2655,6 @@ static GSA* extract(GSA *self, PyObject *args)
     nGSA->SA=malloc(n * sizeof(idx_t));
     if (nGSA->SA==NULL) {
         free(tmp);
-		//printf("Failed trying to allocate "PYIDXFORMAT" integers of memory.\n",n);
         PyErr_SetString(PyExc_TypeError, "Could not allocate enough memory for new index.");
         return NULL;
     }
@@ -2820,7 +2662,6 @@ static GSA* extract(GSA *self, PyObject *args)
     nGSA->LCP=malloc(n * sizeof(int));
     if (nGSA->LCP==NULL) {
         free(tmp);
-		//printf("Failed trying to allocate "PYIDXFORMAT" integers of memory.\n",n);
         PyErr_SetString(PyExc_TypeError, "Could not allocate enough memory for new index.");
         return NULL;
     }
@@ -2930,139 +2771,6 @@ static GSA* extract(GSA *self, PyObject *args)
 	
 	return nGSA;
 }
-
-
-//TODO: remove dependency on TI for this function --> only works for aligning a set of max two sequences, so use self->sep to distinguish between them!
-//cannot be used to segment sets of sequences!!!
-static PyObject * split(GSA *self, PyObject *args){
-    GSA * gsa_a;
-    GSA * gsa_b;
-    
-    //create two new index objects
-    gsa_a=(GSA *)GSA_new(&GSAType, NULL, NULL);
-    gsa_b=(GSA *)GSA_new(&GSAType, NULL, NULL);
-    
-    idx_t idx,ml;
-    
-    if (! PyArg_ParseTuple(args, "ii", &idx, &ml)) {
-        PyErr_SetString(GSAError, "Failed to parse input parameters");
-        return NULL;
-    }
-    
-    idx_t startInT1,startInT2,endInT1,endInT2,ss,lcp,tid,tid1,tid2,i,bi=0,ai=0,minlcp1=-1,minlcp0=-1,last_set=-1;
-    startInT1 = self->SA[idx];
-    startInT2 = self->SA[idx-1];
-    endInT1 = self->SA[idx]+ml;
-    endInT2 = self->SA[idx-1]+ml;
-    
-    //allocate memory for new index datastructures
-    if (startInT2>startInT1) {
-        gsa_a->n=(startInT1+(startInT2 - self->sep));
-        gsa_a->SA=malloc(gsa_a->n * sizeof(int));
-        gsa_a->LCP=malloc(gsa_a->n * sizeof(int));
-
-        gsa_b->n=(self->sep-endInT1) + (self->n-endInT2);
-        gsa_b->SA=malloc(gsa_b->n * sizeof(int));
-        gsa_b->LCP=malloc(gsa_b->n * sizeof(int));
-    } else {
-        gsa_a->n=(startInT2 + (startInT1 - self->sep));
-        gsa_a->SA=malloc(gsa_a->n * sizeof(int));
-        gsa_a->LCP=malloc(gsa_a->n * sizeof(int));
-        
-        gsa_b->n=(self->sep-endInT2) + (self->n-endInT1);
-        gsa_b->SA=malloc(gsa_b->n * sizeof(int));
-        gsa_b->LCP=malloc(gsa_b->n * sizeof(int));
-    }
-    
-    tid1=self->TIiv[self->SA[idx]]->id;
-    tid2=self->TIiv[self->SA[idx-1]]->id;
-    
-    if (tid1==tid2) {
-        PyErr_SetString(GSAError, "Invalid match. Match within instead of between sequences.");
-        return NULL;
-    }
-
-    //fprintf(stderr,"startInT1=%d endInT1=%d startInT2=%d endInT2=%d\n",startInT1,endInT1,startInT2,endInT2);
-    
-    for (i=0; i<self->n; i++) {
-        ss=self->SA[i];
-        lcp=self->LCP[i];
-        tid=self->TIiv[self->SA[i]]->id;
-        
-        //fprintf(stderr,"%d %d %d %d %d %d %d %d %d %d\n",i,ss,lcp,tid,tid1,tid2,minlcp0,minlcp1,ai,bi);
-        
-        if ( ((tid==tid1) && (ss<startInT1)) || ((tid==tid2) && (ss<startInT2)) ) {
-            //printf("--> a\n");
-            
-            if (ai==0){ //first record
-                gsa_a->LCP[ai]=-1;
-                minlcp0=-2;
-            } else {
-                if (last_set==0) { //consecutive values, no need to recalc LCP
-                    gsa_a->LCP[ai]=lcp;
-                    minlcp0=-2;
-                } else { //not consecutive, use minlcp
-                    if ((lcp<minlcp0) || (minlcp0<0)) {
-                        minlcp0=lcp;
-                    }
-                    gsa_a->LCP[ai]=minlcp0;
-                    minlcp0=-2;
-                }
-            }
-            gsa_a->SA[ai]=ss;
-            //gsa_a->TI[ai]=tid;
-            last_set=0;
-            ai++;
-        }
-        
-        if (((tid==tid1) && (ss>=endInT1)) || ((tid==tid2) && (ss>=endInT2))) {
-            //printf("--> b\n");
-            
-            if (bi==0){ //first record
-                gsa_b->LCP[bi]=-1;
-                minlcp1=-2;
-            } else {
-                if (last_set==1){ //consecutive values, no need to recalc LCP
-                    gsa_b->LCP[bi]=lcp;
-                    minlcp1=-2;
-                } else { //not consecutive, use minlcp
-                    if ((lcp<minlcp1) || (minlcp1<0)) {
-                        minlcp1=lcp;
-                    }
-                    gsa_b->LCP[bi]=minlcp1;
-                    minlcp1=-2;
-                }
-            }
-            gsa_b->SA[bi]=ss;
-            //gsa_b->TI[bi]=tid;
-            last_set=1;
-            bi++;
-        }
-        
-        if (((tid==tid1) && ((ss>=startInT1) && (ss<endInT1))) || ((tid==tid2) && ((ss>=startInT2) && (ss<endInT2))) ) {
-            //printf("--> NONE\n");
-            //check min for both minlcp0 and minlcp1
-            if ((lcp<minlcp0) || ((minlcp0==-2) || (minlcp0==-1))) { minlcp0=lcp;}
-            if ((lcp<minlcp1) || ((minlcp1==-2) || (minlcp1==-1))) { minlcp1=lcp;}
-            last_set=2;
-            continue;
-        }
-    
-    
-        if ((last_set==1) && (minlcp0!=-1)) {
-            //check min for minlcp0
-            if ((lcp<minlcp0) || (minlcp0==-2)) {minlcp0=lcp;}
-        }
-    
-        if ((last_set==0) && (minlcp1!=-1)) {
-            //check min for minlcp1
-            if ((lcp<minlcp1) || (minlcp1==-2)) {minlcp1=lcp;}
-        }
-    }
-    
-    return Py_BuildValue("OO", gsa_a, gsa_b);
-}
-
 
 
 #ifndef PyMODINIT_FUNC	/* declarations for DLL import/export */

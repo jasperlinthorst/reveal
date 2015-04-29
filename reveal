@@ -41,10 +41,12 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
     
     assert(v1.indexed==0)
     
-    mergedv=g.add_vertex(2, v1.indexed, v1.coord_origin, v1.coord_contig, \
+    mergedv=g.add_vertex(2, v1.indexed, \
                             v1.contig_start+(aFrom-v1.saoffset), \
                             v1.contig_start+(aTo-v1.saoffset), \
                             aFrom, aFrom)
+    mergedv.coord_origin=v1.coord_origin
+    mergedv.coord_contig=v1.coord_contig
     
     for v in v1.origin.union(v2.origin):
         mergedv.origin.add(v)
@@ -52,7 +54,7 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
         mergedv.contig_origin.add(v)
     
     #TODO: add extract by domain so we dont have to create this node in the first place
-    tmpv=g.add_vertex(2, v2.indexed, v2.coord_origin, v2.coord_contig, \
+    tmpv=g.add_vertex(2, v2.indexed, \
                     v2.contig_start+(bFrom-v2.saoffset), \
                     v2.contig_start+(bTo-v2.saoffset), \
                     bFrom, v2.rcsaoffset+(v2.saoffset+(v2.contig_end-v2.contig_start))-bTo if v2.rcsaoffset>v2.saoffset else bFrom)
@@ -64,10 +66,13 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
     #create a vertex for the unaligned prefix of v1
     #assert(v1.contig_start<=aFrom-v1.saoffset)
     if aFrom!=v1.saoffset: 
-        l1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
+        l1nv=g.add_vertex(v1.input_origin, v1.indexed, \
                             v1.contig_start, \
                             v1.contig_start+(aFrom-v1.saoffset), \
                             v1.saoffset, v1.saoffset)
+        l1nv.coord_origin=v1.coord_origin
+        l1nv.coord_contig=v1.coord_contig
+
         for v in v1.origin:
             l1nv.origin.add(v)
         for v in v1.contig_origin:
@@ -96,10 +101,13 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
     assert(aTo-v1.saoffset<=v1.contig_end)
     if aTo!=v1.saoffset+(v1.contig_end-v1.contig_start):
         
-        r1nv=g.add_vertex(v1.input_origin, v1.indexed, v1.coord_origin, v1.coord_contig, \
+        r1nv=g.add_vertex(v1.input_origin, v1.indexed, \
                 v1.contig_start+v1prefixlength+v1matchlength, \
                 v1.contig_start+v1prefixlength+v1matchlength+v1suffixlength, \
                 v1.saoffset+v1prefixlength+v1matchlength, v1.saoffset+v1prefixlength+v1matchlength)
+        r1nv.coord_origin=v1.coord_origin
+        r1nv.coord_contig=v1.coord_contig
+        
         for v in v1.origin:
             r1nv.origin.add(v)
         for v in v1.contig_origin:
@@ -127,10 +135,13 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
 
     #create a vertex for the unaligned prefix of v2
     if bFrom!=v2.saoffset:
-        l2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
+        l2nv=g.add_vertex(v2.input_origin, v2.indexed, \
                             v2.contig_start, \
                             v2.contig_start+(bFrom-v2.saoffset), \
                             v2.saoffset, v2.rcsaoffset+v2suffixlength+v2matchlength if v2.rcsaoffset>v2.saoffset else v2.saoffset)
+        l2nv.coord_origin=v2.coord_origin
+        l2nv.coord_contig=v2.coord_contig
+        
         for v in v2.origin:
             l2nv.origin.add(v)
         for v in v2.contig_origin:
@@ -170,10 +181,13 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
     #create a vertex for the unaligned suffix of v2
     assert(bTo-v2.saoffset<=v2.contig_end)
     if bTo!=v2.saoffset+(v2.contig_end-v2.contig_start):
-        r2nv=g.add_vertex(v2.input_origin, v2.indexed, v2.coord_origin, v2.coord_contig, \
+        r2nv=g.add_vertex(v2.input_origin, v2.indexed, \
                 v2.contig_start+v2prefixlength+v2matchlength, \
                 v2.contig_start+v2prefixlength+v2matchlength+v2suffixlength, \
                 v2.saoffset+v2prefixlength+v2matchlength, v2.rcsaoffset)
+        r2nv.coord_origin=v2.coord_origin
+        r2nv.coord_contig=v2.coord_contig
+        
         for v in v2.origin:
             r2nv.origin.add(v)
         for v in v2.contig_origin:
@@ -444,7 +458,7 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                         else:
                             directneighbors_r=len(v.edges_to)
                     
-                    if len(bubble)==directneighbors==directneighbors_r:
+                    if len(bubble)<=directneighbors==directneighbors_r:
                         pass
                     else:
                         logging.error("Complex bubble detected at %s, no call made in vcf.",pos)
@@ -554,11 +568,6 @@ def bubbles(g,T,outputfilename,compress=True, minvarsize=0, maxvarsize=None, min
                         calls+="\t"+call
                     vcffile.write(calls+"\n")
                     
-                    #logging.debug("found bubble starting splitting at: %s and joining at %s --> %s.", v.id, jn[0].id, [s[0].id for s in bubble])
-                    #if len(bubble)==1:
-                    #    indelnode=bubble.pop()
-                    #    if (indelnode[0].contig_end-indelnode[0].contig_start)>50:
-                    #        logging.info("found large insert (%s) at position: %s with length: %s", indelnode[0].id, min([v.contig_end,jn.contig_end]), indelnode[0].contig_end-indelnode[0].contig_start)
     vcffile.close()
     
     return filename, nvars, ngaps, altngaps, ninversions, nsvs
@@ -1480,17 +1489,22 @@ def revcomp(s):
 
 def saveGFA(g, outputfile, index):
     T=index.T
-    outputfile=outputfile.replace('.gfasta','.gfa')
-    f=gzip.open(outputfile,'wb')
+    #f=gzip.open(outputfile,'wb')
+    f=open(outputfile,'wb')
     sep=';'
     f.write('H VN:Z:1.0\n')
-    f.write('H SM:Z:')
+    f.write('H ORI:Z:')
     for i,o in enumerate(g.origins): #which samples are contained in the graph
         f.write(o+sep)
     f.write('\n')
     
-    mapping=dict({'origin':'SM','contig_origin':'CS','contig_start':'CS',
-                  'contig_end':'CE', 'coord_origin':'CO'})
+	#mapping between vertex members and GFA tags
+    mapping=dict({	'origin':'ORI',				#set
+					'contig_origin':'CTG',		#set
+					'contig_start':'START',		#int
+					'contig_end':'END',			#int
+					'coord_origin':'CRD',		#str
+					'coord_contig': 'CRDCTG'})	#str
     
     for v in g.vertices.values():
         origintag=sep.join([str(o) for o in v.origin])
@@ -1502,7 +1516,7 @@ def saveGFA(g, outputfile, index):
             if isinstance(val,list) or isinstance(val,set):
                 val=sep.join([str(o) for o in val])
             f.write('\t'+mapping[key]+':Z:'+str(val))
-        f.write('\n')        
+        f.write('\n')
         
     for e in g.edges:
         if e.orientation==0:
@@ -1677,7 +1691,7 @@ def plot_bubble(g,T,v,degree=10, direction=True):
         g.vertices[v.id].attributes['seqlen']=l
     plot(g, keys=keys, addseq=True)
 
-def plot_gfasta(filename):
+def plot_file(filename):
     import GSA
     i=GSA.index(filename)
     g=i.graph
@@ -1714,23 +1728,23 @@ def define_merging_order(branch, to_merge, counter):
 
     a = branch.clades.pop().name
     if isinstance(a,int):
-        a = str(a)+".gfasta.gz"
+        a = str(a)+".gfa"
     
     b = branch.clades.pop().name
     if isinstance(b,int):
-        b = str(b)+".gfasta.gz"
+        b = str(b)+".gfa"
     
     branch.name = counter
-    tmp = [a, b, str(counter)+".gfasta.gz"]
+    tmp = [a, b, str(counter)+".gfa"]
     to_merge.append(tmp)
     return counter + 1
 
 def main():
     usage = "reveal [options] <sequence1.(g)fasta> <sequence2.(g)fasta> ..."
     parser = argparse.ArgumentParser(usage)
-    parser.add_argument('graphs', nargs='*', help='Fasta or gfasta files specifying either assembly/alignment graphs (.gfasta) or sequences (.fasta). When only one gfasta file is supplied, variants are called within the gfasta file.')
+    parser.add_argument('graphs', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    parser.add_argument("--GFA", dest="gfa", action="store_true", default=False, help="Output alignment graph in GFA format")
+#    parser.add_argument("--GFA", dest="gfa", action="store_true", default=False, help="Output alignment graph in GFA format")
     parser.add_argument("-c", "--indexrc", action="store_true", dest="rcindex", default=False, help="Whether to index reverse complements of nodes/contigs/unitigs as well.")
     parser.add_argument("-s", dest="nseed", type=int, default=1, help="Max number of seeds to start up the alignment process (default 1).")
     parser.add_argument("-k", dest="kseed", type=int, default=None, help="MUMs over this size will be used to seed the alignment process, overrides -s if specified.")
@@ -1762,7 +1776,7 @@ def main():
     if len(args.graphs)==1 and args.tree==None:
         args.graphs = glob.glob(args.graphs[0])
     
-    basenames=[os.path.basename(graph).replace('.fasta','').replace('.gfasta','').replace('.fa','').replace('.gz','') for graph in args.graphs]
+    basenames=[os.path.basename(graph).replace('.fasta','').replace('.gfa','').replace('.fa','').replace('.gz','') for graph in args.graphs]
     
     if len(set(basenames))!=len(args.graphs):
         logging.fatal("Filenames aren't unique, make sure filenames are unique throughout all genomes!")
@@ -1808,7 +1822,7 @@ def main():
         tree = Phylo.read(args.tree, "newick")
         counter = 0
         define_merging_order(tree.root, to_merge, counter)
-        to_merge[-1][2]=args.output+'.gfasta.gz' #final alignment graph
+        to_merge[-1][2]=args.output+'.gfa' #final alignment graph
     else:
         for i in range(1,len(args.graphs)):
             if (i==1):
@@ -1818,9 +1832,9 @@ def main():
                 g1=tmp
                 g2=args.graphs[i]
             if i==len(args.graphs)-1:
-                tmp=args.output+'.gfasta.gz'
+                tmp=args.output+'.gfa'
             else:
-                tmp=str(i)+'.gfasta.gz'
+                tmp=str(i)+'.gfa'
             to_merge.append((g1,g2,tmp))
     
     for i,now_merging in enumerate(to_merge):
@@ -1886,11 +1900,7 @@ def main():
         if(eos.count(0)!=len(eos)):
             logging.error('Not all nodes in the alignment graph have same orientation!')
         
-        if args.gfa:
-            graphname=saveGFA(g, tmpname, rindex)
-        else:
-            graphname=save(g, tmpname, rindex)
-        
+        graphname=saveGFA(g, tmpname, rindex)
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
         
 #        logging.info("Pickling mums that were used for the alignment...")
