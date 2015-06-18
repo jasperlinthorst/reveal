@@ -1930,12 +1930,11 @@ def smooth_paths(rindex):
                 continue
             
             #smooth prefix
-            if len(v.edges_from)>1:# and v.input_origin>1:
+            if len(v.edges_from)>1 and v.input_origin>1:
                 #logging.info("Start path smoothing from node %s"%v.id)
                 neighbors=[]
                 for e in v.edges_from:
                     assert(e.source==v)
-                    #if e.target.input_origin<2: #only apply on aligned nodes
                     if len(e.target.edges_to)==1:
                         neighbors.append(e.target)
                 seq=[]
@@ -1973,12 +1972,11 @@ def smooth_paths(rindex):
                     s=nei_seq[j]
     
             #smooth suffix
-            if len(v.edges_to)>1:# and v.input_origin>1:
+            if len(v.edges_to)>1 and v.input_origin>1:
                 #logging.info("Start path smoothing from node %s"%v.id)
                 neighbors=[]
                 for e in v.edges_to:
                     assert(e.target==v)
-                    #if e.source.input_origin<2: #only apply on aligned nodes
                     if len(e.source.edges_from)==1:
                         neighbors.append(e.source)
                 seq=[]
