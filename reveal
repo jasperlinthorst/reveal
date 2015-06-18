@@ -1913,97 +1913,107 @@ def align_pre(g,startv,vertices,nchar): #TODO: for now only works for DAG
 
 def smooth_paths(rindex):
     T=rindex.T #need input text in python... (ideally do this in c)
-    stack=g.vertices.keys()
-    while len(stack)>0:
-        vid=stack.pop()
-        if g.vertices.has_key(vid):
-            v=g.vertices[vid]
-        else:
-            continue
-        
-        #smooth prefix
-        if len(v.edges_from)>1 and v.input_origin>1:
-            #logging.info("Start path smoothing from node %s"%v.id)
-            neighbors=[]
-            for e in v.edges_from:
-                assert(e.source==v)
-                if e.target.input_origin<2: #only apply on aligned nodes
+    g=rindex.graph
+    
+    cycle=0
+    mutate=True
+    while mutate:
+        stack=g.vertices.keys()
+        cycle+=1
+        mutate=False
+        logging.info("Cycle %s of path smoothing." % cycle)
+        while len(stack)>0:
+            vid=stack.pop()
+            if g.vertices.has_key(vid):
+                v=g.vertices[vid]
+            else:
+                continue
+            
+            #smooth prefix
+            if len(v.edges_from)>1:# and v.input_origin>1:
+                #logging.info("Start path smoothing from node %s"%v.id)
+                neighbors=[]
+                for e in v.edges_from:
+                    assert(e.source==v)
+                    #if e.target.input_origin<2: #only apply on aligned nodes
                     if len(e.target.edges_to)==1:
                         neighbors.append(e.target)
-            seq=[]
-            for nei in neighbors:
-                seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)])
-            nei_seq=zip(neighbors,seq)
-            nei_seq.sort(key=lambda k: k[1])
-            combine=[]
-            for j in range(len(nei_seq)):
-                if j==0:
+                seq=[]
+                for nei in neighbors:
+                    seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)])
+                nei_seq=zip(neighbors,seq)
+                nei_seq.sort(key=lambda k: k[1])
+                combine=[]
+                for j in range(len(nei_seq)):
+                    if j==0:
+                        s=nei_seq[j]
+                        minc=len(s[1])
+                        combine.append(s)
+                        continue
+                    #determine length common prefix
+                    c=0
+                    while c<len(nei_seq[j][1]) and c<len(s[1]) and nei_seq[j][1][c]==s[1][c]:
+                        c+=1
+                    if c>0:
+                        if c<minc:
+                            minc=c
+                        combine.append(nei_seq[j])
+                    if c==0 or j==len(nei_seq)-1: #no common sequence anymore
+                        if len(combine)>1:
+                            logging.info("Aligning common prefix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
+                            newnode=align_pre(g, v, combine, minc)
+                            mutate=True
+                            if newnode!=None:
+                                logging.info("New node with id %s created for common prefix." % newnode.id)
+                                stack.append(newnode.id)
+                            combine=[]
+                        else:
+                            combine=[nei_seq[j]]
+                        minc=len(nei_seq[j][1])
                     s=nei_seq[j]
-                    minc=len(s[1])
-                    combine.append(s)
-                    continue
-                #determine length common prefix
-                c=0
-                while c<len(nei_seq[j][1]) and c<len(s[1]) and nei_seq[j][1][c]==s[1][c]:
-                    c+=1
-                if c>0:
-                    if c<minc:
-                        minc=c
-                    combine.append(nei_seq[j])
-                if c==0 or j==len(nei_seq)-1: #no common sequence anymore
-                    if len(combine)>1:
-                        logging.info("Aligning common prefix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
-                        newnode=align_pre(g, v, combine, minc)
-                        if newnode!=None:
-                            logging.info("New node with id %s created for common prefix." % newnode.id)
-                            stack.append(newnode.id)
-                        combine=[]
-                    else:
-                        combine=[nei_seq[j]]
-                    minc=len(nei_seq[j][1])
-                s=nei_seq[j]
-
-        #smooth suffix
-        if len(v.edges_to)>1 and v.input_origin>1:
-            #logging.info("Start path smoothing from node %s"%v.id)
-            neighbors=[]
-            for e in v.edges_to:
-                assert(e.target==v)
-                if e.source.input_origin<2: #only apply on aligned nodes
+    
+            #smooth suffix
+            if len(v.edges_to)>1:# and v.input_origin>1:
+                #logging.info("Start path smoothing from node %s"%v.id)
+                neighbors=[]
+                for e in v.edges_to:
+                    assert(e.target==v)
+                    #if e.source.input_origin<2: #only apply on aligned nodes
                     if len(e.source.edges_from)==1:
                         neighbors.append(e.source)
-            seq=[]
-            for nei in neighbors:
-                seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)][::-1])
-            nei_seq=zip(neighbors,seq)
-            nei_seq.sort(key=lambda k: k[1])
-            combine=[]
-            for j in range(len(nei_seq)):
-                if j==0:
+                seq=[]
+                for nei in neighbors:
+                    seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)][::-1])
+                nei_seq=zip(neighbors,seq)
+                nei_seq.sort(key=lambda k: k[1])
+                combine=[]
+                for j in range(len(nei_seq)):
+                    if j==0:
+                        s=nei_seq[j]
+                        minc=len(s[1])
+                        combine.append(s)
+                        continue
+                    #determine length common prefix
+                    c=0
+                    while c<len(nei_seq[j][1]) and c<len(s[1]) and nei_seq[j][1][c]==s[1][c]:
+                        c+=1
+                    if c>0:
+                        if c<minc:
+                            minc=c
+                        combine.append(nei_seq[j])
+                    if c==0 or j==len(nei_seq)-1: #no common sequence anymore
+                        if len(combine)>1:
+                            logging.info("Aligning common suffix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
+                            newnode=align_suf(g, v, combine, minc)
+                            mutate=True
+                            if newnode!=None:
+                                logging.info("New node with id %s created for common prefix." % newnode.id)
+                                stack.append(newnode.id)
+                            combine=[]
+                        else:
+                            combine=[nei_seq[j]]
+                        minc=len(nei_seq[j][1])
                     s=nei_seq[j]
-                    minc=len(s[1])
-                    combine.append(s)
-                    continue
-                #determine length common prefix
-                c=0
-                while c<len(nei_seq[j][1]) and c<len(s[1]) and nei_seq[j][1][c]==s[1][c]:
-                    c+=1
-                if c>0:
-                    if c<minc:
-                        minc=c
-                    combine.append(nei_seq[j])
-                if c==0 or j==len(nei_seq)-1: #no common sequence anymore
-                    if len(combine)>1:
-                        logging.info("Aligning common suffix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
-                        newnode=align_suf(g, v, combine, minc)
-                        if newnode!=None:
-                            logging.info("New node with id %s created for common prefix." % newnode.id)
-                            stack.append(newnode.id)
-                        combine=[]
-                    else:
-                        combine=[nei_seq[j]]
-                    minc=len(nei_seq[j][1])
-                s=nei_seq[j]
 
 
 
