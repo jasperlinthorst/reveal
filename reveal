@@ -230,6 +230,21 @@ def align(g, v1, aFrom, aTo, v2, bFrom, bTo, rcmatch, T, coordsystem=None):
     
     return l1nv, r1nv, l2nv, r2nv, mergedv, tmpv
 
+#destroys the entire graph!
+def isacyclic(g):
+    while True:
+        peelof=[]
+        for v in g.vertices.values():
+            if len(v.edges_from)==0:
+                peelof.append(v)
+        if len(peelof)==0:
+            break
+        for v in peelof:
+            g.remove_vertex(v)
+        peelof=[]
+    return len(g.vertices)==0
+
+
 
 def search(g, startv, set_of_nodes_with_false_condition, maxdegree=None, idirection=True, alg='bfs', condition=lambda s,e: True):
     '''
@@ -1487,6 +1502,38 @@ def revcomp(s):
     letters.reverse()
     return ''.join(letters)
 
+def saveSimple(index):
+    T=index.T
+    g=index.graph
+    sep=" | "
+    sep2=","
+    sep3=" "
+    with open("simple_graph.node.graph",'w') as gf:
+        for v in g.vertices.values():
+            gf.write('>'+str(v.id)+sep)
+            gf.write(sep2.join([str(o).replace(sep,'').replace(sep2,'').replace(sep3,'') for o in v.origin])+sep) #file origin
+            gf.write(str(v.contig_start)+sep)
+            gf.write(str(v.contig_end)+'\n')
+            gf.write(T[v.saoffset:v.saoffset+(v.contig_end-v.contig_start)]+'\n')
+    
+#    edges=[]
+#    for e in g.edges:
+#        edges.append((e.source.id,e.target.id))
+#    
+#    edges.sort(key=lambda x: x[1])
+#    
+#    with open("simple_graph.edge.graph",'w') as ef:
+#        for e in edges:
+#            ef.write(str(e[0])+sep3+str(e[1])+'\n')
+    with open("simple_graph.edge.graph",'w') as fEdge:
+        for v in g.vertices.values():
+            for e in v.edges_to: #incoming edges
+                if (e.orientation == 2 and e.source == v):
+                    fEdge.write(str(e.target.id) + " " + str(e.source.id) + "\n")
+                else:
+                    fEdge.write(str(e.source.id) + " " + str(e.target.id) + "\n")
+
+
 def saveGFA(g, outputfile, index):
     T=index.T
     #f=gzip.open(outputfile,'wb')
@@ -1739,7 +1786,68 @@ def define_merging_order(branch, to_merge, counter):
     to_merge.append(tmp)
     return counter + 1
 
-def align_pre(g,vertices,nchar): #TODO: for now only works for DAG
+
+def align_suf(g,startv,vertices,nchar): #TODO: for now only works for DAG
+    #check that nodes are a proper split of all input genomes, so we dont collapse variations (only works for haploid genomes(!))
+    for i in range(len(vertices)):
+        for j in range(len(vertices)):
+            if i>=j:
+                continue
+            assert(vertices[i][1][0:nchar]==vertices[j][1][0:nchar])
+            s1=vertices[i][0].origin
+            s2=vertices[j][0].origin
+            if not(s1.isdisjoint(s2)):
+                logging.info("unable to join paths for nodes %s" % [v[0].id for v in vertices])
+                return
+    
+    v1=vertices[0][0]
+    #create a new vertex for the merged prefix of vertices,
+    #inherits properties from the first vertex in the list (shouldn't matter..)
+    mergedv=g.add_vertex(2, v1.indexed, \
+                            v1.contig_end-nchar, \
+                            v1.contig_end, \
+                            v1.saoffset+(v1.contig_end-v1.contig_start)-nchar, \
+                            v1.saoffset+(v1.contig_end-v1.contig_start)-nchar)
+    mergedv.coord_origin=v1.coord_origin
+    mergedv.coord_contig=v1.coord_contig
+    
+    #logging.info("Created merged prefix node %s",mergedv.id)
+    
+    #create union of all origins of all nodes
+    allorigins=set()
+    allcontigorigins=set()
+    for v,s in vertices:
+        allorigins=allorigins.union(v.origin)
+        allcontigorigins=allcontigorigins.union(v.contig_origin)
+    for o in allorigins:
+        mergedv.origin.add(o)
+    for co in allcontigorigins:
+        mergedv.contig_origin.add(co)
+        
+    for v,s in vertices:
+        assert(v!=mergedv)
+        assert(v!=startv)
+        if len(s)==v.contig_end-v.contig_start: #copy all edges to mergedv and remove v
+            for e in v.edges_to:
+                assert(e.target==v)
+                assert(mergedv!=e.source)
+                g.add_edge(e.source,mergedv,e.orientation)
+            for e in v.edges_from:
+                assert(e.source==v)
+                assert(mergedv!=e.target)
+                g.add_edge(mergedv,e.target,e.orientation)
+            g.remove_vertex(v)
+        else: #update vertex
+            for e in v.edges_to:
+                assert(e.target==v)
+                assert(mergedv!=e.source)
+                g.add_edge(e.source,mergedv,e.orientation)
+            assert(mergedv!=v)
+            g.add_edge(v,mergedv,0)
+            v.contig_end-=nchar
+    return mergedv
+
+def align_pre(g,startv,vertices,nchar): #TODO: for now only works for DAG
     #check that nodes are a proper split of all input genomes, so we dont collapse variations (only works for haploid genomes(!))
     for i in range(len(vertices)):
         for j in range(len(vertices)):
@@ -1776,29 +1884,31 @@ def align_pre(g,vertices,nchar): #TODO: for now only works for DAG
         mergedv.contig_origin.add(co)
         
     for v,s in vertices:
+        assert(v!=mergedv)
+        assert(v!=startv)
         if len(s)==v.contig_end-v.contig_start: #copy all edges to mergedv and remove v
             for e in v.edges_to:
-                
-                if e.source==v:
-                    g.add_edge(mergedv,e.target,e.orientation)
-                else:
-                    g.add_edge(e.source,mergedv,e.orientation)
+                assert(e.target==v)
+                assert(mergedv!=startv)
+                assert(mergedv!=e.source)
+                g.add_edge(e.source,mergedv,e.orientation)
             for e in v.edges_from:
-                if e.source==v:
-                    g.add_edge(mergedv,e.target,e.orientation)
-                else:
-                    g.add_edge(e.source,mergedv,e.orientation)
+                assert(e.source==v)
+                assert(e.target!=startv)
+                assert(mergedv!=e.target)
+                g.add_edge(mergedv,e.target,e.orientation)
             g.remove_vertex(v)
         else: #update vertex
             for e in v.edges_to:
-                if e.source==v:
-                    g.add_edge(mergedv,e.target,e.orientation)
-                else:
-                    g.add_edge(e.source,mergedv,e.orientation)
+                assert(e.target==v)
+                assert(mergedv!=startv)
+                assert(mergedv!=e.source)
+                g.add_edge(e.source,mergedv,e.orientation)
             assert(mergedv!=v)
             g.add_edge(mergedv,v,0)
             v.contig_start+=nchar
             v.saoffset+=nchar
+            v.rcsaoffset+=nchar #not used for now
     return mergedv
 
 def smooth_paths(rindex):
@@ -1810,26 +1920,21 @@ def smooth_paths(rindex):
             v=g.vertices[vid]
         else:
             continue
+        
+        #smooth prefix
         if len(v.edges_from)>1 and v.input_origin>1:
             #logging.info("Start path smoothing from node %s"%v.id)
             neighbors=[]
             for e in v.edges_from:
-                if e.source==v:
-                    if e.target.input_origin<2:
+                assert(e.source==v)
+                if e.target.input_origin<2: #only apply on aligned nodes
+                    if len(e.target.edges_to)==1:
                         neighbors.append(e.target)
-                else:
-                    if e.source.input_origin<2:
-                        neighbors.append(e.source)
             seq=[]
             for nei in neighbors:
                 seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)])
             nei_seq=zip(neighbors,seq)
             nei_seq.sort(key=lambda k: k[1])
-            
-            #logging.info("Sequences to smooth:")
-            #for seq in nei_seq:
-            #    logging.info("Node: %s Seq: %s" % (seq[0].id,seq[1]))
-            
             combine=[]
             for j in range(len(nei_seq)):
                 if j==0:
@@ -1848,7 +1953,7 @@ def smooth_paths(rindex):
                 if c==0 or j==len(nei_seq)-1: #no common sequence anymore
                     if len(combine)>1:
                         logging.info("Aligning common prefix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
-                        newnode=align_pre(g, combine, minc)
+                        newnode=align_pre(g, v, combine, minc)
                         if newnode!=None:
                             logging.info("New node with id %s created for common prefix." % newnode.id)
                             stack.append(newnode.id)
@@ -1857,6 +1962,50 @@ def smooth_paths(rindex):
                         combine=[nei_seq[j]]
                     minc=len(nei_seq[j][1])
                 s=nei_seq[j]
+
+        #smooth suffix
+        if len(v.edges_to)>1 and v.input_origin>1:
+            #logging.info("Start path smoothing from node %s"%v.id)
+            neighbors=[]
+            for e in v.edges_to:
+                assert(e.target==v)
+                if e.source.input_origin<2: #only apply on aligned nodes
+                    if len(e.source.edges_from)==1:
+                        neighbors.append(e.source)
+            seq=[]
+            for nei in neighbors:
+                seq.append(T[nei.saoffset:nei.saoffset+(nei.contig_end-nei.contig_start)][::-1])
+            nei_seq=zip(neighbors,seq)
+            nei_seq.sort(key=lambda k: k[1])
+            combine=[]
+            for j in range(len(nei_seq)):
+                if j==0:
+                    s=nei_seq[j]
+                    minc=len(s[1])
+                    combine.append(s)
+                    continue
+                #determine length common prefix
+                c=0
+                while c<len(nei_seq[j][1]) and c<len(s[1]) and nei_seq[j][1][c]==s[1][c]:
+                    c+=1
+                if c>0:
+                    if c<minc:
+                        minc=c
+                    combine.append(nei_seq[j])
+                if c==0 or j==len(nei_seq)-1: #no common sequence anymore
+                    if len(combine)>1:
+                        logging.info("Aligning common suffix of length %s for nodes %s of %s." % (minc,[tmp[0].id for tmp in combine],[tmp[0].id for tmp in nei_seq]))
+                        newnode=align_suf(g, v, combine, minc)
+                        if newnode!=None:
+                            logging.info("New node with id %s created for common prefix." % newnode.id)
+                            stack.append(newnode.id)
+                        combine=[]
+                    else:
+                        combine=[nei_seq[j]]
+                    minc=len(nei_seq[j][1])
+                s=nei_seq[j]
+
+
 
 #Remove all nodes only contain N characters, reduce graph complexity"
 #If strict is True then remove any node that contains a single N after alignment"
@@ -1934,6 +2083,8 @@ def main():
         rindex=GSA.index(args.graphs[0])
         vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(rindex.graph, rindex.T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
         logging.info("Variants written to %s.",vcffile)
+        
+        saveSimple(rindex)
         
         if args.cytoscaperpcloc!=None: #if cytoscape is specified plot the graph
             logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
@@ -2039,7 +2190,7 @@ def main():
             logging.error('Not all nodes in the alignment graph have same orientation!')
         graphname=saveGFA(g, tmpname, rindex)
         logging.info("Graph alignment between %s and %s done and written to %s.", g1, g2, graphname)
-        
+
 #        logging.info("Pickling mums that were used for the alignment...")
 #        d['mums']=[(mum[0],mum[1],mum[2],mum[3].contig_origin.copy().pop(),mum[4].contig_origin.copy().pop(),mum[5]) for mum in mums]
 #        pickle.dump(d, file(tmums+'.pickle', 'w'))
@@ -2066,20 +2217,24 @@ def main():
                 commonseq+=l
         
         logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
+        
+        if not(isacyclic(g)):
+            logging.fatal("Resulting graph is NOT acyclic!")
+            exit(1)
     
     if not(args.intermediate): #clean up intermediate alignment graphs
         for merge in to_merge[:-1]:
             os.unlink(merge[2])
     
-    T=rindex.T
-    logging.info("Calling variations in graph...")
-    vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
-    logging.info("Variant calling done and written to %s.",vcffile)
-    logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
+    #T=rindex.T
+    #logging.info("Calling variations in graph...")
+    #vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(g, T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
+    #logging.info("Variant calling done and written to %s.",vcffile)
+    #logging.info("Called %s variants of which %s closed gaps on ref, %s closed gaps on alt, %s inversions and %s large (>50bp) indels.",nvars,ngaps,altngaps,ninversions,nsvs)
     
-    if args.cytoscaperpcloc!=None:
-        logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
-        plot_graph(rindex)
+    #if args.cytoscaperpcloc!=None:
+    #    logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
+    #    plot_graph(rindex)
     
     logging.info("All graphs/sequences are aligned.")
         
