@@ -1406,9 +1406,10 @@ def bubble_aln(i, source, sink, vertices, coordsystem=None, pcutoff=1e-5,
             stack.append((index,(mergedv,sourcesearchdirection),None,vertices,True))
             continue
         
-        if len(vertices)>1: #anything left-over in the index? go again..
+        if len(vertices)>1: #anything left-over in the index? go again?
             logging.debug("Vertices %s left over in bubble after alignment, could not be segmented...",sorted([v.id for v in vertices]))
-            stack.append((index,source,sink,vertices,tip))
+            #if we continue aligning we can't assure that the result is acyclic
+            #stack.append((index,source,sink,vertices,tip))
         
         run+=1
     
@@ -2013,8 +2014,6 @@ def smooth_paths(rindex):
                         minc=len(nei_seq[j][1])
                     s=nei_seq[j]
 
-
-
 #Remove all nodes only contain N characters, reduce graph complexity"
 #If strict is True then remove any node that contains a single N after alignment"
 def prune_gaps(rindex, strict=False):
@@ -2053,6 +2052,8 @@ def main():
     parser.add_argument("--vcfmax", dest="maxvarsize", default=None, type=int, help="The max size of a variant for it to be written to the vcf.")
     parser.add_argument("--invmin", dest="minnwsize", default=25, type=int, help="The min size for inversion detection, no testing for inversions smaller than this threshold (default 25).")
     parser.add_argument("--invmax", dest="maxnwsize", default=1000, type=int, help="The max size for inversion detection, no testing for inversions larger than this threshold (default 1000, consider memory usage!).")
+    parser.add_argument("--bubble-pruning", dest="bubblepruning", action="store_true", default=False, help="Bubble pruning, tries to reduce complexity in bubbles from mulitple sequence alignments.")
+    parser.add_argument("--gap-pruning", dest="gappruning", action="store_true", default=False, help="Removes nodes from the resulting graph that consist of only N characters.")
     
     args = parser.parse_args()
     global g, rindex, mums, totalignedseq, extractedvertices
@@ -2190,8 +2191,8 @@ def main():
         
         #merge nodes that are on similar paths! --> only useful for msa
         if len(g.origins)>2: #only when aligning graphs we need smoothing
-            smooth_paths(rindex)
-            #prune_gaps(rindex,strict=True)
+            if args.bubblepruning:
+                smooth_paths(rindex)
         
         eos=[e.orientation for e in g.edges]
         if(eos.count(0)!=len(eos)):
@@ -2224,11 +2225,17 @@ def main():
             if len(v.origin)==n: #node is common to all input genomes
                 commonseq+=l
         
-        logging.info("%.2f%% of the sequence in the graph is common to all input genomes", (commonseq/float(allseq))*100 )
+        logging.info("%.2f%% of the sequence in the graph is common to all %s input genomes", ((commonseq/float(allseq))*100, n) )
         
         if not(isacyclic(g)):
+            if args.cytoscaperpcloc!=None:
+                logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
+                plot_graph(rindex)
             logging.fatal("Resulting graph is NOT acyclic!")
             exit(1)
+    
+    #if args.gappruning:
+    #    prune_gaps(rindex,strict=False)
     
     if not(args.intermediate): #clean up intermediate alignment graphs
         for merge in to_merge[:-1]:
