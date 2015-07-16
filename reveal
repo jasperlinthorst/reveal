@@ -2096,7 +2096,7 @@ def main():
         vcffile,nvars,ngaps,altngaps,ninversions,nsvs=bubbles(rindex.graph, rindex.T, args.output, minvarsize=args.minvarsize, maxvarsize=args.maxvarsize, maxnwsize=args.maxnwsize, minnwsize=args.minnwsize)
         logging.info("Variants written to %s.",vcffile)
         
-        saveSimple(rindex)
+        #saveSimple(rindex)
         
         if args.cytoscaperpcloc!=None: #if cytoscape is specified plot the graph
             logging.info("Trying to plot the graph at %s.",args.cytoscaperpcloc)
