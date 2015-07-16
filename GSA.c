@@ -423,12 +423,44 @@ Vertex_getcontigstart(Vertex *self, void *closure)
     PyObject * cs=Py_BuildValue(PYIDXTYPE,self->contig_start);
     return cs;
 }
+static int
+Vertex_setcontigstart(Vertex *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyInt_Check(args)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be an integer");
+		return -1;
+	}
+	self->contig_start=PyInt_AS_LONG(args);
+	return 0;
+}
+
 static PyObject *
 Vertex_getcontigend(Vertex *self, void *closure)
 {
     PyObject * ce=Py_BuildValue(PYIDXTYPE,self->contig_end);
     return ce;
 }
+static int
+Vertex_setcontigend(Vertex *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyInt_Check(args)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be an integer");
+		return -1;
+	}
+	self->contig_end=PyInt_AS_LONG(args);
+	return 0;
+}
+
 
 static PyObject *
 Vertex_getsaoffset(Vertex *self, void *closure)
@@ -436,12 +468,45 @@ Vertex_getsaoffset(Vertex *self, void *closure)
     PyObject * saoffset=Py_BuildValue(PYIDXTYPE,self->saoffset);
     return saoffset;
 }
+static int
+Vertex_setsaoffset(Vertex *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyInt_Check(args)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be an integer");
+		return -1;
+	}
+	self->saoffset=PyInt_AS_LONG(args);
+	return 0;
+}
+
+
 static PyObject *
 Vertex_getrcsaoffset(Vertex *self, void *closure)
 {
     PyObject * rcsaoffset=Py_BuildValue(PYIDXTYPE,self->rcsaoffset);
     return rcsaoffset;
 }
+static int
+Vertex_setrcsaoffset(Vertex *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (! PyInt_Check(args)) {
+		PyErr_SetString(PyExc_TypeError,
+				"Must be an integer");
+		return -1;
+	}
+	self->rcsaoffset=PyInt_AS_LONG(args);
+	return 0;
+}
+
 
 static PyObject *
 Vertex_getedgesto(Vertex *self, void *closure)
@@ -498,19 +563,19 @@ static PyGetSetDef Vertex_getseters[] = {
         NULL},
 
     {"contig_start",
-        (getter)Vertex_getcontigstart, NULL,
+        (getter)Vertex_getcontigstart, (setter)Vertex_setcontigstart,
         "start within the coord contig",
         NULL},
     {"contig_end",
-        (getter)Vertex_getcontigend, NULL,
+        (getter)Vertex_getcontigend, (setter)Vertex_setcontigend,
         "end within the coord contig",
         NULL},
     {"saoffset",
-        (getter)Vertex_getsaoffset, NULL,
+        (getter)Vertex_getsaoffset, (setter)Vertex_setsaoffset,
         "offset in the suffix array",
         NULL},
     {"rcsaoffset",
-        (getter)Vertex_getrcsaoffset, NULL,
+        (getter)Vertex_getrcsaoffset, (setter)Vertex_setrcsaoffset,
         "offset of the reverse complement in the suffix array",
         NULL},
     {"edges_from",
@@ -652,6 +717,38 @@ Edge_gettarget(Edge *self, void *closure)
     return (PyObject*)self->target;
 }
 
+static int
+Edge_setsource(Edge *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (args->ob_type!=&VertexType) {
+		PyErr_SetString(PyExc_TypeError,
+				"Source of an edge must be a Vertex.");
+		return -1;
+	}
+	self->source=(Vertex*)args;
+	return 0;
+}
+static int
+Edge_settarget(Edge *self, PyObject *args, void *closure)
+{
+	if (args== NULL) {
+		PyErr_SetString(PyExc_TypeError, "Cannot set value to NULL");
+		return -1;
+	}
+	if (args->ob_type!=&VertexType) {
+		PyErr_SetString(PyExc_TypeError,
+				"Target of an edge must a Vertex.");
+		return -1;
+	}
+	self->source=(Vertex*)args;
+	return 0;
+}
+
+
 static PyObject *
 Edge_getorientation(Edge *self, void *closure)
 {
@@ -660,11 +757,11 @@ Edge_getorientation(Edge *self, void *closure)
 
 static PyGetSetDef Edge_getseters[] = {
     {"source",
-        (getter)Edge_getsource, NULL,
+        (getter)Edge_getsource, (setter)Edge_setsource,
         "source vertex",
         NULL},
     {"target",
-        (getter)Edge_gettarget, NULL,
+        (getter)Edge_gettarget, (setter)Edge_settarget,
         "target vertex",
         NULL},
      {"orientation",
