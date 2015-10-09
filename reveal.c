@@ -48,7 +48,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
     mum->n=2;
     for (i=1;i<index->n;i++){
         if (index->LCP[i]>mum->l){
-            if (index->SA[i]>index->sep == index->SA[i-1]>index->sep){ //repeat
+            if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
                continue;
             }
             if (index->SA[i]<index->SA[i-1]) {
@@ -70,7 +70,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 lb=index->LCP[i-1];
                 la=index->LCP[i+1];
             }
-            if (lb==index->LCP[i] || la==index->LCP[i]){
+            if (lb>=index->LCP[i] || la>=index->LCP[i]){
                 continue;//not unique
             }
             //match is not a repeat and is maximally unique

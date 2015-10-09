@@ -26,7 +26,7 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
         PyErr_SetString(RevealError, "Sample name has to be a string.");
         return NULL;
     }
-    
+
     if (self->nsamples>0){
         //printf("adding sample %d\n",self->n-1);
         self->nsep= (int*) realloc(self->nsep,(self->nsamples)*sizeof(int));
@@ -36,9 +36,9 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
         }
         self->nsep[self->nsamples-1]=self->n-1;
         //printf("sample %d at %d\n",self->nsep[self->nsamples-1],self->nsamples-1);
-    } else {
-        self->nsep= (int*) malloc(sizeof(int));
-    }
+    } //else {
+        //self->nsep= (int*) malloc(sizeof(int));
+    //}
     
     self->nsamples++;
     Py_INCREF(Py_None);
@@ -55,7 +55,7 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s#", &seq, &l))
         return NULL;
    
-    self->sep=self->n-1;
+    //self->sep=self->n-1;
     
     //realloc space for T
     char *tmp=realloc(self->T,(self->n+(l+1)+1)*sizeof(char));
@@ -155,13 +155,13 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     
     compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
     
-    //if (self->nsamples>2){
+    if (self->nsamples>2){
          self->SO = malloc(self->n*sizeof(uint8_t));
          if (build_SO(self)!=0){
             PyErr_SetString(RevealError, "Failed to construct SO.");
             return NULL;
          };
-    //}
+    }
     
     Py_INCREF(Py_None);
     return Py_None;
@@ -266,7 +266,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     }
     
     time(&tfinish);
-    fprintf(stderr,"Alignment based on %d MUMs, produced in %.f seconds.\n",nmums,difftime(tfinish,tstart));
+    //fprintf(stderr,"Alignment based on %d MUMs, produced in %.f seconds.\n",nmums,difftime(tfinish,tstart));
     
     free(index_queue);
     
@@ -566,8 +566,8 @@ reveal_dealloc(RevealIndex *self)
     }
     
     //TODO: DECREF all python objects: nodes, samples, main
-    Py_DECREF(self->nodes);
-    Py_DECREF(self->samples);
+    //Py_DECREF(self->nodes);
+    //Py_DECREF(self->samples);
     
     if (self->SA!=NULL){
         free(self->SA);

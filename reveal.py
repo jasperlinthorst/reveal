@@ -464,26 +464,24 @@ def main():
                 t.add(i)
                 G.add_node(i,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
     
-    for sep in idx.nsep:
-        assert(idx.T[sep]=='$')
+    #for sep in idx.nsep:
+    #    assert(idx.T[sep]=='$')
     
     idx.construct()
-    sa=idx.SA
-    sai=idx.SAi
-    lcp=idx.LCP
-
     T=idx.T
-    so=idx.SO
     
     if len(args.inputfiles)>2:
-        idx.align(mumpicker2,graphalign,threads=args.threads)
+        idx.align(mumpicker,graphalign,threads=args.threads)
     else:
         idx.align(None,graphalign,threads=args.threads)
     
-    T=idx.T
     prune_nodes(G)
     
     if args.gml:
         write_gml(G,T, outputfile=args.output+'.gml')
+        graph=args.output+'.gml'
     else:
         write_gfa(G,T,vg=args.vg, outputfile=args.output+'.gfa')
+        graph=args.output+'.gfa'
+    
+    print "Alignment graph written to:",graph

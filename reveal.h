@@ -14,7 +14,7 @@ typedef struct
     uint8_t      * SO;  //Array indicating for each suffix which sample it originated from (max 256 samples!)
     int          n;   //lenght of SA and LCP
     int depth; //depth within the hierarchical alignment tree
-    int sep;   //position of the sentinel(s) that seperate the samples in the input text //TODO: should be array to keep track of multiple samples
+    //int sep;   //position of the sentinel(s) that seperate the samples in the input text //TODO: should be array to keep track of multiple samples
     int *nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int nsamples; //number of samples in T
     PyObject * main; //main index
