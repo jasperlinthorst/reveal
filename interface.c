@@ -1,4 +1,4 @@
-#include "python.h"
+#include "Python.h"
 #include "reveal.h"
 #include <divsufsort.h>
 #include <pthread.h>

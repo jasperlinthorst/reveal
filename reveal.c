@@ -5,7 +5,7 @@
 #include <semaphore.h>
 #include <unistd.h>
 #include <time.h>
-#include "python.h"
+#include "Python.h"
 #include "reveal.h"
 
 /* The mutex lock */
