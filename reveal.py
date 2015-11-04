@@ -5,47 +5,40 @@ import networkx as nx
 from collections import defaultdict, deque
 import threading
 import reveallib
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 import argparse
 import logging
+import os
+import schemes
 
-def printSA(index,maxline=100,start=0,end=100):
-    sa=index.SA
-    lcp=index.LCP
-    t=idx.T
-    sai=idx.SAi
-    print len(sa), len(lcp)
-    assert(len(sa)==len(lcp))
-    for s,l in zip(sa[start:end],lcp[start:end]):
-        print str(s).zfill(8), str(l).zfill(6), t[s:s+l].ljust(maxline) if lcp<=maxline else t[s:s+maxline].ljust(maxline), so[s]
-
-def assertSA(idx):
-    print "T"
-    t=idx.T
-    print "SA"
-    sa=idx.SA
-    print "LCP"
-    lcp=idx.LCP
-    for i,(s,l) in enumerate(zip(sa,lcp)):
-        if i==0:
-            continue
-        t1=t[s:s+l]
-        t2=t[sa[i-1]:sa[i-1]+l]
-        if t1!=t2:
-            printSA(idx,start=i-3,end=i+2)
-            print i,l,t[s:s+l]
-            print i-1,l,t[sa[i-1]:sa[i-1]+l]
-        if s+l!=len(t)-1 and sa[i-1]+l!=len(t)-1:
-            if not(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N'):
-                print "printing SA for ",i
-                if i>2:
-                    printSA(idx,start=i-3,end=i+2,maxline=150)
-                else:
-                    printSA(idx,start=0,end=i+2,maxline=150)
-
-                print "Done"
-                assert(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N')
-        assert(t[s:s+l]==t[sa[i-1]:sa[i-1]+l])
+#
+#def assertSA(idx):
+#    print "T"
+#    t=idx.T
+#    print "SA"
+#    sa=idx.SA
+#    print "LCP"
+#    lcp=idx.LCP
+#    for i,(s,l) in enumerate(zip(sa,lcp)):
+#        if i==0:
+#            continue
+#        t1=t[s:s+l]
+#        t2=t[sa[i-1]:sa[i-1]+l]
+#        if t1!=t2:
+#            printSA(idx,start=i-3,end=i+2)
+#            print i,l,t[s:s+l]
+#            print i-1,l,t[sa[i-1]:sa[i-1]+l]
+#        if s+l!=len(t)-1 and sa[i-1]+l!=len(t)-1:
+#            if not(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N'):
+#                print "printing SA for ",i
+#                if i>2:
+#                    printSA(idx,start=i-3,end=i+2,maxline=150)
+#                else:
+#                    printSA(idx,start=0,end=i+2,maxline=150)
+#
+#                print "Done"
+#                assert(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N')
+#        assert(t[s:s+l]==t[sa[i-1]:sa[i-1]+l])
 
 def fasta_reader(fn):
     seq=""
@@ -122,9 +115,9 @@ def mergenodes(mns):
         for e in G.in_edges(mn):
             assert(e[0]!=refnode)
             #assert(not G.has_edge(e[0],refnode))
-            if G.has_edge(refnode,e[0]):
-                print mns, refnode
-                write_gml(G,T,outputfile="test.gml")
+            #if G.has_edge(refnode,e[0]):
+            #    print mns, refnode
+            #    write_gml(G,T,outputfile="test.gml")
             assert(not G.has_edge(refnode,e[0]))
             G.add_edge(e[0],refnode)
         for e in G.out_edges(mn):
@@ -202,12 +195,12 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,sp):
     nodes=index.nodes
-    if l<minlength or len(nodes)==0:
+    if l<schemes.minlength or len(nodes)==0:
+        #print l, schemes.minlength, len(nodes), n, sp
         return
     #assert(n==len(sp))
     mns=[]
     topop=[]
-    T=index.T
     for i,pos in enumerate(sp):
         #assert(len(t[pos])==1) #be sure that there are no overlapping intervals in the tree!
         #assert(len(t[pos+l-1])==1) #be sure that there are no overlapping intervals in the tree!
@@ -224,49 +217,7 @@ def graphalign(l,index,n,sp):
     intervals=segmentgraph(mn,nodes)
     return intervals
 
-def mumpicker(multimums,idx):
-    maxscore=0
-    maxl=0
-    nomum=(0,idx,0,[])
-    bestmum=nomum
-    for multimum in multimums:
-        l,n,sp=multimum
-        if n==idx.nsamples:
-            if l>maxl:
-                maxl=l
-                bestmum=(l,idx,n,sp)
-    p=(1-((1-(0.25**bestmum[0]))**(((idx.n/float(idx.nsamples))**2))))**(idx.nsamples-1)
-    if p>pcutoff:
-        bestmum=(0,idx,0,[])
-        multimums.sort(key=lambda l: l[0]*l[1],reverse=True)
-        for multimum in multimums:
-            l,n,sp=multimum
-            p=(1-((1-(0.25**l))**(((idx.n/idx.nsamples)**2))))**(idx.nsamples-1)
-            if (p<=pcutoff):
-                return (l,idx,n,sp)
-        #not a single significant multi-mum
-        return nomum
-    else:
-        #one multimum for all samples index
-        return bestmum
-
-def mumpicker2(multimums,idx):
-    bestmum_by_n={}
-    bestmum=(0,idx,0,[])
-    for multimum in multimums:
-        l,n,sp=multimum
-        if n in bestmum_by_n:
-            if l>bestmum_by_n[n][0]:
-                bestmum_by_n[n]=(l,idx,n,sp)
-        else:
-            bestmum_by_n[n]=(l,idx,n,sp)
-    for key in sorted(bestmum_by_n,reverse=True):
-        if bestmum_by_n[key][0]>=minlength:
-            bestmum=bestmum_by_n[key]
-            break
-    return bestmum
-
-def prune_nodes(G):
+def prune_nodes(G,T):
     converged=False
     reverse=False
     while not(converged):
@@ -387,7 +338,7 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
         f.write('L\t'+str(mapping[node1])+'\t+\t'+str(mapping[node2])+"\t+\t0M\n")
     f.close()
 
-def write_gml(G,T,outputfile="reference.gml"):
+def write_gml(G,T,outputfile="reference",hwm=1000):
     mapping={}
     for n in nx.nodes(G):
         mapping[n]=str(n)
@@ -404,16 +355,30 @@ def write_gml(G,T,outputfile="reference.gml"):
             G.node[n]['seq']=T[n.begin:n.end].upper()
         G.node[n]['l']=len(G.node[n]['seq'])
     G=nx.relabel_nodes(G,mapping,copy=True)
-    nx.write_gml(G,outputfile)
-
-def pan_core_dist(G):
-    d=[0]*idx.nsamples
-    for node,data in G.nodes_iter(data=True):
-        if len(G.in_edges(node)+G.out_edges(node))<2:
-            #print "skipping", node
-            continue
-        d[len(data['sample'])-1]+=node.end-node.begin
-    return d
+    outputfiles=[]
+    sgn=[]
+    i=0
+    for n in nx.topological_sort(G):
+        sgn.append(n)
+        if G.node[n]['n']==len(G.graph['samples']): #join node
+            if len(sgn)>=hwm:
+                sg=G.subgraph(sgn)
+                fn=outputfile+'.'+str(i)+'.gml'
+                nx.write_gml(sg,fn)
+                outputfiles.append(fn)
+                sgn=[]
+                i+=1
+    if len(sgn)>0:
+        sg=G.subgraph(sgn)
+        if i==0:
+            fn=outputfile+'.gml'
+        else:
+            fn=outputfile+'.'+str(i)+'.gml'
+        nx.write_gml(sg,fn)
+        outputfiles.append(fn)
+    
+    return outputfiles
+    #nx.write_gml(G,outputfile)
 
 def main():
     usage = "reveal [options] <sequence1.(g)fa> <sequence2.(g)fa> ... <sequenceN.(g)fa>"
@@ -437,10 +402,11 @@ def main():
         return
     
     if args.output==None:
-        args.output="_".join([f[:f.rfind('.')] for f in args.inputfiles])
+        args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
     
     #globale variables to simplify callbacks from c extension
-    global idx,t,G,T,so,pcutoff,minlength,reference
+    #global idx,t,G,so,reference
+    global t,G,reference
     
     reference=args.reference
     
@@ -448,10 +414,10 @@ def main():
     idx=reveallib.index()
     G=nx.DiGraph()
     G.graph['samples']=[]
-    pcutoff=args.pcutoff
-    minlength=args.minlength
+    schemes.pcutoff=args.pcutoff
+    schemes.minlength=args.minlength
     
-    for sample in args.inputfiles:
+    for i,sample in enumerate(args.inputfiles):
         idx.addsample(sample)
         if sample.endswith(".gfa"):
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
@@ -460,28 +426,39 @@ def main():
             G.graph['samples'].append(sample)
             for name,seq in fasta_reader(sample):
                 intv=idx.addsequence(seq.upper())
-                i=Interval(intv[0],intv[1])
-                t.add(i)
-                G.add_node(i,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
+                Intv=Interval(intv[0],intv[1])
+                t.add(Intv)
+                schemes.ts.add(Intv)
+                schemes.interval2sampleid[Intv]=i
+                G.add_node(Intv,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
+    
+    #schemes.T=idx.T
     
     #for sep in idx.nsep:
     #    assert(idx.T[sep]=='$')
-    
+
+    print "Constructing index..."
     idx.construct()
-    T=idx.T
+    print "Done."
     
+    print "Aligning genomes..."
     if len(args.inputfiles)>2:
-        idx.align(mumpicker,graphalign,threads=args.threads)
+        idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
     else:
         idx.align(None,graphalign,threads=args.threads)
+    print "Done."
     
-    prune_nodes(G)
+    print "Merging nodes..."
+    T=idx.T
+    prune_nodes(G,T) #TODO: do this after every alignment step to reduce graph size during alignment
+    print "Done."
     
+    print "Writing graph..."
     if args.gml:
-        write_gml(G,T, outputfile=args.output+'.gml')
-        graph=args.output+'.gml'
+        graph=write_gml(G,T, outputfile=args.output)
     else:
         write_gfa(G,T,vg=args.vg, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
+    print "Done."
     
     print "Alignment graph written to:",graph

@@ -211,7 +211,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     if (numThreads>0){
         
         Py_BEGIN_ALLOW_THREADS;
-
+        
         for(i = 0; i < numThreads; i++) {
             fprintf(stderr,"Creating thread %d\n",i);
             RevealWorker *rw;
