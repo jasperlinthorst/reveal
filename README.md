@@ -36,16 +36,8 @@ To validate whether everything is correctly installed you can run a test alignme
 
 **reveal tests/1a.fa tests/1b.fa**  
   
-If everything is correctly installed, the produced output should end with the following lines:  
-  
-...  
-04/09/2015 09:59:37 AM Identity (tot_aligned_sequence/(len(s1)+len(s2))) between 1a.fa and 1b.fa is 76.63%.  
-04/09/2015 09:59:37 AM Identity genome/graph 1a.fa: ((tot_aligned_sequence/2)/len(s1)) is 67.71%.  
-04/09/2015 09:59:37 AM Identity genome/graph 1b.fa: ((tot_aligned_sequence/2)/len(s2)) is 88.26%.  
-04/09/2015 09:59:37 AM 62.12% of the sequence in the graph is common to all input genomes  
-04/09/2015 09:59:37 AM All graphs/sequences are aligned.  
+If everything is correctly installed, the a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)). In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
-The following files should now have been created:
-- 1a\_1b.gfa - containing the alignment graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/))
-- 1a\_1b.vcf.gz - containing variant calls in vcf format (experimental)
+**reveal tests/1a.fa tests/1b.fa --gml**
 
+The current version of reveal does not produce vcf output anymore, but I am planning on adding some form of variant caller in the future. In case you really need VCF, the best short term solution is to check out commit fcdba9d3631e0404ce1a95feb063cf6b9a484ca8
