@@ -397,7 +397,7 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     
-    if len(args.inputfiles)==0:
+    if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
     
