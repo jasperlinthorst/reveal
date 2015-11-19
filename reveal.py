@@ -5,40 +5,11 @@ import networkx as nx
 from collections import defaultdict, deque
 import threading
 import reveallib
-#from matplotlib import pyplot as plt
 import argparse
 import logging
 import os
 import schemes
-
-#
-#def assertSA(idx):
-#    print "T"
-#    t=idx.T
-#    print "SA"
-#    sa=idx.SA
-#    print "LCP"
-#    lcp=idx.LCP
-#    for i,(s,l) in enumerate(zip(sa,lcp)):
-#        if i==0:
-#            continue
-#        t1=t[s:s+l]
-#        t2=t[sa[i-1]:sa[i-1]+l]
-#        if t1!=t2:
-#            printSA(idx,start=i-3,end=i+2)
-#            print i,l,t[s:s+l]
-#            print i-1,l,t[sa[i-1]:sa[i-1]+l]
-#        if s+l!=len(t)-1 and sa[i-1]+l!=len(t)-1:
-#            if not(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N'):
-#                print "printing SA for ",i
-#                if i>2:
-#                    printSA(idx,start=i-3,end=i+2,maxline=150)
-#                else:
-#                    printSA(idx,start=0,end=i+2,maxline=150)
-#
-#                print "Done"
-#                assert(t[s+l]!=t[sa[i-1]+l] or t[s+l].islower() or t[s+l]=='N')
-#        assert(t[s:s+l]==t[sa[i-1]:sa[i-1]+l])
+import caller
 
 def fasta_reader(fn):
     seq=""
@@ -332,6 +303,7 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
                 )
         else:
             f.write("\n")
+            f.write("P\t"+str(i)+"\t"+sep.join(data['sample'])+"\t+\t"+str(node.end-node.begin)+"M\n")
         mapping[node]=i
         i+=1
     for node1,node2 in G.edges_iter():
@@ -378,7 +350,6 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
         outputfiles.append(fn)
     
     return outputfiles
-    #nx.write_gml(G,outputfile)
 
 def main():
     usage = "reveal [options] <sequence1.(g)fa> <sequence2.(g)fa> ... <sequenceN.(g)fa>"
@@ -394,8 +365,24 @@ def main():
     parser.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
+
+    parser.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size.")
+    parser.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions).")
+    parser.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
+    parser.add_argument("--indels", dest="indels", action="store_true", default=False, help="Output indels in a gfa graph.")
+    parser.add_argument("--inv", dest="inv", action="store_true", default=False, help="Output inversions in a gfa graph.")
+    parser.add_argument("--multi", dest="multi", action="store_true", default=False, help="Output variants with multiple alleles in a gfa graph.")
+    parser.add_argument("--all", dest="allvar", action="store_true", default=False, help="Output all variants in a gfa graph.")
+    
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
+    
+    if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
+        logging.info("Parsing GFA file.")
+        c=caller.Caller(args.inputfiles[0])
+        logging.info("Writing variants.")
+        c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
+        return
     
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
@@ -405,7 +392,6 @@ def main():
         args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
     
     #globale variables to simplify callbacks from c extension
-    #global idx,t,G,so,reference
     global t,G,reference
     
     reference=args.reference
@@ -431,11 +417,6 @@ def main():
                 schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
-    
-    #schemes.T=idx.T
-    
-    #for sep in idx.nsep:
-    #    assert(idx.T[sep]=='$')
 
     print "Constructing index..."
     idx.construct()
