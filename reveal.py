@@ -164,7 +164,7 @@ def segmentgraph(node,nodes):
     rest = nodes - (leading | trailing)
     return list(leading), list(trailing), list(rest)
 
-def graphalign(l,index,n,sp):
+def graphalign(l,index,n,score,sp):
     nodes=index.nodes
     if l<schemes.minlength or len(nodes)==0:
         #print l, schemes.minlength, len(nodes), n, sp
@@ -226,7 +226,7 @@ def prune_nodes(G,T):
                             mergenodes(group)
                             converged=False
 
-def read_gfa(gfafile, index, tree, graph, minsamples=2, targetsample=None):
+def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None):
     f=open(gfafile,'r')
     sep=";"
     mapping={} #temp mapping object
@@ -261,7 +261,14 @@ def read_gfa(gfafile, index, tree, graph, minsamples=2, targetsample=None):
                 
                 ann['ORI']=set(ann['ORI'])
                 ann['CTG']=set(ann['CTG'])
-                if len(ann['ORI'])<minsamples or (targetsample!=None and targetsample in ann['ORI']): #dont index these nodes, just add them to the graph
+                
+                if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
+                    graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=gfafile+'_'+nodeid
+                elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
+                    graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=gfafile+'_'+nodeid
+                elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
                     graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=gfafile+'_'+nodeid
                 else:
@@ -290,7 +297,11 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
     i=1
     mapping={}
     for node,data in G.nodes_iter(data=True):
-        f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
+        if 'seq' in data:
+            f.write('S\t'+str(i)+'\t'+data['seq'].upper())
+        else:
+            f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
+        
         if not(vg):
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\n" % 
                     (
@@ -361,6 +372,7 @@ def main():
     parser.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
     parser.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
     parser.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
+    parser.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
     parser.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
     parser.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
@@ -406,7 +418,9 @@ def main():
     for i,sample in enumerate(args.inputfiles):
         idx.addsample(sample)
         if sample.endswith(".gfa"):
+            #TODO: now applies to all graphs! probably want to have this graph specific if at all...
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
+                                    maxsamples=args.maxsamples,
                                     targetsample=args.targetsample)
         else: #consider it to be a fasta file
             G.graph['samples'].append(sample)

@@ -54,9 +54,9 @@ def mumpicker2(multimums,idx):
         l,n,sp=multimum
         if n in bestmum_by_n:
             if l>bestmum_by_n[n][0]:
-                bestmum_by_n[n]=(l,idx,n,sp)
+                bestmum_by_n[n]=(l,idx,n,0,sp)
         else:
-            bestmum_by_n[n]=(l,idx,n,sp)
+            bestmum_by_n[n]=(l,idx,n,0,sp)
     
     for key in sorted(bestmum_by_n,reverse=True):
         if bestmum_by_n[key][0]>=minlength:

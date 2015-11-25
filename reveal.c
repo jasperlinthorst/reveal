@@ -40,11 +40,12 @@ int push_index(RevealIndex *idx) {
     return 0;
 }
 
-int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
+int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     int i=0,aStart,bStart;
     int lb,la;
     mum->u=1;
     mum->l=0;
+    mum->score=0;
     mum->n=2;
     for (i=1;i<index->n;i++){
         if (index->LCP[i]>mum->l){
@@ -82,9 +83,105 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
     return 0;
 }
 
+int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
+    int i=0,aStart,bStart;
+    int lb,la;
+    int penalize;
+    if (PyList_Size(index->nodes)==2){
+        penalize=1;
+    } else {
+        penalize=0;
+    }
+    mum->u=1;
+    mum->l=0;
+    mum->score=-2147483648;
+    mum->n=2;
+    for (i=1;i<index->n;i++){
+        if (index->LCP[i]>mum->score){
+            if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+               continue;
+            }
+            if (index->SA[i]<index->SA[i-1]) {
+                aStart=index->SA[i];
+                bStart=index->SA[i-1];
+            } else {
+                aStart=index->SA[i-1];
+                bStart=index->SA[i];
+            }
+            if (aStart>0 && bStart>0){ //if not it has to be maximal!
+                if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+                    continue; //not maximal
+                }
+            }
+            if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+                lb=index->LCP[i-1];
+                la=0;
+            } else {
+                lb=index->LCP[i-1];
+                la=index->LCP[i+1];
+            }
+            if (lb>=index->LCP[i] || la>=index->LCP[i]){
+                continue;//not unique
+            }
+            //match is not a repeat and is maximally unique
+            
+            //penalize for the indel it creates in leading and trailing part
+            int penalty=0;
+            int lpenalty=0;
+            int tpenalty=0;
+            
+            if (index->depth>0 && penalize==1){
+                PyObject *node1=PyList_GetItem(index->nodes,0);
+                int start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
+                int end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
+    
+                PyObject *node2=PyList_GetItem(index->nodes,1);
+                int start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
+                int end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
+                
+                if (start1<aStart && end1>aStart){
+                    lpenalty=abs((aStart-start1)-(bStart-start2)); //leading penalty
+                    tpenalty=abs((end1-(aStart+index->LCP[i]))-(end2-(bStart+index->LCP[i]))); //trailing penalty
+                    assert(lpenalty>=0);
+                    assert(tpenalty>=0);
+                    if (lpenalty>tpenalty){
+                        penalty=tpenalty;
+                    } else {
+                        penalty=lpenalty;
+                    }
+                    //penalty=tpenalty+lpenalty;
+                    assert(penalty>=0);
+                } else {
+                    lpenalty=abs((bStart-start1)-(aStart-start2)); //leading penalty
+                    tpenalty=abs((end1-(bStart+index->LCP[i]))-(end2-(aStart+index->LCP[i]))); //trailing penalty
+                    assert(lpenalty>=0);
+                    assert(tpenalty>=0);
+                    if (lpenalty>tpenalty){
+                        penalty=tpenalty;
+                    } else {
+                        penalty=lpenalty;
+                    }
+                    //penalty=tpenalty+lpenalty;
+                    assert(penalty>=0);
+                }
+            }
+
+            if (index->LCP[i]-penalty > mum->score){
+                mum->score=index->LCP[i]-penalty;
+                mum->l=index->LCP[i];
+                mum->sp[0]=aStart;
+                mum->sp[1]=bStart;
+            }
+            
+        }
+    }
+    return 0;
+}
+
 int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     mum->u=1;
     mum->l=0;
+    mum->score=0;
     mum->n=0;
     int i=0,j=0,la,lb;
     int *flag_so=calloc( index->nsamples,sizeof(int));
@@ -550,6 +647,7 @@ void *aligner(void *arg) {
             RevealMultiMUM mmum;
             mmum.sp=(int *) malloc(idx->nsamples*sizeof(int));
             mmum.l=0;
+            mmum.score=0;
             
             PyObject *result;
             
@@ -599,7 +697,7 @@ void *aligner(void *arg) {
                 PyObject *sp=NULL;
                 PyObject *tmp=NULL;
                 
-                PyArg_ParseTuple(mum,"iOiO",&mmum.l,&tmp,&mmum.n,&sp);
+                PyArg_ParseTuple(mum,"iOiiO",&mmum.l,&tmp,&mmum.n,&mmum.score,&sp);
                 
                 for (i=0; i<mmum.n; i++){
                     PyObject * pos=PyList_GetItem(sp,i);
@@ -623,8 +721,9 @@ void *aligner(void *arg) {
                 
                 if (idx->nsamples>2){
                     getbestmultimum(idx, &mmum, idx->nsamples);
-                } else {
-                    getbestmum(idx, &mmum); //simpler method (tiny bit more efficient), but essentially should produce the same results
+                } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
+                    //getlongestmum(idx, &mmum);
+                    getbestmum(idx, &mmum);
                 }
                 
                 pthread_mutex_lock(&python);      //LOCK PYTHON            
@@ -640,7 +739,7 @@ void *aligner(void *arg) {
                     PyList_SetItem(sps,i,pos);
                 }
                 
-                arglist = Py_BuildValue("(i,O,i,O)", mmum.l, idx, mmum.n, sps);
+                arglist = Py_BuildValue("(i,O,i,i,O)", mmum.l, idx, mmum.n, mmum.score, sps);
                 if (arglist==NULL){
                     PyErr_SetString(PyExc_TypeError, "***** Building argument list failed");
                     err_flag=1;
