@@ -366,8 +366,8 @@ def main():
     parser.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
 
-    parser.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size.")
-    parser.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions).")
+    parser.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size (default=1).")
+    parser.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions) (default=1000).")
     parser.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
     parser.add_argument("--indels", dest="indels", action="store_true", default=False, help="Output indels in a gfa graph.")
     parser.add_argument("--inv", dest="inv", action="store_true", default=False, help="Output inversions in a gfa graph.")

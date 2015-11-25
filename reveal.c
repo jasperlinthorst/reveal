@@ -59,7 +59,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 bStart=index->SA[i];
             }
             if (aStart>0 && bStart>0){ //if not it has to be maximal!
-                if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+                if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
                     continue; //not maximal
                 }
             }
@@ -289,10 +289,14 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
 
 int ismultimum(RevealIndex * idx, int l, int lb, int ub, int * flag_so) {
     if (l>0){
-        if (ub-lb<=((RevealIndex *) idx->main)->nsamples){ //cant be larger than #samples
-            int j;
-            memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
-    
+        int j;
+        memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
+        
+        if (((RevealIndex *) idx->main)->nsamples==2){ //dont need SO in case of only two samples
+            if ( (idx->SA[ub]>idx->nsep[0]) == (idx->SA[lb]>idx->nsep[0]) ){
+                return 0;
+            }
+        } else {
             for (j=lb; j<ub+1; j++) { //has to occur in all samples once
                 if (flag_so[idx->SO[idx->SA[j]]]==0){
                     flag_so[idx->SO[idx->SA[j]]]=1;
@@ -300,17 +304,17 @@ int ismultimum(RevealIndex * idx, int l, int lb, int ub, int * flag_so) {
                     return 0;
                 }
             }
-            
-            for (j=lb; j<ub; j++){
-                if (idx->SA[j]==0){
-                    return 1;
-                }
-                if (idx->SA[j+1]==0){
-                    return 1;
-                }
-                if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
-                    return 1;
-                }
+        }
+        
+        for (j=lb; j<ub; j++){ //check maximal
+            if (idx->SA[j]==0){
+                return 1; //success
+            }
+            if (idx->SA[j+1]==0){
+                return 1; //success
+            }
+            if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
+                return 1; //success
             }
         }
     }
@@ -325,11 +329,11 @@ PyObject * getmultimums(RevealIndex *index) {
         return NULL;
     }
     RevealIndex * main = (RevealIndex *) index->main;
-    int *flag_so=calloc(main->nsamples,sizeof *flag_so);
     int maxdepth=1000;
+    int *flag_so=calloc(main->nsamples,sizeof *flag_so);
     int *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
     int *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    int *stack_ub=malloc(maxdepth * sizeof *stack_ub);
+    int *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
     int depth=0;
     int i,lb,i_lb,i_ub,i_lcp;
     stack_lcp[0]=0;
@@ -344,17 +348,21 @@ PyObject * getmultimums(RevealIndex *index) {
             i_lb = stack_lb[depth];
             i_ub = stack_ub[depth];
             depth--;
-            if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                int n=(i_ub-i_lb)+1;
-                int x;
-                PyObject *sp=PyList_New(n);
-                for (x=0;x<n;x++) {
-                    PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-                    PyList_SET_ITEM(sp, x, v);
+            int n=(i_ub-i_lb)+1;
+            
+            if (n<=main->nsamples){
+                if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                    int x;
+                    PyObject *sp=PyList_New(n);
+                    for (x=0;x<n;x++) {
+                        PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                        PyList_SET_ITEM(sp, x, v);
+                    }
+                    PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
+                    PyList_Append(multimums,multimum);
                 }
-                PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
-                PyList_Append(multimums,multimum);
             }
+            
             assert(depth>=0);
             lb = i_lb;
         }
@@ -366,7 +374,6 @@ PyObject * getmultimums(RevealIndex *index) {
                 stack_lb=realloc(stack_lb,maxdepth * sizeof *stack_lb);
                 stack_ub=realloc(stack_ub,maxdepth * sizeof *stack_ub);
             }
-            assert(depth<1000);     //TODO: fix dynamic!        
             stack_lcp[depth]=index->LCP[i];
             stack_lb[depth]=lb;
             stack_ub[depth]=0;
@@ -377,43 +384,26 @@ PyObject * getmultimums(RevealIndex *index) {
     i_lb = stack_lb[depth];
     i_ub = stack_ub[depth];
     depth--;
-    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-        int n=(i_ub-i_lb)+1;
-        int x;
-        PyObject *sp=PyList_New(n);
-        for (x=0;x<n;x++) {
-            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-            PyList_SET_ITEM(sp, x, v);
-        }
-        PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
-        PyList_Append(multimums,multimum);
-    }
     
+    int n=(i_ub-i_lb)+1;
+    if (n<=main->nsamples){
+        if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+            int x;
+            PyObject *sp=PyList_New(n);
+            for (x=0;x<n;x++) {
+                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                PyList_SET_ITEM(sp, x, v);
+            }
+            PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
+            PyList_Append(multimums,multimum);
+        }
+    }
     free(stack_lcp);
     free(stack_lb);
     free(stack_ub);
     free(flag_so);
     return multimums;
-
-//for i in range(1,n):
-//    lb = i-1
-//    while LCP[i] < stack[-1][0]:
-//        stack[-1][2]=i-1
-//        interval = stack.pop()
-//        if ismultimum(interval,SO,SA,idx):
-//            intervals.append(interval)
-//        lb = interval[1]
-//    if LCP[i] > stack[-1][0]:
-//        stack.append([LCP[i], lb, None])
-//
-//stack[-1][2] = n-1
-//interval = stack.pop()
-//if ismultimum(interval,SO,SA,idx):
-//    intervals.append(interval)
-    
 }
-
-
 
 
 void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_trailing, RevealIndex *i_par){

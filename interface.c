@@ -162,11 +162,12 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
             return NULL;
          };
     }
+
+    self->main=(PyObject *) self;
     
     Py_INCREF(Py_None);
     return Py_None;
 };
-
 
 static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
 {
@@ -311,6 +312,7 @@ static PyMethodDef reveal_methods[] = {
     { "addsequence", (PyCFunction) addsequence, METH_VARARGS },
     { "construct", (PyCFunction) construct, METH_VARARGS },
     { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
+    { "getmultimems", (PyCFunction) getmultimums, METH_VARARGS },
     { NULL, NULL }
 };
 

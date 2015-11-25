@@ -21,7 +21,7 @@ class Caller:
     
     def call(self,minlength=1,maxlength=1000,allvar=False,inversions=False,indels=False,snps=False,multi=False):
         g=self.graph
-        for node in g.nodes():
+        for node in nx.topological_sort(g,g.nodes()):
             if len(g[node])>1: #split
                 assert(len(g[node])<=self.graph.graph['samples'])
                 alleles=[]
@@ -32,28 +32,34 @@ class Caller:
                         s=g.node[nei]['seq']
                         alleles.append(s)
                         allelelengths.append(len(s))
-                #TODO: find join node and only output only simple bubbles
+                #TODO: find join node and only(!) output simple bubbles
                 assert(len(alleles)>=1)
                 output=allvar
                 if min(allelelengths)>=minlength and max(allelelengths)<=maxlength:
+                    
                     if inversions and not(output):
                         if len(alleles)==2: #only test inversion if two alleles
                             score=seqal.nw_align(alleles[0],alleles[1])[2]
                             al1,al2,rcscore=seqal.nw_align(rc(alleles[0]),alleles[1])
                             if rcscore>score:
-                                print al1
-                                print al2
-                                output=True
+                                if (rcscore-score)>(sum(allelelengths)/2):
+                                    alleles[0]=al1
+                                    alleles[1]=al2
+                                    output=True
+                    
                     if indels and not(output):
                         output=indel
+                    
                     if snps and not(output):
                         if min(allelelengths)==max(allelelengths)==1 and len(alleles)==2:
                             output=True
+                    
                     if multi and not(output):
                         if len(alleles)>2:
                             output=True
+                    
                     if output:
-                        print alleles
+                        print g.node[node]['start']+len(g.node[node]['seq']),alleles
     
     def parse(self):
         f=open(self.gfafile,'r')

@@ -42,5 +42,6 @@ typedef struct
 
 int getbestmum(RevealIndex *index, RevealMultiMUM *mum);
 int getbestmultimum(RevealIndex *index, RevealMultiMUM *mmum, int min_n);
+PyObject * getmultimums(RevealIndex *index);
 
 #endif
