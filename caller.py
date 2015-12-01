@@ -6,13 +6,13 @@ Created on Fri Nov 13 13:24:31 2015
 """
 
 import networkx as nx
-import seqal
 
 def rc(seq):
     d = {'A':'T','T':'A','G':'C','C':'G','N':'N'}
     return "".join([d[b] for b in reversed(seq)])
 
 class Caller:
+    import seqal
     def __init__(self, gfafile):
         self.gfafile = gfafile
         self.vcffile = gfafile.replace(".gfa",".vcf")

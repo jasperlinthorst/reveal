@@ -9,7 +9,6 @@ import argparse
 import logging
 import os
 import schemes
-import caller
 
 def fasta_reader(fn):
     seq=""
@@ -166,7 +165,7 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,score,sp):
     nodes=index.nodes
-    if l<schemes.minlength or len(nodes)==0:
+    if l<schemes.minlength or len(nodes)==0 or score<0:
         #print l, schemes.minlength, len(nodes), n, sp
         return
     #assert(n==len(sp))
@@ -390,6 +389,7 @@ def main():
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     
     if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
+        import caller
         logging.info("Parsing GFA file.")
         c=caller.Caller(args.inputfiles[0])
         logging.info("Writing variants.")
