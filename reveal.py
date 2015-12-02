@@ -229,6 +229,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     f=open(gfafile,'r')
     sep=";"
     mapping={} #temp mapping object
+    edges=[] #tmp list for edges
     for line in f:
         if line.startswith('H'):
             h=line.split()
@@ -279,10 +280,15 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     
         #L	206	+	155	+	0M
         if line.startswith('L'):
-            e=line.strip().split()
-            assert(not graph.has_edge(mapping[e[1]],mapping[e[3]]))
-            assert(not graph.has_edge(mapping[e[3]],mapping[e[1]]))
-            graph.add_edge(mapping[e[1]],mapping[e[3]],ofrom=e[2],oto=e[4],cigar=e[5])
+	    edges.append(line)
+
+    for line in edges:
+	e=line.strip().split()
+        assert(not graph.has_edge(mapping[e[1]],mapping[e[3]]))
+        assert(not graph.has_edge(mapping[e[3]],mapping[e[1]]))
+        graph.add_edge(mapping[e[1]],mapping[e[3]],ofrom=e[2],oto=e[4],cigar=e[5])
+
+
 
 def write_gfa(G,T,outputfile="reference.gfa",vg=False):
     f=open(outputfile,'wb')
@@ -293,15 +299,21 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
         for subsample in sample.rstrip().rstrip(sep).split(sep):
             f.write(subsample+sep)
     f.write('\n')
-    i=1
+    
     mapping={}
-    for node,data in G.nodes_iter(data=True):
+
+    for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
+	mapping[node]=i+1 #one-based for vg
+    
+    for i,node in enumerate(nx.topological_sort(G)):
+	i+=1
+	data=G.node[node]
         if 'seq' in data:
             f.write('S\t'+str(i)+'\t'+data['seq'].upper())
         else:
             f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
         
-        if not(vg):
+	if not vg:
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
@@ -313,11 +325,14 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
                 )
         else:
             f.write("\n")
-            f.write("P\t"+str(i)+"\t"+sep.join(data['sample'])+"\t+\t"+str(node.end-node.begin)+"M\n")
-        mapping[node]=i
-        i+=1
-    for node1,node2 in G.edges_iter():
-        f.write('L\t'+str(mapping[node1])+'\t+\t'+str(mapping[node2])+"\t+\t0M\n")
+            for sample in data['sample']:
+                f.write("P\t"+str(i)+"\t"+sample+"\t+\t"+str(node.end-node.begin)+"M\n")
+	
+	for to in G[node]:
+	    f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
+	
+    #for node1,node2 in G.edges_iter():
+    #    f.write('L\t'+str(mapping[node1])+'\t+\t'+str(mapping[node2])+"\t+\t0M\n")
     f.close()
 
 def write_gml(G,T,outputfile="reference",hwm=1000):
