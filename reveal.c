@@ -129,17 +129,18 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
             int penalty=0;
             int lpenalty=0;
             int tpenalty=0;
-            
+            int start1=-1,end1=-1,start2=-1,end2=-1;
+
             if (index->depth>0 && penalize==1){
                 PyObject *node1=PyList_GetItem(index->nodes,0);
-                int start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
-                int end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
+                start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
+                end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
     
                 PyObject *node2=PyList_GetItem(index->nodes,1);
-                int start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
-                int end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
+                start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
+                end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
                 
-                if (start1<aStart && end1>aStart){
+                if (start1<=aStart && end1>=aStart){
                     lpenalty=abs((aStart-start1)-(bStart-start2)); //leading penalty
                     tpenalty=abs((end1-(aStart+index->LCP[i]))-(end2-(bStart+index->LCP[i]))); //trailing penalty
                     assert(lpenalty>=0);
@@ -166,6 +167,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 }
             }
 
+	    //fprintf(stderr,"l=%d p=%d score=%d start1=%d aStart=%d start2=%d bStart=%d lpenalty=%d, tpenalty=%d\n",index->LCP[i],penalty,mum->score, start1, aStart, start2, bStart, lpenalty, tpenalty);
             if (index->LCP[i]-penalty > mum->score){
                 mum->score=index->LCP[i]-penalty;
                 mum->l=index->LCP[i];
