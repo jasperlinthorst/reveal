@@ -317,8 +317,8 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
-                    data['coordsample'],
-                    data['coordcontig'],
+                    data['coordsample'].replace(sep,""),
+                    data['coordcontig'].replace(sep,""),
                     sep.join(data['contig']),
                     data['start']
                     )
@@ -452,7 +452,7 @@ def main():
                 t.add(Intv)
 		schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
-                G.add_node(Intv,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
+                G.add_node(Intv,sample={sample},contig={name.replace(";","")},coordsample=sample,coordcontig=name.replace(";",""),start=0,aligned=0)
 
     print "Constructing index..."
     idx.construct()
