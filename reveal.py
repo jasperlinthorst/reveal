@@ -15,9 +15,9 @@ def fasta_reader(fn):
     with open(fn,'r') as ff:
         for line in ff:
             if line.startswith(">"):
-                name=line.rstrip().replace(">","")
                 if seq!="":
                     yield name,seq
+                name=line.rstrip().replace(">","")
                 seq=""
             else:
                 seq+=line.rstrip()
@@ -166,7 +166,7 @@ def segmentgraph(node,nodes):
 def graphalign(l,index,n,score,sp):
     nodes=index.nodes
     if l<schemes.minlength or len(nodes)==0 or score<0:
-        #print l, schemes.minlength, len(nodes), n, sp
+        #print l, schemes.minlength, len(nodes), n, sp, score
         return
     #assert(n==len(sp))
     mns=[]
@@ -353,28 +353,34 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
         G.node[n]['l']=len(G.node[n]['seq'])
     G=nx.relabel_nodes(G,mapping,copy=True)
     outputfiles=[]
-    sgn=[]
+    
     i=0
-    for n in nx.topological_sort(G):
-        sgn.append(n)
-        if G.node[n]['n']==len(G.graph['samples']): #join node
-            if len(sgn)>=hwm:
-                sg=G.subgraph(sgn)
-                fn=outputfile+'.'+str(i)+'.gml'
-                nx.write_gml(sg,fn)
-                outputfiles.append(fn)
-                sgn=[]
-                i+=1
-    if len(sgn)>0:
-        sg=G.subgraph(sgn)
-        if i==0:
-            fn=outputfile+'.gml'
-        else:
-            fn=outputfile+'.'+str(i)+'.gml'
-        nx.write_gml(sg,fn)
-        outputfiles.append(fn)
+    for subset in nx.connected_components(G.to_undirected()):
+	sgn=[]
+	g=G.subgraph(subset)
+	for n in nx.topological_sort(g):
+	    sgn.append(n)
+	    if G.node[n]['n']==len(G.graph['samples']): #join node
+		if len(sgn)>=hwm:
+		    sg=G.subgraph(sgn)
+		    fn=outputfile+'.'+str(i)+'.gml'
+		    nx.write_gml(sg,fn)
+		    outputfiles.append(fn)
+		    sgn=[]
+		    i+=1
+	if len(sgn)>0:
+	    sg=G.subgraph(sgn)
+	    fn=outputfile+'.'+str(i)+'.gml'
+	    nx.write_gml(sg,fn)
+	    i+=1
+	    outputfiles.append(fn)
     
     return outputfiles
+
+#return a subgraph or sequence that contains (if all is well) the input sequence/graph from the specified sample
+#def extract(sample,graph):
+#    for node in graph.
+
 
 def main():
     usage = "reveal [options] <sequence1.(g)fa> <sequence2.(g)fa> ... <sequenceN.(g)fa>"
@@ -390,8 +396,9 @@ def main():
     parser.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
     parser.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
+    parser.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
-
+    
     parser.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size (default=1).")
     parser.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions) (default=1000).")
     parser.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
@@ -443,7 +450,7 @@ def main():
                 intv=idx.addsequence(seq.upper())
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                schemes.ts.add(Intv)
+		schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={sample},contig={name},coordsample=sample,coordcontig=name,start=0,aligned=0)
 
@@ -465,7 +472,7 @@ def main():
     
     print "Writing graph..."
     if args.gml:
-        graph=write_gml(G,T, outputfile=args.output)
+        graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
     else:
         write_gfa(G,T,vg=args.vg, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
