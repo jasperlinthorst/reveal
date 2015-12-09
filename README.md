@@ -34,10 +34,14 @@ If libdivsufsort is installed, REVEAL can be installed by executing the followin
 
 To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:  
 
-**reveal tests/1a.fa tests/1b.fa**  
+**reveal align tests/1a.fa tests/1b.fa**  
   
 If everything is correctly installed, the a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)). In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
-**reveal tests/1a.fa tests/1b.fa --gml**
+**reveal align tests/1a.fa tests/1b.fa --gml**
 
-The current version of reveal does not produce vcf output anymore, but I am planning on adding some form of variant caller in the future. In case you really need VCF, the best short term solution is to check out commit fcdba9d3631e0404ce1a95feb063cf6b9a484ca8
+To extract variants from the GFA graph, you need to install [seqal](https://github.com/mhulsman/seqal), run:
+
+**reveal call 1a&#95;1b.gfa --all**
+
+This will print a list of different variants (SNPs, indels, inversions) and their positions (with respect to the genome used as a reference if specified during alignment) and the actual varying alleles. Consider the --minlen and --maxlen arguments to filter the output variants by size. For now, inverions are detected by needle-man wunsch alignment of the reverse complemented alleles so be aware of the memory requirements of detecting large inversions from the graph. 

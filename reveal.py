@@ -317,8 +317,8 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
-                    data['coordsample'].replace(sep,""),
-                    data['coordcontig'].replace(sep,""),
+                    data['coordsample'].replace(sep,"").replace("\t",""),
+                    data['coordcontig'].replace(sep,"").replace("\t",""),
                     sep.join(data['contig']),
                     data['start']
                     )
@@ -377,37 +377,60 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
     
     return outputfiles
 
-#return a subgraph or sequence that contains (if all is well) the input sequence/graph from the specified sample
-#def extract(sample,graph):
-#    for node in graph.
-
-
 def main():
-    usage = "reveal [options] <sequence1.(g)fa> <sequence2.(g)fa> ... <sequenceN.(g)fa>"
-    parser = argparse.ArgumentParser(usage)
-    parser.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
-    parser.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    parser.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
-    parser.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
-    parser.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
-    parser.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
-    parser.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
-    parser.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
-    parser.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
-    parser.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
-    parser.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
-    parser.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
-    parser.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
+    import textwrap
     
-    parser.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size (default=1).")
-    parser.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions) (default=1000).")
-    parser.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
-    parser.add_argument("--indels", dest="indels", action="store_true", default=False, help="Output indels in a gfa graph.")
-    parser.add_argument("--inv", dest="inv", action="store_true", default=False, help="Output inversions in a gfa graph.")
-    parser.add_argument("--multi", dest="multi", action="store_true", default=False, help="Output variants with multiple alleles in a gfa graph.")
-    parser.add_argument("--all", dest="allvar", action="store_true", default=False, help="Output all variants in a gfa graph.")
+    desc=textwrap.dedent("""
+Type 'reveal <positional_argument> --help' for help on a specific subcommand.\n
+
+Reveal constructs population reference graphs by aligning multiple whole 
+genomes using recursive exact matching.
+
+http://www.biorxiv.org/content/early/2015/07/17/022715.
+""")
+    parser = argparse.ArgumentParser(prog="reveal", formatter_class=argparse.RawDescriptionHelpFormatter, usage="reveal -h for usage", description=desc)
+    subparsers = parser.add_subparsers()
+    parser_aln = subparsers.add_parser('align',prog="reveal align")
+    parser_call = subparsers.add_parser('call',prog="reveal call")
+    #parser_plot = subparsers.add_parser('plot')
+    #parser_convert = subparsers.add_parser('convert')
+    
+    parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
+    parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
+    parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
+    parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
+    parser_aln.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
+    parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
+    parser_aln.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
+    parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
+    parser_aln.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
+    parser_aln.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
+    parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
+    parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
+    parser_aln.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
+    parser_aln.set_defaults(func=align)
+
+    parser_call.add_argument('graph', nargs=1, help='A graph in gfa format from which variants should be extracted.')    
+    parser_call.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size (default=1).")
+    parser_call.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions) (default=1000).")
+    parser_call.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
+    parser_call.add_argument("--indels", dest="indels", action="store_true", default=False, help="Output indels in a gfa graph.")
+    parser_call.add_argument("--inv", dest="inv", action="store_true", default=False, help="Output inversions in a gfa graph.")
+    parser_call.add_argument("--multi", dest="multi", action="store_true", default=False, help="Output variants with multiple alleles in a gfa graph.")
+    parser_call.add_argument("--all", dest="allvar", action="store_true", default=False, help="Output all variants in a gfa graph.")
+    parser_call.set_defaults(func=call)
+    
+    #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
+    #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
+    #parser_plot.set_defaults(func=plot)
+
+    #parser_plot.set_defaults(func=convert)
     
     args = parser.parse_args()
+    args.func(args)
+
+
+def align(args):
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     
     if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
@@ -479,3 +502,23 @@ def main():
     print "Done."
     
     print "Alignment graph written to:",graph
+
+#extract variants from gfa graphs
+def call(args):
+    if args.graph[0].endswith(".gfa"):
+        import caller
+        logging.info("Parsing GFA file.")
+        c=caller.Caller(args.graph[0])
+        logging.info("Writing variants.")
+        c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
+        return
+
+#TODO: create dotplots from two fasta files or from a sample in a graph wrt to reference in a graph
+#def plot(args):
+#    return
+
+#TODO: convert gfa graph to gml (sub)graphs
+#def convert(args):
+#    return
+
+

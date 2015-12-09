@@ -12,14 +12,14 @@ def rc(seq):
     return "".join([d[b] for b in reversed(seq)])
 
 class Caller:
-    import seqal
+    
     def __init__(self, gfafile):
         self.gfafile = gfafile
-        self.vcffile = gfafile.replace(".gfa",".vcf")
         self.graph = nx.DiGraph()
         self.parse()
     
     def call(self,minlength=1,maxlength=1000,allvar=False,inversions=False,indels=False,snps=False,multi=False):
+	import seqal
         g=self.graph
         for node in nx.topological_sort(g,g.nodes()):
             if len(g[node])>1: #split
@@ -59,7 +59,7 @@ class Caller:
                             output=True
                     
                     if output:
-                        print g.node[node]['start']+len(g.node[node]['seq']),alleles
+                        print g.node[node]['coordsample'],g.node[node]['coordcontig'],g.node[node]['start']+len(g.node[node]['seq']),alleles
     
     def parse(self):
         f=open(self.gfafile,'r')
