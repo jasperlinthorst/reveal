@@ -15,8 +15,11 @@ extern int maxqsize,qsize,qstart,aw,nmums,err_flag,die;
 
 /* pops an index of the queue */
 RevealIndex* pop_index() {
-    if(qsize > qstart) {
-        return index_queue[qstart++];
+    //fprintf(stderr,"qsize=%d qstart=%d\n",qsize,qstart);
+    //if(qsize > qstart) { FIFO
+    if(qsize > 0) { //LIFO
+        return index_queue[--qsize]; //LIFO
+        //return index_queue[qstart++]; //FIFO
     }
     else { /* Error buffer empty */
         return NULL;
@@ -628,7 +631,7 @@ void *aligner(void *arg) {
 
     RevealIndex * idx;
     while(1) {
-        int hasindex=0;
+	int hasindex=0;
         int i=0;
         
         pthread_mutex_lock(&mutex);/* acquire the mutex lock */
@@ -642,6 +645,8 @@ void *aligner(void *arg) {
         pthread_mutex_unlock(&mutex);/* release the mutex lock */
         
         if (die==1 || (rw->threadid==-1 && hasindex==0)){
+	    //if (hasindex==0) fprintf(stderr,"no more indices\n");
+	    //if (die==1) fprintf(stderr,"die\n");
             break;
         }
 

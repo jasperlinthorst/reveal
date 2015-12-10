@@ -168,6 +168,7 @@ def graphalign(l,index,n,score,sp):
     if l<schemes.minlength or len(nodes)==0 or score<0:
         #print l, schemes.minlength, len(nodes), n, sp, score
         return
+    #print l, n, score
     #assert(n==len(sp))
     mns=[]
     topop=[]
@@ -337,7 +338,8 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
 
 def write_gml(G,T,outputfile="reference",hwm=1000):
     mapping={}
-    for n in nx.nodes(G):
+    #for n,d in nx.nodes(G,data=True):
+    for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
         G.node[n]['n']=len(d['sample'])
@@ -378,17 +380,14 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
     return outputfiles
 
 def main():
-    import textwrap
+    desc="""
+    Type 'reveal <positional_argument> --help' for help on a specific subcommand.\n
+    Reveal constructs population reference graphs by aligning multiple whole 
+    genomes using recursive exact matching.
+    http://www.biorxiv.org/content/early/2015/07/17/022715.
+    """
     
-    desc=textwrap.dedent("""
-Type 'reveal <positional_argument> --help' for help on a specific subcommand.\n
-
-Reveal constructs population reference graphs by aligning multiple whole 
-genomes using recursive exact matching.
-
-http://www.biorxiv.org/content/early/2015/07/17/022715.
-""")
-    parser = argparse.ArgumentParser(prog="reveal", formatter_class=argparse.RawDescriptionHelpFormatter, usage="reveal -h for usage", description=desc)
+    parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc)
     subparsers = parser.add_subparsers()
     parser_aln = subparsers.add_parser('align',prog="reveal align")
     parser_call = subparsers.add_parser('call',prog="reveal call")
@@ -397,7 +396,7 @@ http://www.biorxiv.org/content/early/2015/07/17/022715.
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
+    #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
@@ -408,6 +407,7 @@ http://www.biorxiv.org/content/early/2015/07/17/022715.
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
+    parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align)
 
     parser_call.add_argument('graph', nargs=1, help='A graph in gfa format from which variants should be extracted.')    
@@ -445,48 +445,16 @@ def align(args):
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
     
+    if args.contigs:
+	if len(args.inputfiles)!=2:
+	    logging.fatal("Only pairwise alignment of contigs is possible.")
+	else:
+	    G,idx=align_contigs(args)
+    else:
+	G,idx=align_genomes(args)
+    
     if args.output==None:
         args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
-    
-    #globale variables to simplify callbacks from c extension
-    global t,G,reference
-    
-    reference=args.reference
-    
-    t=IntervalTree()
-    idx=reveallib.index()
-    G=nx.DiGraph()
-    G.graph['samples']=[]
-    schemes.pcutoff=args.pcutoff
-    schemes.minlength=args.minlength
-    
-    for i,sample in enumerate(args.inputfiles):
-        idx.addsample(sample)
-        if sample.endswith(".gfa"):
-            #TODO: now applies to all graphs! probably want to have this graph specific if at all...
-            read_gfa(sample,idx,t,G,minsamples=args.minsamples,
-                                    maxsamples=args.maxsamples,
-                                    targetsample=args.targetsample)
-        else: #consider it to be a fasta file
-            G.graph['samples'].append(sample)
-            for name,seq in fasta_reader(sample):
-                intv=idx.addsequence(seq.upper())
-                Intv=Interval(intv[0],intv[1])
-                t.add(Intv)
-		schemes.ts.add(Intv)
-                schemes.interval2sampleid[Intv]=i
-                G.add_node(Intv,sample={sample},contig={name.replace(";","")},coordsample=sample,coordcontig=name.replace(";",""),start=0,aligned=0)
-
-    print "Constructing index..."
-    idx.construct()
-    print "Done."
-    
-    print "Aligning genomes..."
-    if len(args.inputfiles)>2:
-        idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
-    else:
-        idx.align(None,graphalign,threads=args.threads)
-    print "Done."
     
     print "Merging nodes..."
     T=idx.T
@@ -502,6 +470,121 @@ def align(args):
     print "Done."
     
     print "Alignment graph written to:",graph
+
+def align_genomes(args):
+    #globale variables to simplify callbacks from c extension
+    global t,G,reference
+    
+    reference=args.reference
+    
+    t=IntervalTree()
+    idx=reveallib.index()
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    #schemes.pcutoff=args.pcutoff
+    schemes.minlength=args.minlength
+    
+    for i,sample in enumerate(args.inputfiles):
+        idx.addsample(sample)
+        if sample.endswith(".gfa"):
+            #TODO: now applies to all graphs! probably want to have this graph specific if at all...
+            read_gfa(sample,idx,t,G,minsamples=args.minsamples,
+                                    maxsamples=args.maxsamples,
+                                    targetsample=args.targetsample)
+        else: #consider it to be a fasta file
+            G.graph['samples'].append(sample)
+            for name,seq in fasta_reader(sample):
+                intv=idx.addsequence(seq.upper())
+                Intv=Interval(intv[0],intv[1])
+                t.add(Intv)
+                schemes.ts.add(Intv)
+                schemes.interval2sampleid[Intv]=i
+                G.add_node(Intv,sample={sample},contig={name.replace(";","")},coordsample=sample,coordcontig=name.replace(";",""),start=0,aligned=0)
+     
+    print "Constructing index..."
+    idx.construct()
+    print "Done."
+    
+    print "Aligning genomes..."
+    if len(args.inputfiles)>2:
+        idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
+    else:
+        idx.align(None,graphalign,threads=args.threads)
+    print "Done."
+    return G,idx
+
+def align_contigs(args):
+    global t,G,reference
+    
+    reference=args.reference
+    schemes.minlength=args.minlength
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    
+    ref=args.inputfiles[0]
+    contigs=args.inputfiles[1]
+    
+    t=IntervalTree()
+    idx=reveallib.index()
+    
+    idx.addsample(ref)
+    if ref.endswith(".gfa"):
+        read_gfa(ref,idx,t,G,minsamples=args.minsamples,
+                                maxsamples=args.maxsamples,
+                                targetsample=args.targetsample)
+    else:
+        G.graph['samples'].append(ref)
+        for chromname,chrom in fasta_reader(ref):
+            intv=idx.addsequence(chrom.upper())
+            Intv=Interval(intv[0],intv[1])
+            t.add(Intv)
+            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordsample=ref,coordcontig=chromname.replace(";",""),start=0,aligned=0)
+    
+    i=0
+    G.graph['samples'].append(contigs)
+    for contigname,contig in fasta_reader(contigs):
+	idx.addsample(contigs)
+	intv=idx.addsequence(contig.upper())
+	Intv=Interval(intv[0],intv[1])
+	t.add(Intv)
+	G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
+	
+	print "Constructing index..."
+        idx.construct()
+	print "Done."
+	
+	print "Aligning contig",contigname,"..."
+        idx.align(None,graphalign,threads=args.threads)
+	print "Done."
+        
+        t=IntervalTree()
+        T=idx.T
+        del(idx)
+	idx=reveallib.index()
+	idx.addsample(ref)
+        #add sequence of all nodes in G that are not spanned by the alignment
+        mapping={}
+        for node,data in G.nodes(data=True):
+            if isinstance(node,Interval):
+                if data['aligned']==1 or (len([nei for nei in G.neighbors(node) if G.node[nei]['aligned']!=1])==0 and len(G.neighbors(node))!=0):
+                    data['seq']=T[node.begin:node.end].upper()
+                    mapping[node]=i
+                    i+=1
+                else:
+                    if contigs not in data['sample']:
+                        intv=idx.addsequence(T[node.begin:node.end])
+                        Intv=Interval(intv[0],intv[1])
+                        t.add(Intv)
+                        mapping[node]=Intv
+                    else:
+                        data['seq']=T[node.begin:node.end]
+                        mapping[node]=i
+                        i+=1
+        
+        G=nx.relabel_nodes(G,mapping, copy=True)
+    return G,idx
+    
+
 
 #extract variants from gfa graphs
 def call(args):
@@ -521,4 +604,7 @@ def call(args):
 #def convert(args):
 #    return
 
+#TODO: extract genome from gfa graph
+#def extract(args):
+#    return
 

@@ -204,6 +204,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     index_queue[0]=self;
     
     qsize=1;
+    qstart=0;
     aw=0;
     nmums=0;
     
