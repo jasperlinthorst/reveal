@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import schemes
+import sys
 
 def fasta_reader(fn):
     seq=""
@@ -237,7 +238,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             tag=h[1].split(':')
             if tag[0]=="ORI":
                 for sample in tag[2].rstrip(sep).split(sep):
-                    graph.graph['samples'].append(sample)
+                    if 'samples' in graph.graph:
+                        graph.graph['samples'].append(sample)
+                    else:
+                        graph.graph['samples']=[sample]
         if line.startswith('S'):
             s=line.strip().split('\t')
             nodeid=s[1]
@@ -250,10 +254,15 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     ann[v[0]]=v[2]
             
             if "ORI" not in ann: #not a reveal graph, so no metadata on nodes, just index all
-                intv=index.addsequence(s[2].upper())
-                intv=Interval(intv[0],intv[1])
-                tree.add(intv)
-                graph.add_node(intv,sample={gfafile},contig={nodeid},aligned=0)
+                if index!=None:
+                    intv=index.addsequence(s[2].upper())
+                    intv=Interval(intv[0],intv[1])
+                    tree.add(intv)
+                    graph.add_node(intv,sample={gfafile},contig={nodeid},aligned=0)
+                    mapping[nodeid]=intv
+                else:
+                    graph.add_node(gfafile+'_'+nodeid,sample={gfafile},contig={nodeid},seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=gfafile+'_'+nodeid
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
                     ann['ORI']=[ann['ORI']]
@@ -273,12 +282,16 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=gfafile+'_'+nodeid
                 else:
-                    intv=index.addsequence(s[2].upper())
-                    intv=Interval(intv[0],intv[1])
-                    tree.add(intv)
-                    graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0)
-                    mapping[nodeid]=intv
-                    
+                    if index!=None:
+                        intv=index.addsequence(s[2].upper())
+                        intv=Interval(intv[0],intv[1])
+                        tree.add(intv)
+                        graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0)
+                        mapping[nodeid]=intv
+                    else:
+                        graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                        mapping[nodeid]=gfafile+'_'+nodeid
+        
         #L	206	+	155	+	0M
         if line.startswith('L'):
 	    edges.append(line)
@@ -388,17 +401,19 @@ def main():
     """
     
     parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc)
+    parser.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
+    
     subparsers = parser.add_subparsers()
-    parser_aln = subparsers.add_parser('align',prog="reveal align")
-    parser_call = subparsers.add_parser('call',prog="reveal call")
+    parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
+    parser_call = subparsers.add_parser('call',prog="reveal call", description="Extract variants from a graph.")
     #parser_plot = subparsers.add_parser('plot')
     #parser_convert = subparsers.add_parser('convert')
+    parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
-    parser_aln.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
@@ -420,6 +435,11 @@ def main():
     parser_call.add_argument("--all", dest="allvar", action="store_true", default=False, help="Output all variants in a gfa graph.")
     parser_call.set_defaults(func=call)
     
+    parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
+    parser_extract.add_argument('samples', nargs='*', help='Name of the sample to be extracted from the graph.')
+    parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
+    parser_extract.set_defaults(func=extract)
+
     #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
     #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
     #parser_plot.set_defaults(func=plot)
@@ -427,11 +447,11 @@ def main():
     #parser_plot.set_defaults(func=convert)
     
     args = parser.parse_args()
+    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
 
 
 def align(args):
-    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     
     if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
         import caller
@@ -448,6 +468,7 @@ def align(args):
     if args.contigs:
 	if len(args.inputfiles)!=2:
 	    logging.fatal("Only pairwise alignment of contigs is possible.")
+            return
 	else:
 	    G,idx=align_contigs(args)
     else:
@@ -594,7 +615,6 @@ def call(args):
         c=caller.Caller(args.graph[0])
         logging.info("Writing variants.")
         c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
-        return
 
 #TODO: create dotplots from two fasta files or from a sample in a graph wrt to reference in a graph
 #def plot(args):
@@ -604,7 +624,35 @@ def call(args):
 #def convert(args):
 #    return
 
-#TODO: extract genome from gfa graph
-#def extract(args):
-#    return
-
+def extract(args):
+    if not args.graph[0].endswith(".gfa"):
+        logging.fatal("Invalid gfa file.")
+        return
+    G=nx.DiGraph()
+    read_gfa(args.graph[0], None, None, G)
+    for sample in args.samples:
+        sg=[]
+        for node,data in G.nodes(data=True):
+            if sample in data['sample']:
+                sg.append(node)
+        width=args.width
+        for i,contig in enumerate(nx.connected_components(G.subgraph(sg).to_undirected())):
+            seq=""
+            try:
+                sys.stdout.write(">"+sample+" "+str(i)+"\n")
+                for node in nx.topological_sort(G.subgraph(contig)):
+                    seq+=G.node[node]['seq']
+                f=0
+                for i in xrange(width,len(seq),width):
+                    sys.stdout.write(seq[f:i]+'\n')
+                    f=i
+                sys.stdout.write(seq[f:]+'\n')
+            except IOError:
+                try:
+                    sys.stdout.close()
+                except IOError:
+                    pass
+                try:
+                    sys.stderr.close()
+                except IOError:
+                    pass
