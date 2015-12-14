@@ -453,13 +453,13 @@ def main():
 
 def align(args):
     
-    if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
-        import caller
-        logging.info("Parsing GFA file.")
-        c=caller.Caller(args.inputfiles[0])
-        logging.info("Writing variants.")
-        c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
-        return
+    #if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
+    #    import caller
+    #    logging.info("Parsing GFA file.")
+    #    c=caller.Caller(args.inputfiles[0])
+    #    logging.info("Writing variants.")
+    #    c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
+    #    return
     
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
@@ -506,7 +506,7 @@ def align_genomes(args):
     schemes.minlength=args.minlength
     
     for i,sample in enumerate(args.inputfiles):
-        idx.addsample(sample)
+        idx.addsample(os.path.basename(sample))
         if sample.endswith(".gfa"):
             #TODO: now applies to all graphs! probably want to have this graph specific if at all...
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
@@ -548,7 +548,7 @@ def align_contigs(args):
     t=IntervalTree()
     idx=reveallib.index()
     
-    idx.addsample(ref)
+    idx.addsample(os.path.basename(ref))
     if ref.endswith(".gfa"):
         read_gfa(ref,idx,t,G,minsamples=args.minsamples,
                                 maxsamples=args.maxsamples,
@@ -564,17 +564,17 @@ def align_contigs(args):
     i=0
     G.graph['samples'].append(contigs)
     for contigname,contig in fasta_reader(contigs):
-	idx.addsample(contigs)
+	idx.addsample(os.path.basename(contigs))
 	intv=idx.addsequence(contig.upper())
 	Intv=Interval(intv[0],intv[1])
 	t.add(Intv)
 	G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
 	
-	print "Constructing index..."
+	print "Constructing index...",idx.n
         idx.construct()
 	print "Done."
 	
-	print "Aligning contig",contigname,"..."
+	print "Aligning contig",contigname,len(contig),"..."
         idx.align(None,graphalign,threads=args.threads)
 	print "Done."
         
@@ -582,12 +582,12 @@ def align_contigs(args):
         T=idx.T
         del(idx)
 	idx=reveallib.index()
-	idx.addsample(ref)
+	idx.addsample(os.path.basename(ref))
         #add sequence of all nodes in G that are not spanned by the alignment
         mapping={}
         for node,data in G.nodes(data=True):
             if isinstance(node,Interval):
-                if data['aligned']==1 or (len([nei for nei in G.neighbors(node) if G.node[nei]['aligned']!=1])==0 and len(G.neighbors(node))!=0):
+                if data['aligned']==1 or (len([nei for nei in G.neighbors(node) if G.node[nei]['aligned']!=1])==len(G.neighbors(node)) and len(G.neighbors(node))>1) :
                     data['seq']=T[node.begin:node.end].upper()
                     mapping[node]=i
                     i+=1

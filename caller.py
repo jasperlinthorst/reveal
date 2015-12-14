@@ -21,66 +21,69 @@ class Caller:
     def call(self,minlength=1,maxlength=1000,allvar=False,inversions=False,indels=False,snps=False,multi=False):
 	import seqal
         g=self.graph
-        for node in nx.topological_sort(g,g.nodes()):
-            if len(g[node])>1: #split
-		name='N/A'
-                assert(len(g[node])<=self.graph.graph['samples'])
-                alleles=[]
-                allele_nodes=[]
-                allelelengths=[]
-                indel=False
-                for nei in g[node]:
-                    if g.node[nei]['sample'].issubset(g.node[node]['sample']):
-			if not(g.node[node]['sample']==g.node[nei]['sample']):
-			    s=g.node[nei]['seq']
-			    allele_nodes.append(g.node[nei])
-			    alleles.append(s)
-			    allelelengths.append(len(s))
-			else:
-			    indel=True #direct neighbor has the same set of samples, then it has to be an indel
-		
-                #TODO: find join node and only(!) output simple bubbles
-                assert(len(alleles)>=1)
-                
-		if allvar:
-		    inversions,indels,snps,multi=True,True,True,True
-		
-		output=False
-                if min(allelelengths)>=minlength and max(allelelengths)<=maxlength:
-                    
-                    if inversions and not(output):
-                        if len(alleles)==2: #only test inversion if two alleles
-                            score=seqal.nw_align(alleles[0],alleles[1])[2]
-                            al1,al2,rcscore=seqal.nw_align(rc(alleles[0]),alleles[1])
-                            if rcscore>score:
-                                if (rcscore-score)>(sum(allelelengths)/2):
-                                    #alleles[0]=al1
-                                    #alleles[1]=al2
-                                    output=True
-				    name='inversion'
-                    
-                    if indels and not(output):
-                        if indel:
-			    name='insert'
-			    for vnode in allele_nodes:
-				if vnode['coordsample']==g.node[node]['coordsample']:
-				    name='delete'
-				    break
-			    output=True
-                    
-                    if snps and not(output):
-                        if min(allelelengths)==max(allelelengths)==1 and len(alleles)==2:
-			    name='SNP'
-                            output=True
-                    
-                    if multi and not(output):
-                        if len(alleles)>2:
-			    name='multi'
-                            output=True
-                    
-                    if output or allvar:
-                        print g.node[node]['coordsample'],g.node[node]['coordcontig'],g.node[node]['start']+len(g.node[node]['seq']),name,alleles
-    
+	
+	for subset in nx.connected_components(g.to_undirected()):
+	    #print len(subset)
+	    for node in nx.topological_sort(g,subset):
+		if len(g[node])>1: #split
+		    name='N/A'
+		    assert(len(g[node])<=self.graph.graph['samples'])
+		    alleles=[]
+		    allele_nodes=[]
+		    allelelengths=[]
+		    indel=False
+		    for nei in g[node]:
+			if g.node[nei]['sample'].issubset(g.node[node]['sample']):
+			    if not(g.node[node]['sample']==g.node[nei]['sample']):
+				s=g.node[nei]['seq']
+				allele_nodes.append(g.node[nei])
+				alleles.append(s)
+				allelelengths.append(len(s))
+			    else:
+				indel=True #direct neighbor has the same set of samples, then it has to be an indel
+		    
+		    #TODO: find join node and only(!) output simple bubbles
+		    assert(len(alleles)>=1)
+		    
+		    if allvar:
+			inversions,indels,snps,multi=True,True,True,True
+		    
+		    output=False
+		    if min(allelelengths)>=minlength and max(allelelengths)<=maxlength:
+			
+			if inversions and not(output):
+			    if len(alleles)==2: #only test inversion if two alleles
+				score=seqal.nw_align(alleles[0],alleles[1])[2]
+				al1,al2,rcscore=seqal.nw_align(rc(alleles[0]),alleles[1])
+				if rcscore>score:
+				    if (rcscore-score)>(sum(allelelengths)/2):
+					#alleles[0]=al1
+					#alleles[1]=al2
+					output=True
+					name='inversion'
+			
+			if indels and not(output):
+			    if indel:
+				name='insert'
+				for vnode in allele_nodes:
+				    if vnode['coordsample']==g.node[node]['coordsample']:
+					name='delete'
+					break
+				output=True
+			
+			if snps and not(output):
+			    if min(allelelengths)==max(allelelengths)==1 and len(alleles)==2:
+				name='SNP'
+				output=True
+			
+			if multi and not(output):
+			    if len(alleles)>2:
+				name='multi'
+				output=True
+			
+			if output or allvar:
+			    print g.node[node]['coordsample'],g.node[node]['coordcontig'],g.node[node]['start']+len(g.node[node]['seq']),allelelengths,name,alleles
+	
     def parse(self):
         f=open(self.gfafile,'r')
         self.graph.graph['samples']=[]
