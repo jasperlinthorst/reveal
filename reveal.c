@@ -271,124 +271,6 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     return 0;
 }
 
-//PyObject * getmultimums(RevealIndex *index){
-//    
-//    PyObject * multimums;
-//    multimums=PyList_New(0);
-//    
-//    if (index==NULL){
-//        fprintf(stderr,"No valid index object.\n");
-//        return NULL;
-//    }
-//    
-////    int trace=0;
-////    if (index->n==1515){
-////        trace=1;    
-////    }
-//    
-//    RevealIndex * main = (RevealIndex *) index->main;
-//    int i=0,j=0,la,lb;
-//    int *flag_so=calloc(main->nsamples,sizeof(int));
-//    int flag_maximal=0;
-//    int flag_unique=0;
-//    int flag_lcp;
-//    int x;
-//    int min_n=2;
-//    
-//    for (i=min_n-1;i<index->n;i++){
-//        if (i==index->n-1 || index->LCP[i+1]<index->LCP[i]){
-//            int so;
-//            flag_maximal=0;
-//            flag_unique=0;
-//            flag_lcp=index->LCP[i];
-//            int n=0;
-//
-//            for (j=0;j<(main->nsamples-1) && i-j-1>=0;j++){ //scan back n places in SA
-//                if (j==0){
-//                    assert(index->SO[index->SA[i]]>=0 && index->SO[index->SA[i]]<main->nsamples);
-//                    flag_so[index->SO[index->SA[i]]]=1;
-//                    n=1;
-//                }
-//                assert(i-j-1>=0);
-//                so=index->SO[index->SA[i-j-1]];
-//                assert(so>=0 && so<=main->nsamples);
-//                if (flag_so[so]==0){
-//                    flag_so[so]=1;
-//                } else {
-//                    j--;
-//                    break;
-//                }
-//                if (!flag_maximal){
-//                    if (index->SA[i-j]>0 && index->SA[i-j-1]>0){
-//                        assert((index->SA[i-j]-1)>=0);
-//                        assert((index->SA[i-j-1]-1)>=0);
-//                        if (index->T[index->SA[i-j]-1] != index->T[index->SA[i-j-1]-1] || islower(index->T[index->SA[i-j]-1]) || index->T[index->SA[i-j]-1]=='$'){
-//                            flag_maximal=1;
-//                        }
-//                    } else {
-//                        flag_maximal=1;
-//                    }
-//                }
-//                
-//                if (index->LCP[i-j]<flag_lcp){
-//                    break;
-//                    //found another multimum!
-//                    
-//                    assert((i-j)>=0 && (i-j)<index->n);
-//                    flag_lcp=index->LCP[i-j];
-//                }
-//                n++;
-//            }
-//            
-////            if (trace)
-////                fprintf(stderr,"%d lcp=%d maximal=%d so[0]=%d so[1]=%d, n=%d min_n=%d\n",i,flag_lcp,flag_maximal,flag_so[0], flag_so[1], n, min_n);
-//            
-//            if (n>=min_n && flag_maximal){
-//                
-//                //is it unique within the entire index?
-//                if (i==index->n-1) { //is it the last domain in the array, then only check predecessor
-//                    assert(i-(n-1)>=0);
-//                    lb=index->LCP[i-(n-1)];
-//                    la=0;
-//                } else if ((i-(n-1))==0) { //is it the first domain in the array, then only check successor
-//                    lb=0;
-//                    assert(i+1<index->n);
-//                    la=index->LCP[i+1]; //USE THIS TO SCAN FASTER! LCP[i+1] has to be smaller than LCP[i] otherwise not optimal interval!
-//                } else {
-//                    assert(i-(n-1)>=0);
-//                    lb=index->LCP[i-(n-1)];
-//                    assert(i+1<index->n);
-//                    la=index->LCP[i+1];
-//                }
-//                
-////                if (trace)
-////                    fprintf(stderr,"%d lb=%d la=%d\n",i,lb,la);
-//                
-//                if (flag_lcp>lb && flag_lcp>la){
-//                    flag_unique=1;
-//
-//                    PyObject *sp=PyList_New(n);
-//                    for (x=0;x<n;x++) {
-//                        assert(i-x>=0);
-//                        PyObject *v = Py_BuildValue("i", index->SA[i-x]);
-//                        PyList_SET_ITEM(sp, x, v);
-//                    }
-//                    PyObject *multimum=Py_BuildValue("i,i,O",flag_lcp,n,sp);
-//                    PyList_Append(multimums,multimum);
-//                }
-//            }
-//            for (j=0;j<main->nsamples;j++){ //memset?
-//                flag_so[j]=0; //reset so flags
-//            }
-//            flag_maximal=0; //reset maximal flag
-//        }
-//    }
-//    free(flag_so);
-//
-//    return multimums;
-//}
-
-
 int ismultimum(RevealIndex * idx, int l, int lb, int ub, int * flag_so) {
     if (l>0){
         int j;
@@ -538,8 +420,8 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
             } else{
                 assert(D[i]==0); //parallel paths
                 
-                if (ip>=i_par->n)
-                    fprintf(stderr,"ip=%d n=%d\n",ip,i_par->n);
+                //if (ip>=i_par->n)
+                //    fprintf(stderr,"ip=%d n=%d\n",ip,i_par->n);
                 
                 assert(ip<i_par->n);
                 i_par->SA[ip]=idx->SA[i];
@@ -585,36 +467,56 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
 }
 
 void bubble_sort(RevealIndex* idx, int* sp, int n, int l){
+    //RevealIndex *main=(RevealIndex *) idx->main;
+    //fprintf(stderr,"mark lower case %d %d %d\n",sp[0],sp[1],l);
+    
     int i=0,j=0,x,tmpSA,tmpLCP;
     for (i=0; i<n; i++){
         for (j=sp[i];j<sp[i]+l;j++){
+	    //assert(isupper(idx->T[j]));
             idx->T[j]=tolower(idx->T[j]);
         }
     }
+    
     for (j=0; j<n; j++) {
+	//fprintf(stderr,"sort %d %d %d %d %d %d\n",j,sp[j],n,l,idx->n,main->n);
         for (i=0; i<idx->n; i++){
             if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i]>sp[j]){ //
                 x=i;
                 tmpSA=idx->SA[i];
                 tmpLCP=idx->LCP[i];
                 while ( (idx->LCP[x] > sp[j]-tmpSA) && (x>0) ){
+		    //assert(x<=idx->n);
+		    //assert(idx->SA[x-1]<main->n);
                     idx->SAi[idx->SA[x-1]]=x;
                     idx->SA[x]=idx->SA[x-1];
                     idx->LCP[x]=idx->LCP[x-1]; //!
                     x--;
                 }
-    			idx->SAi[tmpSA]=x;
-	    		idx->SA[x]=tmpSA;
-		    	idx->LCP[x+1]=sp[j]-tmpSA;
-			    if ((tmpLCP < idx->LCP[i+1]) && (i < idx->n-1)){
-				    idx->LCP[i+1]=tmpLCP; //!
-			    }
+		//assert(x>=0);
+		//assert(tmpSA>=0);
+		//assert(x<idx->n);
+		//assert(x<idx->n-1);
+		//assert(tmpSA<main->n);
+		
+		idx->SAi[tmpSA]=x;
+		idx->SA[x]=tmpSA;
+		idx->LCP[x+1]=sp[j]-tmpSA;
+		
+		//assert(i+1<idx->n);
+		
+		if (i<idx->n-1){
+		    if (tmpLCP < idx->LCP[i+1]){
+			idx->LCP[i+1]=tmpLCP; //!
+		    }
+		}
                 continue;
             }
+	    
             if (i<idx->n-1){ 
                 if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i+1]>sp[j]){
                     if (idx->LCP[i+1] > idx->LCP[i]){
-                        idx->LCP[i+1]= sp[j]-idx->SA[i]; 
+                        idx->LCP[i+1]= sp[j]-idx->SA[i];
                         continue;
                     }
                 }
@@ -635,6 +537,7 @@ void *aligner(void *arg) {
         int i=0;
         
         pthread_mutex_lock(&mutex);/* acquire the mutex lock */
+	//fprintf(stderr,"get index\n");
         idx=pop_index();
         if (idx==NULL){
             hasindex=0;
@@ -730,6 +633,7 @@ void *aligner(void *arg) {
                     getbestmultimum(idx, &mmum, idx->nsamples);
                 } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
                     //getlongestmum(idx, &mmum);
+		    //fprintf(stderr,"getbestmum\n");
                     getbestmum(idx, &mmum);
                 }
                 
@@ -906,8 +810,10 @@ void *aligner(void *arg) {
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);       //UNLOCK PYTHON
             
+	    //fprintf(stderr,"split\n");
             split(idx, D, i_leading, i_trailing, i_parallel);
             
+	    //fprintf(stderr,"bubble sort\n");
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
             //bubble_sort(i_trailing, mmum.sp, mmum.n, mmum.l);
             //bubble_sort(i_parallel, mmum.sp, mmum.n, mmum.l);
@@ -925,6 +831,7 @@ void *aligner(void *arg) {
             nmums++;
             //add resulting indices to the queue 
             if (i_leading->n>0){
+		//fprintf(stderr,"push leading\n");
                 if (!(push_index(i_leading)==0)){
                     fprintf(stderr,"Failed to add leading index to queue.\n");
                     Py_DECREF(i_leading);
@@ -934,6 +841,7 @@ void *aligner(void *arg) {
                 }
             }
             if (i_trailing->n>0){
+		//fprintf(stderr,"push trailing\n");
                 if (!(push_index(i_trailing)==0)){
                     fprintf(stderr,"Failed to add trailing index to queue.\n");
                     Py_DECREF(i_trailing);
@@ -943,6 +851,7 @@ void *aligner(void *arg) {
                 }
             }
             if (i_parallel->n>0){
+		//fprintf(stderr,"push parallel\n");
                 if (!(push_index(i_parallel)==0)){
                     fprintf(stderr,"Failed to add parallel paths index to queue.\n");
                     Py_DECREF(i_parallel);
