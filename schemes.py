@@ -9,6 +9,7 @@ from intervaltree import IntervalTree
 
 global minlength, pcutoff
 minlength=20
+minscore=0
 pcutoff=1e-3
 ts=IntervalTree()
 interval2sampleid=dict()

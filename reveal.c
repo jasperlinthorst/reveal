@@ -43,6 +43,49 @@ int push_index(RevealIndex *idx) {
     return 0;
 }
 
+PyObject * getmums(RevealIndex *index){
+    int i=0,aStart,bStart;
+    int lb,la;
+    PyObject *mums=PyList_New(0);
+    for (i=1;i<index->n;i++){
+	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+	    continue;
+	}
+	if (index->SA[i]<index->SA[i-1]) {
+	    aStart=index->SA[i];
+	    bStart=index->SA[i-1];
+	} else {
+	    aStart=index->SA[i-1];
+	    bStart=index->SA[i];
+	}
+	if (aStart>0 && bStart>0){ //if not it has to be maximal!
+	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+		continue; //not maximal
+	    }
+	}
+	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+	    lb=index->LCP[i-1];
+	    la=0;
+	} else {
+	    lb=index->LCP[i-1];
+	    la=index->LCP[i+1];
+	}
+	if (lb>=index->LCP[i] || la>=index->LCP[i]){
+	    continue;//not unique
+	}
+
+	//match is not a repeat and is maximally unique
+	//append to list
+	PyObject *mum=Py_BuildValue("i,i,i",index->LCP[i],aStart,bStart);
+	if (PyList_Append(mums,mum)==0){
+	    Py_DECREF(mum);
+	} else {
+	    return NULL;
+	}
+    }
+    return mums;
+}
+
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     int i=0,aStart,bStart;
     int lb,la;
@@ -380,6 +423,7 @@ PyObject * getmultimums(RevealIndex *index) {
             }
             PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
             PyList_Append(multimums,multimum);
+	    //Py_DECREF(multimum);
         }
     }
     free(stack_lcp);
@@ -731,17 +775,7 @@ void *aligner(void *arg) {
                     trailingn++;
                 }
             }
-            
-//            for (i=0;i<PyList_Size(rest);i++){
-//                PyObject *tup;
-//                tup=PyList_GetItem(rest,i);
-//                PyArg_ParseTuple(tup,"ii",&begin,&end);
-//                for (j=begin; j<end; j++){
-//                    D[idx->SAi[j]]=0;
-//                    parn++;
-//                }
-//            }
-            
+                        
             for (i=0;i<mmum.n;i++){
                 for (j=mmum.sp[i];j<mmum.sp[i]+mmum.l;j++){
                     D[idx->SAi[j]]=3;

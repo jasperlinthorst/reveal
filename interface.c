@@ -28,7 +28,6 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
     }
 
     if (self->nsamples>0){
-        //printf("adding sample %d\n",self->n-1);
         self->nsep= (int*) realloc(self->nsep,(self->nsamples)*sizeof(int));
         if (self->nsep==NULL){
             PyErr_SetString(RevealError, "Failed to add sample.");
@@ -36,9 +35,7 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
         }
         self->nsep[self->nsamples-1]=self->n-1;
         //printf("sample %d at %d\n",self->nsep[self->nsamples-1],self->nsamples-1);
-    } //else {
-        //self->nsep= (int*) malloc(sizeof(int));
-    //}
+    } 
     
     self->nsamples++;
     Py_INCREF(Py_None);
@@ -48,15 +45,12 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
 static PyObject *addsequence(RevealIndex *self, PyObject *args)
 {
     //call add sequence only if self->sep[self->nsamples]
-    
     char * seq;
     int l;
     int s;
     if (!PyArg_ParseTuple(args, "s#", &seq, &l))
         return NULL;
    
-    //self->sep=self->n-1;
-    
     //realloc space for T
     char *tmp=realloc(self->T,(self->n+(l+1)+1)*sizeof(char));
     
@@ -89,7 +83,6 @@ int compute_lcp(char *T, int *SA, int *SAi, int *LCP, int n) {
             LCP[k] = -1;
         } else {
             j = SA[k-1];
-            //while ((i - h < n) && (j + h < n) && (T[i+h] == T[j+h]) && (T[i+h]!='$' && T[j+h]!='$') && (T[i+h]!='N' && T[j+h]!='N') ) { ++h; } //stop comparing when a sentinel or N is encountered, so we dont find matches that span them
             while ((i - h < n) && (j + h < n) && (T[i+h] == T[j+h]) && T[i+h]!='$' && T[i+h]!='N' ) { ++h; } //stop comparing when a sentinel or N is encountered, so we dont find matches that span them
             LCP[k] = h;
         }
@@ -314,6 +307,7 @@ static PyMethodDef reveal_methods[] = {
     { "construct", (PyCFunction) construct, METH_VARARGS },
     { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
     { "getmultimems", (PyCFunction) getmultimums, METH_VARARGS },
+    { "getmums", (PyCFunction) getmums, METH_VARARGS },
     { NULL, NULL }
 };
 

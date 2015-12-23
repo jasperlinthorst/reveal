@@ -25,6 +25,13 @@ def fasta_reader(fn):
         if seq!="":
             yield name,seq
 
+def rc(seq):
+    d = d = {'A':'T','C':'G','G':'C','T':'A','N':'N','a':'t','c':'g',\
+        'g':'c','t':'a','n':'n','Y':'R','R':'Y','K':'M','M':'K',\
+        'S':'S','W':'W','B':'V','V':'B','D':'H','H':'D','N':'N',\
+        'X':'X','-':'-'}
+    return "".join([d[b] for b in reversed(seq)])
+
 def breaknode(node,pos,l):
     att=G.node[node]
     in_edges=G.in_edges(node)
@@ -166,11 +173,10 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,score,sp):
     nodes=index.nodes
-    if l<schemes.minlength or len(nodes)==0 or score<0:
-        #print l, schemes.minlength, len(nodes), n, sp, score
+
+    if l<schemes.minlength or len(nodes)==0 or score<schemes.minscore:
         return
-    #print l, n, score
-    #assert(n==len(sp))
+    
     mns=[]
     topop=[]
     for i,pos in enumerate(sp):
@@ -345,13 +351,10 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
 	for to in G[node]:
 	    f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
 	
-    #for node1,node2 in G.edges_iter():
-    #    f.write('L\t'+str(mapping[node1])+'\t+\t'+str(mapping[node2])+"\t+\t0M\n")
     f.close()
 
 def write_gml(G,T,outputfile="reference",hwm=1000):
     mapping={}
-    #for n,d in nx.nodes(G,data=True):
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
@@ -406,7 +409,7 @@ def main():
     subparsers = parser.add_subparsers()
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
     parser_call = subparsers.add_parser('call',prog="reveal call", description="Extract variants from a graph.")
-    #parser_plot = subparsers.add_parser('plot')
+    parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
     #parser_convert = subparsers.add_parser('convert')
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     
@@ -415,6 +418,7 @@ def main():
     #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
+    parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
     parser_aln.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
@@ -439,10 +443,12 @@ def main():
     parser_extract.add_argument('samples', nargs='*', help='Name of the sample to be extracted from the graph.')
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
     parser_extract.set_defaults(func=extract)
-
+    
+    parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a dotplot should be generated.')
+    parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
     #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
     #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
-    #parser_plot.set_defaults(func=plot)
+    parser_plot.set_defaults(func=plot)
 
     #parser_plot.set_defaults(func=convert)
     
@@ -452,15 +458,7 @@ def main():
 
 
 def align(args):
-    
-    #if len(args.inputfiles)==1 and args.inputfiles[0].endswith(".gfa"):
-    #    import caller
-    #    logging.info("Parsing GFA file.")
-    #    c=caller.Caller(args.inputfiles[0])
-    #    logging.info("Writing variants.")
-    #    c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
-    #    return
-    
+
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
@@ -492,10 +490,11 @@ def align(args):
     
     print "Alignment graph written to:",graph
 
+
 def align_genomes(args):
     #globale variables to simplify callbacks from c extension
     global t,G,reference
-    
+     
     reference=args.reference
     
     t=IntervalTree()
@@ -504,6 +503,7 @@ def align_genomes(args):
     G.graph['samples']=[]
     #schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
+    schemes.minscore=args.minscore
     
     for i,sample in enumerate(args.inputfiles):
         idx.addsample(os.path.basename(sample))
@@ -539,6 +539,7 @@ def align_contigs(args):
     
     reference=args.reference
     schemes.minlength=args.minlength
+    schemes.minscore=args.minscore
     G=nx.DiGraph()
     G.graph['samples']=[]
     
@@ -576,7 +577,11 @@ def align_contigs(args):
 	
 	print "Aligning contig",contigname,len(contig),"..."
         idx.align(None,graphalign,threads=args.threads)
-	print "Done."
+        identity=0
+        for node,data in G.nodes(data=True):
+            if data['aligned']==1 and isinstance(node,Interval):
+                identity+=node.end-node.begin
+	print "Done, %d bp out of %d bp aligned (%d%%)." % (identity,len(contig),round(100*(identity/float(len(contig))),2))
         
         t=IntervalTree()
         T=idx.T
@@ -587,25 +592,29 @@ def align_contigs(args):
         mapping={}
         for node,data in G.nodes(data=True):
             if isinstance(node,Interval):
-                if data['aligned']==1 or (len([nei for nei in G.neighbors(node) if G.node[nei]['aligned']!=1])==len(G.neighbors(node)) and len(G.neighbors(node))>1) :
-                    data['seq']=T[node.begin:node.end].upper()
-                    mapping[node]=i
-                    i+=1
-                else:
-                    if contigs not in data['sample']:
+                neis=G.neighbors(node)
+                if len(neis)<=1 and data['aligned']==0 and contigs not in data['sample']: #use unconnected and unaligned nodes for next run
+                    intv=idx.addsequence(T[node.begin:node.end])
+                    Intv=Interval(intv[0],intv[1])
+                    t.add(Intv)
+                    mapping[node]=Intv
+                    continue
+                
+                if len(neis)==2 and data['aligned']==0 and contigs not in data['sample']: #also index nodes that connect two alignments
+                    if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']==1 and G.node[neis[1]]['aligned']==1:
                         intv=idx.addsequence(T[node.begin:node.end])
                         Intv=Interval(intv[0],intv[1])
                         t.add(Intv)
                         mapping[node]=Intv
-                    else:
-                        data['seq']=T[node.begin:node.end]
-                        mapping[node]=i
-                        i+=1
+                        continue
+                
+                #all other cases, simply add the sequence to the graph, but dont index it
+                data['seq']=T[node.begin:node.end].upper()
+                mapping[node]=i
+                i+=1
         
         G=nx.relabel_nodes(G,mapping, copy=True)
     return G,idx
-    
-
 
 #extract variants from gfa graphs
 def call(args):
@@ -616,9 +625,80 @@ def call(args):
         logging.info("Writing variants.")
         c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
 
-#TODO: create dotplots from two fasta files or from a sample in a graph wrt to reference in a graph
-#def plot(args):
-#    return
+def plot(args):
+    from matplotlib import pyplot as plt
+    
+    if len(args.fastas)!=2:
+        logging.fatal("Can only create mumplot for 2 sequences.")
+        return
+    
+    idx=reveallib.index()
+    for sample in args.fastas:
+        idx.addsample(sample)
+        for name,seq in fasta_reader(sample):
+            intv=idx.addsequence(seq.upper())
+    idx.construct()
+    mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
+    sep=idx.nsep[0]
+    
+    idx=reveallib.index()
+    sample=args.fastas[0]
+    idx.addsample(sample)
+    for name,seq in fasta_reader(sample):
+        intv=idx.addsequence(seq.upper())
+    
+    sample=args.fastas[1]
+    idx.addsample(sample)
+    ls=0
+    for name,seq in fasta_reader(sample):
+        ls+=len(seq)
+        intv=idx.addsequence(rc(seq.upper()))
+    idx.construct()
+    mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums() if mem[0]>args.minlength]
+    
+    print len(mmems),"max exact matches."
+
+    pos=None
+    
+    for mem in mmems:
+        sps=sorted(mem[1:3])
+        l=mem[0]
+        sp1=sps[0]
+        sp2=sps[1]-sep
+        ep1=sp1+l
+        ep2=sp2+l
+        
+        if pos!=None:
+            if abs(sp1-pos)>dist:
+                continue
+            
+            if mem[3]==0 and pos_==None:
+                pos_=sp2
+            
+            if mem[3]==1 and pos_==None:
+                pos_=ls-sp2
+            
+            if mem[3]==0 and abs(sp2-pos_)>dist:
+                #print sp2, pos_, l
+                continue
+            
+            if mem[3]==1 and abs((ls-sp2)-pos_)>dist:
+                #print ls-sp2, pos_, l
+                continue
+        
+        if mem[3]==0:
+            plt.plot([sp1,ep1],[sp2,ep2],'r-')
+        else:
+            assert(mem[3]==1)
+            plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+
+    #plt.savefig(str(pos)+'.png')
+    plt.title(args.fastas[0]+" vs. "+args.fastas[1])
+    plt.xlabel(args.fastas[0])
+    plt.ylabel(args.fastas[1])
+    plt.autoscale(enable=False)
+    plt.show()
+
 
 #TODO: convert gfa graph to gml (sub)graphs
 #def convert(args):
