@@ -526,12 +526,21 @@ def align_genomes(args):
     idx.construct()
     print "Done."
     
+    totbases=idx.n-nx.number_of_nodes(G)
+    
     print "Aligning genomes..."
     if len(args.inputfiles)>2:
         idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
     else:
         idx.align(None,graphalign,threads=args.threads)
-    print "Done."
+    
+    alignedbases=0
+    for node,data in G.nodes(data=True):
+	if data['aligned']:
+	    alignedbases+=(node.end-node.begin)*len(data['sample'])
+    
+    print "Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases)
+    
     return G,idx
 
 def align_contigs(args):
