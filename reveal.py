@@ -475,20 +475,20 @@ def align(args):
     if args.output==None:
         args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
     
-    print "Merging nodes..."
+    logging.info("Merging nodes...")
     T=idx.T
     prune_nodes(G,T) #TODO: do this after every alignment step to reduce graph size during alignment
-    print "Done."
+    logging.info("Done.")
     
-    print "Writing graph..."
+    logging.info("Writing graph...")
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
     else:
         write_gfa(G,T,vg=args.vg, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
-    print "Done."
+    logging.info("Done.")
     
-    print "Alignment graph written to:",graph
+    logging.info("Alignment graph written to: %s"%graph)
 
 
 def align_genomes(args):
@@ -522,13 +522,13 @@ def align_genomes(args):
                 schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={sample},contig={name.replace(";","")},coordsample=sample,coordcontig=name.replace(";",""),start=0,aligned=0)
      
-    print "Constructing index..."
+    logging.info("Constructing index...")
     idx.construct()
-    print "Done."
+    logging.info("Done.")
     
     totbases=idx.n-nx.number_of_nodes(G)
     
-    print "Aligning genomes..."
+    logging.info("Aligning genomes...")
     if len(args.inputfiles)>2:
         idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
     else:
@@ -539,7 +539,7 @@ def align_genomes(args):
 	if data['aligned']:
 	    alignedbases+=(node.end-node.begin)*len(data['sample'])
     
-    print "Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases)
+    logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases))
     
     return G,idx
 
@@ -558,6 +558,7 @@ def align_contigs(args):
     t=IntervalTree()
     idx=reveallib.index()
     
+    totbases=0
     idx.addsample(os.path.basename(ref))
     if ref.endswith(".gfa"):
         read_gfa(ref,idx,t,G,minsamples=args.minsamples,
@@ -566,31 +567,37 @@ def align_contigs(args):
     else:
         G.graph['samples'].append(ref)
         for chromname,chrom in fasta_reader(ref):
+	    print chromname
             intv=idx.addsequence(chrom.upper())
             Intv=Interval(intv[0],intv[1])
             t.add(Intv)
             G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordsample=ref,coordcontig=chromname.replace(";",""),start=0,aligned=0)
     
+    totbases=idx.n-nx.number_of_nodes(G)
+    alignedbases=0
     i=0
     G.graph['samples'].append(contigs)
     for contigname,contig in fasta_reader(contigs):
+	totbases+=len(contig)
 	idx.addsample(os.path.basename(contigs))
 	intv=idx.addsequence(contig.upper())
 	Intv=Interval(intv[0],intv[1])
 	t.add(Intv)
 	G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
 	
-	print "Constructing index...",idx.n
+	logging.info("Constructing index... (size=%d)"%idx.n)
         idx.construct()
-	print "Done."
+	logging.info("Done.")
 	
-	print "Aligning contig",contigname,len(contig),"..."
+	logging.info("Aligning %s (%d bp)" % (contigname,len(contig)))
         idx.align(None,graphalign,threads=args.threads)
         identity=0
         for node,data in G.nodes(data=True):
             if data['aligned']==1 and isinstance(node,Interval):
                 identity+=node.end-node.begin
-	print "Done, %d bp out of %d bp aligned (%d%%)." % (identity,len(contig),round(100*(identity/float(len(contig))),2))
+	
+	alignedbases+=identity
+	logging.info("%s aligned, %d bp out of %d bp aligned (%.2f%%)." % (contigname,identity,len(contig),100*(identity/float(len(contig)))))
         
         t=IntervalTree()
         T=idx.T
@@ -623,6 +630,9 @@ def align_contigs(args):
                 i+=1
         
         G=nx.relabel_nodes(G,mapping, copy=True)
+    
+    logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%(((alignedbases*2)/float(totbases))*100,alignedbases,totbases))
+    
     return G,idx
 
 #extract variants from gfa graphs
