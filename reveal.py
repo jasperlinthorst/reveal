@@ -567,7 +567,6 @@ def align_contigs(args):
     else:
         G.graph['samples'].append(ref)
         for chromname,chrom in fasta_reader(ref):
-	    print chromname
             intv=idx.addsequence(chrom.upper())
             Intv=Interval(intv[0],intv[1])
             t.add(Intv)
