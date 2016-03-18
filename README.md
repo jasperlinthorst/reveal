@@ -35,12 +35,24 @@ If libdivsufsort is installed, REVEAL can be installed by executing the followin
 To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:  
 
 **reveal align tests/1a.fa tests/1b.fa**  
-  
-If everything is correctly installed, the a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)). In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
+
+If everything is correctly installed, a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)). In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
 **reveal align tests/1a.fa tests/1b.fa --gml**
 
-To extract variants from the GFA graph, you need to install [seqal](https://github.com/mhulsman/seqal), run:
+To generate a graph for more than two sequences you can either call:
+
+**reveal align tests/1a.fa tests/1b.fa tests/1c.fa**
+
+or progressively align a sequence to an existing gfa graph:
+
+**reveal align 1a_1b.gfa tests/1c.fa**
+
+or align two graphs:
+
+**reveal align 1a_1b.gfa 1c_1d.gfa**
+
+To extract variants from a GFA graph, you need to install [seqal](https://github.com/mhulsman/seqal), and run:
 
 **reveal call 1a&#95;1b.gfa --all**
 
