@@ -7,7 +7,7 @@ Created on Tue Oct 13 17:59:26 2015
 
 from intervaltree import IntervalTree
 
-global minlength, pcutoff
+global minlength, minscore, pcutoff
 minlength=20
 minscore=0
 pcutoff=1e-3
@@ -48,6 +48,7 @@ def mumpicker(multimums,idx):
 
 #take the largest multimum that occurs in all samples, until it drops below threshold
 #then take largest multimum in less samples that is above thresholds
+#TODO: calculate score for multi-mums!
 def mumpicker2(multimums,idx):
     bestmum_by_n={}
     bestmum=None    
@@ -66,6 +67,70 @@ def mumpicker2(multimums,idx):
         #else:
         #    cluster(multimums,idx)
     return bestmum
+
+#take the best scoring multimum that occurs in all samples, until it drops below threshold
+#then take largest multimum in less samples that is above thresholds
+#TODO: calculate score for multi-mums!
+def mumpicker3(multimums,idx):
+    bestmum_by_n={}
+    bestmum=None
+    for multimum in multimums:
+        l,n,sp=multimum
+        ds=[start-ts[start].pop()[0] for start in sp]
+        ads=sum(ds)/n
+        spenalty=sum([abs(p-ads) for p in ds])
+        de=[ts[start].pop()[1]-(start+l) for start in sp]
+        ade=sum(de)/n
+        epenalty=sum([abs(p-ade) for p in de])
+        penalty=min([spenalty,epenalty])
+        score=(l*(n**2))-penalty
+
+        if n in bestmum_by_n:
+            if score>bestmum_by_n[n][3]:
+                bestmum_by_n[n]=(l,idx,n,score,sp)
+                #print "better",l, n, score, penalty, spenalty, epenalty, sp, ds, de
+        else:
+            bestmum_by_n[n]=(l,idx,n,score,sp)
+            #print "initial",l, n, score, penalty, spenalty, epenalty, sp, ds, de
+    
+    for key in sorted(bestmum_by_n,reverse=True):
+        if bestmum_by_n[key][3]>=minscore:
+            bestmum=bestmum_by_n[key]
+            break
+    
+    #print "bestmum",bestmum
+    #print index.nsamples, bestmum_by_n, bestmum
+    return bestmum
+
+def multimumpicker(multimums,idx):
+    bestmum=None
+    for multimum in multimums:
+        l,n,sp=multimum
+        if l<minlength:
+            continue
+        
+        if bestmum!=None:
+            if n<bestmum[2]:
+                continue
+            if n==bestmum[2] and l<=bestmum[0]:
+                continue
+                
+        ds=[start-ts[start].pop()[0] for start in sp]
+        ads=sum(ds)/n
+        spenalty=sum([abs(p-ads) for p in ds])
+        de=[ts[start].pop()[1]-(start+l) for start in sp]
+        ade=sum(de)/n
+        epenalty=sum([abs(p-ade) for p in de])
+        penalty=min([spenalty,epenalty])
+        score=(l*n)-penalty
+        
+        if score<minscore:
+            continue
+        
+        bestmum=(l,idx,n,score,sp)
+    
+    return bestmum
+
 
 def cluster(multimums,idx):
     T=idx.T

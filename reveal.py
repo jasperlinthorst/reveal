@@ -11,7 +11,7 @@ import os
 import schemes
 import sys
 
-def fasta_reader(fn):
+def fasta_reader(fn,truncN=True):
     seq=""
     with open(fn,'r') as ff:
         for line in ff:
@@ -21,7 +21,19 @@ def fasta_reader(fn):
                 name=line.rstrip().replace(">","")
                 seq=""
             else:
-                seq+=line.rstrip()
+                if truncN:
+                    for base in line.rstrip():
+                        if base.upper()=='N':
+                            if len(seq)==0:
+                                continue
+                            elif seq[-1]=='N':
+                                continue
+                            else:
+                                seq+='N'
+                        else:
+                            seq+=base
+                else:
+                    seq+=line.rstrip()
         if seq!="":
             yield name,seq
 
@@ -173,8 +185,14 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,score,sp):
     nodes=index.nodes
+    
+    if len(nodes)==0:
+	return
+    
+    if l==0:
+	return
 
-    if l<schemes.minlength or len(nodes)==0 or score<schemes.minscore:
+    if l<schemes.minlength or score<schemes.minscore:
         return
     
     mns=[]
@@ -410,7 +428,7 @@ def main():
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
     parser_call = subparsers.add_parser('call',prog="reveal call", description="Extract variants from a graph.")
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
-    #parser_convert = subparsers.add_parser('convert')
+    parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
@@ -446,11 +464,17 @@ def main():
     
     parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a dotplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
+    parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
     #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
     #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
     parser_plot.set_defaults(func=plot)
 
-    #parser_plot.set_defaults(func=convert)
+    parser_convert.add_argument('graph', nargs=1, help='The gfa graph to convert to gml.')
+    parser_convert.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
+    parser_convert.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
+    parser_convert.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
+    parser_convert.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
+    parser_convert.set_defaults(func=convert)
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
@@ -477,7 +501,8 @@ def align(args):
     
     logging.info("Merging nodes...")
     T=idx.T
-    prune_nodes(G,T) #TODO: do this after every alignment step to reduce graph size during alignment
+    if len(G.graph['samples'])>2:
+        prune_nodes(G,T) #TODO: do this after every alignment step to reduce graph size during alignment
     logging.info("Done.")
     
     logging.info("Writing graph...")
@@ -513,31 +538,39 @@ def align_genomes(args):
                                     maxsamples=args.maxsamples,
                                     targetsample=args.targetsample)
         else: #consider it to be a fasta file
-            G.graph['samples'].append(sample)
+            G.graph['samples'].append(os.path.basename(sample))
             for name,seq in fasta_reader(sample):
-                intv=idx.addsequence(seq.upper())
+                intv=idx.addsequence(seq)#.upper())
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                schemes.ts.add(Intv)
+                #schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
-                G.add_node(Intv,sample={sample},contig={name.replace(";","")},coordsample=sample,coordcontig=name.replace(";",""),start=0,aligned=0)
-     
+                G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),start=0,aligned=0)
+    
+    schemes.ts=t
+    
     logging.info("Constructing index...")
     idx.construct()
     logging.info("Done.")
     
-    totbases=idx.n-nx.number_of_nodes(G)
-    
-    logging.info("Aligning genomes...")
     if len(args.inputfiles)>2:
-        idx.align(schemes.mumpicker2,graphalign,threads=args.threads)
+        logging.info("Constructing multi-alignment...")
+        idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
     else:
+        logging.info("Constructing pairwise-alignment...")
         idx.align(None,graphalign,threads=args.threads)
     
     alignedbases=0
-    for node,data in G.nodes(data=True):
-	if data['aligned']:
-	    alignedbases+=(node.end-node.begin)*len(data['sample'])
+    if idx.nsamples>2:
+        totbases=idx.n-nx.number_of_nodes(G)
+        for node,data in G.nodes(data=True):
+            if data['aligned']:
+                alignedbases+=(node.end-node.begin)*len(data['sample'])
+    else:
+        totbases=min([idx.n-idx.nsep[0],idx.nsep[0]])
+        for node,data in G.nodes(data=True):
+            if data['aligned']:
+                alignedbases+=(node.end-node.begin)
     
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases))
     
@@ -577,61 +610,59 @@ def align_contigs(args):
     i=0
     G.graph['samples'].append(contigs)
     for contigname,contig in fasta_reader(contigs):
-	totbases+=len(contig)
-	idx.addsample(os.path.basename(contigs))
-	intv=idx.addsequence(contig.upper())
-	Intv=Interval(intv[0],intv[1])
-	t.add(Intv)
-	G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
-	
-	logging.info("Constructing index... (size=%d)"%idx.n)
-        idx.construct()
-	logging.info("Done.")
-	
-	logging.info("Aligning %s (%d bp)" % (contigname,len(contig)))
-        idx.align(None,graphalign,threads=args.threads)
-        identity=0
-        for node,data in G.nodes(data=True):
-            if data['aligned']==1 and isinstance(node,Interval):
-                identity+=node.end-node.begin
-	
-	alignedbases+=identity
-	logging.info("%s aligned, %d bp out of %d bp aligned (%.2f%%)." % (contigname,identity,len(contig),100*(identity/float(len(contig)))))
-        
-        t=IntervalTree()
-        T=idx.T
-        del(idx)
-	idx=reveallib.index()
-	idx.addsample(os.path.basename(ref))
-        #add sequence of all nodes in G that are not spanned by the alignment
-        mapping={}
-        for node,data in G.nodes(data=True):
-            if isinstance(node,Interval):
-                neis=G.neighbors(node)
-                if len(neis)<=1 and data['aligned']==0 and contigs not in data['sample']: #use unconnected and unaligned nodes for next run
+        totbases+=len(contig)
+        idx.addsample(os.path.basename(contigs))
+        intv=idx.addsequence(contig.upper())
+        Intv=Interval(intv[0],intv[1])
+        t.add(Intv)
+        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
+
+    logging.info("Constructing index... (size=%d)"%idx.n)
+    idx.construct()
+    logging.info("Done.")
+
+    logging.info("Aligning %s (%d bp)" % (contigname,len(contig)))
+    idx.align(None,graphalign,threads=args.threads)
+    identity=0
+    for node,data in G.nodes(data=True):
+        if data['aligned']==1 and isinstance(node,Interval):
+            identity+=node.end-node.begin
+
+    alignedbases+=identity
+    logging.info("%s aligned, %d bp out of %d bp aligned (%.2f%%)." % (contigname,identity,len(contig),100*(identity/float(len(contig)))))
+    
+    t=IntervalTree()
+    T=idx.T
+    del(idx)
+    idx=reveallib.index()
+    idx.addsample(os.path.basename(ref))
+    #add sequence of all nodes in G that are not spanned by the alignment
+    mapping={}
+    for node,data in G.nodes(data=True):
+        if isinstance(node,Interval):
+            neis=G.neighbors(node)
+            if len(neis)<=1 and data['aligned']==0 and contigs not in data['sample']: #use unconnected and unaligned nodes for next run
+                intv=idx.addsequence(T[node.begin:node.end])
+                Intv=Interval(intv[0],intv[1])
+                t.add(Intv)
+                mapping[node]=Intv
+                continue
+            
+            if len(neis)==2 and data['aligned']==0 and contigs not in data['sample']: #also index nodes that connect two alignments
+                if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']==1 and G.node[neis[1]]['aligned']==1:
                     intv=idx.addsequence(T[node.begin:node.end])
                     Intv=Interval(intv[0],intv[1])
                     t.add(Intv)
                     mapping[node]=Intv
                     continue
-                
-                if len(neis)==2 and data['aligned']==0 and contigs not in data['sample']: #also index nodes that connect two alignments
-                    if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']==1 and G.node[neis[1]]['aligned']==1:
-                        intv=idx.addsequence(T[node.begin:node.end])
-                        Intv=Interval(intv[0],intv[1])
-                        t.add(Intv)
-                        mapping[node]=Intv
-                        continue
-                
-                #all other cases, simply add the sequence to the graph, but dont index it
-                data['seq']=T[node.begin:node.end].upper()
-                mapping[node]=i
-                i+=1
-        
-        G=nx.relabel_nodes(G,mapping, copy=True)
-    
+            
+            #all other cases, simply add the sequence to the graph, but dont index it
+            data['seq']=T[node.begin:node.end].upper()
+            mapping[node]=i
+            i+=1
+
+    G=nx.relabel_nodes(G,mapping, copy=True)
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%(((alignedbases*2)/float(totbases))*100,alignedbases,totbases))
-    
     return G,idx
 
 #extract variants from gfa graphs
@@ -639,7 +670,7 @@ def call(args):
     if args.graph[0].endswith(".gfa"):
         import caller
         logging.info("Parsing GFA file.")
-        c=caller.Caller(args.graph[0])
+        c=caller.Caller(args.graph[0],logger=logging)
         logging.info("Writing variants.")
         c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
 
@@ -650,32 +681,38 @@ def plot(args):
         logging.fatal("Can only create mumplot for 2 sequences.")
         return
     
+    #get mmems for forward orientation
     idx=reveallib.index()
     for sample in args.fastas:
         idx.addsample(sample)
         for name,seq in fasta_reader(sample):
             intv=idx.addsequence(seq.upper())
+            break #expect only one sequence per fasta for now
     idx.construct()
     mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
     sep=idx.nsep[0]
     
+    #get mmems for reverse orientation
     idx=reveallib.index()
     sample=args.fastas[0]
     idx.addsample(sample)
     for name,seq in fasta_reader(sample):
+        horzgaps=[i for i,c in enumerate(seq) if c=='N']
         intv=idx.addsequence(seq.upper())
-    
+        break #expect only one sequence per fasta for now
     sample=args.fastas[1]
     idx.addsample(sample)
     ls=0
     for name,seq in fasta_reader(sample):
+        vertgaps=[i for i,c in enumerate(seq) if c=='N']
         ls+=len(seq)
         intv=idx.addsequence(rc(seq.upper()))
+        break #expect only one sequence per fasta for now
     idx.construct()
     mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums() if mem[0]>args.minlength]
     
     print len(mmems),"max exact matches."
-
+    
     pos=None
     
     for mem in mmems:
@@ -709,18 +746,43 @@ def plot(args):
         else:
             assert(mem[3]==1)
             plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+    
+    for gap in horzgaps:
+        plt.axvline(gap)
 
+    for gap in vertgaps:
+        plt.axhline(gap)
+    
     #plt.savefig(str(pos)+'.png')
     plt.title(args.fastas[0]+" vs. "+args.fastas[1])
     plt.xlabel(args.fastas[0])
     plt.ylabel(args.fastas[1])
     plt.autoscale(enable=False)
-    plt.show()
+    
+    if args.interactive:
+        plt.show()
+    else:
+        fn1=args.fastas[0][0:args.fastas[0].rfind('.')] if args.fastas[0].find('.')!=-1 else args.fastas[0]
+        fn2=args.fastas[1][0:args.fastas[1].rfind('.')] if args.fastas[1].find('.')!=-1 else args.fastas[1]
+        plt.savefig(fn1+"_"+fn2+".png")
 
-
-#TODO: convert gfa graph to gml (sub)graphs
-#def convert(args):
-#    return
+def convert(args):
+    if not args.graph[0].endswith(".gfa") or len(args.graph)!=1:
+        logging.fatal("Specify a gfa file.")
+        return
+    
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    t=IntervalTree()
+    idx=reveallib.index()
+    
+    read_gfa(args.graph[0],idx,t,G,minsamples=args.minsamples,
+                         maxsamples=args.maxsamples,
+                         targetsample=args.targetsample)
+    
+    T=idx.T 
+    graph=write_gml(G,T, hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
+    logging.info("GML graph written to: %s"%graph)
 
 def extract(args):
     if not args.graph[0].endswith(".gfa"):
