@@ -376,7 +376,7 @@ PyObject * getmultimums(RevealIndex *index) {
         lb = i-1;
         assert(depth>=0);
         while (index->LCP[i] < stack_lcp[depth]) {
-            stack_ub[depth]=i-1;
+            stack_ub[depth]=i-1; //assign
             i_lcp = stack_lcp[depth];
             i_lb = stack_lb[depth];
             i_ub = stack_ub[depth];
@@ -393,6 +393,7 @@ PyObject * getmultimums(RevealIndex *index) {
                     }
                     PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
                     PyList_Append(multimums,multimum);
+                    Py_DECREF(multimum);
                 }
             }
             
@@ -409,29 +410,33 @@ PyObject * getmultimums(RevealIndex *index) {
             }
             stack_lcp[depth]=index->LCP[i];
             stack_lb[depth]=lb;
-            stack_ub[depth]=0;
+            stack_ub[depth]=0; //initialize
         }
     }
-    stack_ub[depth]=index->n-1;
-    i_lcp = stack_lcp[depth];
-    i_lb = stack_lb[depth];
-    i_ub = stack_ub[depth];
-    depth--;
-    
-    int n=(i_ub-i_lb)+1;
-    if (n<=main->nsamples){
-        if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-            int x;
-            PyObject *sp=PyList_New(n);
-            for (x=0;x<n;x++) {
-                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-                PyList_SET_ITEM(sp, x, v);
+
+    while (depth>=0) {
+        stack_ub[depth]=index->n-1;
+        i_lcp = stack_lcp[depth];
+        i_lb = stack_lb[depth];
+        i_ub = stack_ub[depth];
+        depth--;
+        
+        int n=(i_ub-i_lb)+1;
+        if (n<=main->nsamples){
+            if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                int x;
+                PyObject *sp=PyList_New(n);
+                for (x=0;x<n;x++) {
+                    PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                    PyList_SET_ITEM(sp, x, v);
+                }
+                PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
+                PyList_Append(multimums,multimum);
+        	     Py_DECREF(multimum);
             }
-            PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
-            PyList_Append(multimums,multimum);
-	    //Py_DECREF(multimum);
         }
     }
+    
     free(stack_lcp);
     free(stack_lb);
     free(stack_ub);
