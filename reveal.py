@@ -87,23 +87,29 @@ def breaknode(node,pos,l):
     return mn,other #return merge node
 
 def mergenodes(mns):
+    global o
+    ri=0
     if reference!=None:
         for i,node in enumerate(mns):
             if reference in G.node[node]['sample']:
                 refnode=node
+                ri=i
                 break
         else:
-            refnode=mns[0]
+            refnode=mns[ri]
     else:
-        refnode=mns[0]
+        refnode=mns[ri]
     
     G.node[refnode]['sample']=set.union(*[G.node[node]['sample'] for node in mns])
     G.node[refnode]['contig']=set.union(*[G.node[node]['contig'] for node in mns])
-    G.node[refnode]['aligned']=1
-    mns.remove(refnode)
+    o+=1 #increment counter, to be able to keep track of when nodes were aligned 
+    G.node[refnode]['aligned']=o
+    #mns.remove(refnode)
+    tmp=mns.pop(ri)
+    assert(tmp==refnode)
     for mn in mns: #leave the first node, remove the rest
         for e in G.in_edges(mn):
-            assert(e[0]!=refnode)
+            #assert(e[0]!=refnode)
             #assert(not G.has_edge(e[0],refnode))
             #if G.has_edge(refnode,e[0]):
             #    print mns, refnode
@@ -111,7 +117,7 @@ def mergenodes(mns):
             assert(not G.has_edge(refnode,e[0]))
             G.add_edge(e[0],refnode)
         for e in G.out_edges(mn):
-            assert(e[1]!=refnode)
+            #assert(e[1]!=refnode)
             assert(not G.has_edge(e[1],refnode))
             #assert(not G.has_edge(refnode,e[1]))
             G.add_edge(refnode,e[1])
@@ -185,7 +191,7 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,score,sp):
     nodes=index.nodes
-    
+    global o
     if len(nodes)==0:
 	return
     
@@ -220,7 +226,7 @@ def prune_nodes(G,T):
         converged=True
         for node,data in G.nodes_iter(data=True):
             for run in [0,1]:
-                if data['aligned']==1:
+                if data['aligned']!=0:
                     if run==0:
                         reverse=False
                         neis=G.successors(node)
@@ -229,7 +235,7 @@ def prune_nodes(G,T):
                         neis=G.predecessors(node)
                     seqs={}
                     for nei in neis:
-                        if G.node[nei]['aligned']!=1:
+                        if G.node[nei]['aligned']==0:
                             if 'seq' not in G.node[nei]:
                                 seq=T[nei.begin:nei.end]
                             else:
@@ -352,13 +358,14 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
             f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
         
 	if not vg:
-            f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\n" % 
+            f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
                     data['coordsample'].replace(sep,"").replace("\t",""),
                     data['coordcontig'].replace(sep,"").replace("\t",""),
                     sep.join(data['contig']),
-                    data['start']
+                    data['start'],
+                    data['aligned']
                     )
                 )
         else:
@@ -394,19 +401,22 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
     for subset in nx.connected_components(G.to_undirected()):
 	sgn=[]
 	g=G.subgraph(subset)
+        gn=len(G.graph['samples'])
 	for n in nx.topological_sort(g):
+            if sgn==[]:
+                fr=n
 	    sgn.append(n)
-	    if G.node[n]['n']==len(G.graph['samples']): #join node
+	    if G.node[n]['n']==gn: #join/split node
 		if len(sgn)>=hwm:
 		    sg=G.subgraph(sgn)
-		    fn=outputfile+'.'+str(i)+'.gml'
+		    fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
 		    nx.write_gml(sg,fn)
 		    outputfiles.append(fn)
 		    sgn=[]
 		    i+=1
 	if len(sgn)>0:
 	    sg=G.subgraph(sgn)
-	    fn=outputfile+'.'+str(i)+'.gml'
+            fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
 	    nx.write_gml(sg,fn)
 	    i+=1
 	    outputfiles.append(fn)
@@ -430,6 +440,7 @@ def main():
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
+    #parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph by traversing up and down from a specific node.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -475,6 +486,12 @@ def main():
     parser_convert.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser_convert.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_convert.set_defaults(func=convert)
+
+    #parser_subgraph.add_argument('graph', nargs=1, help='The gfa graph from which to extract subgraph.')
+    #parser_subgraph.add_argument('position', nargs=1, help='The reference position from where you want to start traversing.')
+    #parser_subgraph.add_argument("-n", dest="nnodes", type=int, default=10, help="Number of nodes to traverse up and down.")
+    #parser_subgraph.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
+    #parser_subgraph.set_defaults(func=subgraph)
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
@@ -518,14 +535,15 @@ def align(args):
 
 def align_genomes(args):
     #globale variables to simplify callbacks from c extension
-    global t,G,reference
-     
+    global t,G,reference,o
+    
     reference=args.reference
     
     t=IntervalTree()
     idx=reveallib.index()
     G=nx.DiGraph()
     G.graph['samples']=[]
+    o=0
     #schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
@@ -534,9 +552,11 @@ def align_genomes(args):
         idx.addsample(os.path.basename(sample))
         if sample.endswith(".gfa"):
             #TODO: now applies to all graphs! probably want to have this graph specific if at all...
+            logging.info("Reading graph: %s ..." % sample)
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
                                     maxsamples=args.maxsamples,
                                     targetsample=args.targetsample)
+            logging.info("Done.")
         else: #consider it to be a fasta file
             G.graph['samples'].append(os.path.basename(sample))
             for name,seq in fasta_reader(sample):
@@ -564,12 +584,12 @@ def align_genomes(args):
     if idx.nsamples>2:
         totbases=idx.n-nx.number_of_nodes(G)
         for node,data in G.nodes(data=True):
-            if data['aligned']:
+            if data['aligned']!=0:
                 alignedbases+=(node.end-node.begin)*len(data['sample'])
     else:
         totbases=min([idx.n-idx.nsep[0],idx.nsep[0]])
         for node,data in G.nodes(data=True):
-            if data['aligned']:
+            if data['aligned']!=0:
                 alignedbases+=(node.end-node.begin)
     
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases))
@@ -577,7 +597,7 @@ def align_genomes(args):
     return G,idx
 
 def align_contigs(args):
-    global t,G,reference
+    global t,G,reference,o
     
     reference=args.reference
     schemes.minlength=args.minlength
@@ -625,7 +645,7 @@ def align_contigs(args):
     idx.align(None,graphalign,threads=args.threads)
     identity=0
     for node,data in G.nodes(data=True):
-        if data['aligned']==1 and isinstance(node,Interval):
+        if data['aligned']!=0 and isinstance(node,Interval):
             identity+=node.end-node.begin
 
     alignedbases+=identity
@@ -649,7 +669,7 @@ def align_contigs(args):
                 continue
             
             if len(neis)==2 and data['aligned']==0 and contigs not in data['sample']: #also index nodes that connect two alignments
-                if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']==1 and G.node[neis[1]]['aligned']==1:
+                if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']!=0 and G.node[neis[1]]['aligned']!=0:
                     intv=idx.addsequence(T[node.begin:node.end])
                     Intv=Interval(intv[0],intv[1])
                     t.add(Intv)
