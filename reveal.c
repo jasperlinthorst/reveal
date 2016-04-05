@@ -130,6 +130,7 @@ int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
 }
 
 int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
+    //fprintf(stderr,"Index->n %d\n",index->n);
     int i=0,aStart,bStart;
     int lb,la;
     int penalize;
@@ -213,9 +214,9 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 }
             }
 	    
-	    int w_score=1;
-	    int w_penalty=1;
-	    int score=(w_score*index->LCP[i])-(w_penalty*penalty);
+            int w_score=1;
+            int w_penalty=1;
+            int score=(w_score*index->LCP[i])-(w_penalty*penalty);
 	    
 	    //fprintf(stderr,"l=%d p=%d score=%d start1=%d aStart=%d start2=%d bStart=%d lpenalty=%d, tpenalty=%d\n",index->LCP[i],penalty,mum->score, start1, aStart, start2, bStart, lpenalty, tpenalty);
             //if (index->LCP[i]-penalty > mum->score){
@@ -226,7 +227,6 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 mum->sp[0]=aStart;
                 mum->sp[1]=bStart;
             }
-            
         }
     }
     return 0;
@@ -450,6 +450,7 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
     
     for (i=0; i<idx->n; i++){
         if (D[i]==1){ //write to leading
+            assert(il<i_leading->n);
             i_leading->SA[il]=idx->SA[i];
             if (il==0){
                 i_leading->LCP[il]=0;
@@ -460,6 +461,7 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
             il++;
             lastl=i;
         } else if (D[i]==2){ //write to trailing
+            assert(it<i_trailing->n);
             i_trailing->SA[it]=idx->SA[i];
             if (it==0){
                 i_trailing->LCP[it]=0;
@@ -592,7 +594,6 @@ void *aligner(void *arg) {
         int i=0;
         
         pthread_mutex_lock(&mutex);/* acquire the mutex lock */
-	//fprintf(stderr,"get index\n");
         idx=pop_index();
         if (idx==NULL){
             hasindex=0;
@@ -609,6 +610,10 @@ void *aligner(void *arg) {
         }
 
         if (hasindex==1){
+            //fprintf(stderr,"Starting alignment cycle...\n");
+            //fprintf(stderr,"samples=%d\n",idx->nsamples);
+            //fprintf(stderr,"depth=%d\n",idx->depth);
+            
             RevealMultiMUM mmum;
             mmum.sp=(int *) malloc(idx->nsamples*sizeof(int));
             mmum.l=0;
@@ -690,8 +695,17 @@ void *aligner(void *arg) {
                     getbestmultimum(idx, &mmum, idx->nsamples);
                 } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
                     //getlongestmum(idx, &mmum);
-    		    //fprintf(stderr,"getbestmum\n");
                     getbestmum(idx, &mmum);
+                }
+                
+                //fprintf(stderr,"mum: n=%d l=%d\n",mmum.n,mmum.l);
+                
+                if (mmum.l==0){
+                    Py_DECREF(idx);
+                    pthread_mutex_lock(&mutex);
+                    aw--;
+                    pthread_mutex_unlock(&mutex);
+                    continue;                
                 }
                 
                 pthread_mutex_lock(&python);      //LOCK PYTHON            
@@ -700,6 +714,7 @@ void *aligner(void *arg) {
                 PyObject *sps;
                 PyObject *arglist;
                 
+                //build a list of start positions in the index
                 sps=PyList_New(mmum.n);
                 PyObject *pos;
                 for (i=0;i<mmum.n;i++){
@@ -769,7 +784,7 @@ void *aligner(void *arg) {
             uint8_t *D=calloc(idx->n,sizeof(uint8_t));
             
             int i,j,begin,end,trailingn=0,leadingn=0,parn=0;
-            int nintv_leading=0, nintv_trailing=0, nintv_par=0;
+            int nintv_leading=0, nintv_trailing=0;//, nintv_par=0;
             nintv_leading=PyList_Size(leading_intervals);
             for (i=0;i<nintv_leading;i++){
                 PyObject *tup;
@@ -796,14 +811,14 @@ void *aligner(void *arg) {
                     D[idx->SAi[j]]=3;
                 }
             }
-//            fprintf(stderr,"Trailingn %d\n",trailingn);
-//            fprintf(stderr,"Leadingn %d\n",leadingn);
-//            fprintf(stderr,"mmum l %d\n",mmum.l);
-//            fprintf(stderr,"mmum n %d\n",mmum.n);
-//            fprintf(stderr,"Index n %d\n",idx->n);
+            //fprintf(stderr,"Trailingn %d\n",trailingn);
+            //fprintf(stderr,"Leadingn %d\n",leadingn);
+            //fprintf(stderr,"mmum l %d\n",mmum.l);
+            //fprintf(stderr,"mmum n %d\n",mmum.n);
+            //fprintf(stderr,"Index n %d\n",idx->n);
             parn=idx->n-(trailingn+leadingn+(mmum.l*mmum.n));
             //assert that parn equals length of all intervals in rest
-//            fprintf(stderr,"parn %d\n",parn);
+            //fprintf(stderr,"parn %d\n",parn);
 
             int newdepth=idx->depth+1; //update depth in recursion tree
             
@@ -851,7 +866,7 @@ void *aligner(void *arg) {
             i_parallel->SAi=idx->SAi;
             i_parallel->T=idx->T;
             i_parallel->SO=idx->SO;
-            i_parallel->nsamples=idx->nsamples-mmum.n;
+            i_parallel->nsamples=idx->nsamples;//-mmum.n;
             i_parallel->nsep=idx->nsep;
             i_parallel->main=idx->main;
             
@@ -867,6 +882,7 @@ void *aligner(void *arg) {
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
             //bubble_sort(i_trailing, mmum.sp, mmum.n, mmum.l);
             //bubble_sort(i_parallel, mmum.sp, mmum.n, mmum.l);
+            //fprintf(stderr,"bubble sort done\n");
             
             free(D);
             free(mmum.sp);
@@ -910,7 +926,7 @@ void *aligner(void *arg) {
                     break;
                 }
             }
-            //fprintf(stderr,"done\n");
+            
             aw--;
             pthread_mutex_unlock(&mutex);
         } else {
