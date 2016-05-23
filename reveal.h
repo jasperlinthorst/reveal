@@ -11,7 +11,7 @@ typedef struct
     int          * SA;  //Suffix array
     int          * SAi; //Suffix array
     int          * LCP; //LCP array
-    uint8_t      * SO;  //Array indicating for each suffix which sample it originated from (max 256 samples!)
+    uint16_t          * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
     int          n;   //lenght of SA and LCP
     int depth; //depth within the hierarchical alignment tree
     int *nsep;    //array of integers pointing to sentinels that seperate samples within the input T

@@ -149,7 +149,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
     
     if (self->nsamples>2){
-         self->SO = malloc(self->n*sizeof(uint8_t));
+         self->SO = malloc(self->n*sizeof(uint16_t));
          if (build_SO(self)!=0){
             PyErr_SetString(RevealError, "Failed to construct SO.");
             return NULL;
@@ -224,7 +224,6 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
         
         while (1) {
             pthread_mutex_lock(&mutex);
-            //if (aw==0 && qsize==0){
             if (aw==0 && qsize==qstart){
                 pthread_mutex_unlock(&mutex);
                 break; //successfully aligned quit
