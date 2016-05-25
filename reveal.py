@@ -193,11 +193,11 @@ def graphalign(l,index,n,score,sp):
     nodes=index.nodes
     global o
     if len(nodes)==0:
-	return
+        return
     
     if l==0:
-	return
-
+        return
+    
     if l<schemes.minlength or score<schemes.minscore:
         return
     
@@ -322,12 +322,12 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
                         mapping[nodeid]=gfafile+'_'+nodeid
         
-        #L	206	+	155	+	0M
+        #L      206     +       155     +       0M
         if line.startswith('L'):
-	    edges.append(line)
+            edges.append(line)
 
     for line in edges:
-	e=line.strip().split()
+        e=line.strip().split()
         assert(not graph.has_edge(mapping[e[1]],mapping[e[3]]))
         assert(not graph.has_edge(mapping[e[3]],mapping[e[1]]))
         graph.add_edge(mapping[e[1]],mapping[e[3]],ofrom=e[2],oto=e[4],cigar=e[5])
@@ -347,17 +347,17 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
     mapping={}
 
     for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
-	mapping[node]=i+1 #one-based for vg
+        mapping[node]=i+1 #one-based for vg
     
     for i,node in enumerate(nx.topological_sort(G)):
-	i+=1
-	data=G.node[node]
+        i+=1
+        data=G.node[node]
         if 'seq' in data:
             f.write('S\t'+str(i)+'\t'+data['seq'].upper())
         else:
             f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
         
-	if not vg:
+        if not vg:
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
@@ -372,10 +372,10 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
             f.write("\n")
             for sample in data['sample']:
                 f.write("P\t"+str(i)+"\t"+sample+"\t+\t"+str(node.end-node.begin)+"M\n")
-	
-	for to in G[node]:
-	    f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
-	
+        
+        for to in G[node]:
+            f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
+    
     f.close()
 
 def write_gml(G,T,outputfile="reference",hwm=1000):
@@ -399,27 +399,27 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
     
     i=0
     for subset in nx.connected_components(G.to_undirected()):
-	sgn=[]
-	g=G.subgraph(subset)
+        sgn=[]
+        g=G.subgraph(subset)
         gn=len(G.graph['samples'])
-	for n in nx.topological_sort(g):
+        for n in nx.topological_sort(g):
             if sgn==[]:
                 fr=n
-	    sgn.append(n)
-	    if G.node[n]['n']==gn: #join/split node
-		if len(sgn)>=hwm:
-		    sg=G.subgraph(sgn)
-		    fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
-		    nx.write_gml(sg,fn)
-		    outputfiles.append(fn)
-		    sgn=[]
-		    i+=1
-	if len(sgn)>0:
-	    sg=G.subgraph(sgn)
+            sgn.append(n)
+            if G.node[n]['n']==gn: #join/split node
+                if len(sgn)>=hwm:
+                    sg=G.subgraph(sgn)
+                    fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
+                    nx.write_gml(sg,fn)
+                    outputfiles.append(fn)
+                    sgn=[]
+                    i+=1
+        if len(sgn)>0:
+            sg=G.subgraph(sgn)
             fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
-	    nx.write_gml(sg,fn)
-	    i+=1
-	    outputfiles.append(fn)
+            nx.write_gml(sg,fn)
+            i+=1
+            outputfiles.append(fn)
     
     return outputfiles
 
@@ -505,13 +505,13 @@ def align(args):
         return
     
     if args.contigs:
-	if len(args.inputfiles)!=2:
-	    logging.fatal("Only pairwise alignment of contigs is possible.")
+        if len(args.inputfiles)!=2:
+            logging.fatal("Only pairwise alignment of contigs is possible.")
             return
-	else:
-	    G,idx=align_contigs(args)
+        else:
+            G,idx=align_contigs(args)
     else:
-	G,idx=align_genomes(args)
+        G,idx=align_genomes(args)
     
     if args.output==None:
         args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
@@ -697,40 +697,62 @@ def call(args):
 def plot(args):
     from matplotlib import pyplot as plt
     
-    if len(args.fastas)!=2:
-        logging.fatal("Can only create mumplot for 2 sequences.")
-        return
-    
-    #get mmems for forward orientation
-    idx=reveallib.index()
-    for sample in args.fastas:
+    if len(args.fastas)==2:    
+        #get mmems for forward orientation
+        idx=reveallib.index()
+        for sample in args.fastas:
+            idx.addsample(sample)
+            for name,seq in fasta_reader(sample):
+                intv=idx.addsequence(seq.upper())
+                break #expect only one sequence per fasta for now
+        idx.construct()
+        mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
+        sep=idx.nsep[0]
+        
+        #get mmems for reverse orientation
+        idx=reveallib.index()
+        sample=args.fastas[0]
         idx.addsample(sample)
         for name,seq in fasta_reader(sample):
+            horzgaps=[i for i,c in enumerate(seq) if c=='N']
             intv=idx.addsequence(seq.upper())
             break #expect only one sequence per fasta for now
-    idx.construct()
-    mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
-    sep=idx.nsep[0]
-    
-    #get mmems for reverse orientation
-    idx=reveallib.index()
-    sample=args.fastas[0]
-    idx.addsample(sample)
-    for name,seq in fasta_reader(sample):
-        horzgaps=[i for i,c in enumerate(seq) if c=='N']
-        intv=idx.addsequence(seq.upper())
-        break #expect only one sequence per fasta for now
-    sample=args.fastas[1]
-    idx.addsample(sample)
-    ls=0
-    for name,seq in fasta_reader(sample):
-        vertgaps=[i for i,c in enumerate(seq) if c=='N']
-        ls+=len(seq)
-        intv=idx.addsequence(rc(seq.upper()))
-        break #expect only one sequence per fasta for now
-    idx.construct()
-    mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums() if mem[0]>args.minlength]
-    
+        
+        sample=args.fastas[1]
+        idx.addsample(sample)
+        ls=0
+        for name,seq in fasta_reader(sample):
+            vertgaps=[i for i,c in enumerate(seq) if c=='N']
+            ls+=len(seq)
+            intv=idx.addsequence(rc(seq.upper()))
+            break #expect only one sequence per fasta for now
+        idx.construct()
+        mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums() if mem[0]>args.minlength]
+        
+    elif len(args.fastas)==1:
+
+        idx=reveallib.index()
+        sample=args.fastas[0]
+        idx.addsample(sample)
+        for name,seq in fasta_reader(sample):
+            horzgaps=[i for i,c in enumerate(seq) if c=='N']
+            intv=idx.addsequence(seq.upper())
+            break #expect only one sequence per fasta for now
+        
+        sample=args.fastas[0]+"_rc"
+        idx.addsample(sample)
+        ls=0
+        for name,seq in fasta_reader(sample):
+            vertgaps=[i for i,c in enumerate(seq) if c=='N']
+            ls+=len(seq)
+            intv=idx.addsequence(rc(seq.upper()))
+            break #expect only one sequence per fasta for now
+        idx.construct()
+        mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
+    else:
+        logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
+        return
+
     print len(mmems),"max exact matches."
     
     pos=None
