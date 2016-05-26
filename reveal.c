@@ -631,6 +631,8 @@ void *aligner(void *arg) {
                     Py_DECREF(idx);
                     PyGILState_Release(gstate);
                     pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+
+                    free(mmum.sp);
                     break;
                 }
                 
@@ -652,6 +654,8 @@ void *aligner(void *arg) {
                     pthread_mutex_lock(&mutex);
                     aw--;
                     pthread_mutex_unlock(&mutex);
+
+                    free(mmum.sp);
                     continue;
                 }
                 
@@ -663,12 +667,16 @@ void *aligner(void *arg) {
                     Py_DECREF(multimums);
                     PyGILState_Release(gstate);
                     pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+
+                    free(mmum.sp);
                     break;
                 }
                                 
                 PyObject *sp=NULL;
                 PyObject *tmp=NULL;
+               
                 
+                 
                 PyArg_ParseTuple(mum,"iOiiO",&mmum.l,&tmp,&mmum.n,&mmum.score,&sp);
                 
                 for (i=0; i<mmum.n; i++){
@@ -679,6 +687,8 @@ void *aligner(void *arg) {
                         Py_DECREF(idx);
                         PyGILState_Release(gstate);
                         pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+
+                        free(mmum.sp);
                         break;
                     }
                     mmum.sp[i]=PyInt_AS_LONG(pos);
@@ -705,6 +715,8 @@ void *aligner(void *arg) {
                     pthread_mutex_lock(&mutex);
                     aw--;
                     pthread_mutex_unlock(&mutex);
+
+                    free(mmum.sp);
                     continue;                
                 }
                 
@@ -729,6 +741,8 @@ void *aligner(void *arg) {
                     Py_DECREF(idx);
                     PyGILState_Release(gstate);
                     pthread_mutex_unlock(&python);      //UNLOCK PYTHON
+
+                    free(mmum.sp);
                     break;
                 }
                 
@@ -737,6 +751,8 @@ void *aligner(void *arg) {
                     err_flag=1;
                     PyGILState_Release(gstate);
                     pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+
+                    free(mmum.sp);
                     break;
                 }
                 
@@ -750,6 +766,8 @@ void *aligner(void *arg) {
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);      //UNLOCK PYTHON
+
+                free(mmum.sp);
                 break;
             }
             
@@ -765,6 +783,8 @@ void *aligner(void *arg) {
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
+
+                free(mmum.sp);
                 continue;                
             }
             
@@ -778,6 +798,8 @@ void *aligner(void *arg) {
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
+
+                free(mmum.sp);
                 continue;
             }
             
