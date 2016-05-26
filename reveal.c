@@ -525,7 +525,6 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
 
 void bubble_sort(RevealIndex* idx, int* sp, int n, int l){
     //RevealIndex *main=(RevealIndex *) idx->main;
-    //fprintf(stderr,"mark lower case %d %d %d\n",sp[0],sp[1],l);
     
     int i=0,j=0,x,tmpSA,tmpLCP;
     for (i=0; i<n; i++){
@@ -621,36 +620,37 @@ void *aligner(void *arg) {
             
             PyObject *result;
             
+            pthread_mutex_lock(&python);
+            gstate = PyGILState_Ensure();
+             
             if (rw->mumpicker!=Py_None){
-                pthread_mutex_lock(&python);      //LOCK PYTHON            
-                gstate = PyGILState_Ensure();
-
+                
                 if (!PyCallable_Check(rw->mumpicker)) {
                     PyErr_SetString(PyExc_TypeError, "**** mumpicker isn't callable");
                     err_flag=1;
                     Py_DECREF(idx);
                     PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+                    pthread_mutex_unlock(&python);
 
                     free(mmum.sp);
                     break;
                 }
                 
-                //fprintf(stderr,"Extracting multi mums...");
+                //fprintf(stderr,"Extracting multi mums... %d\n",idx->n);
                 PyObject *multimums = getmultimums(idx);
-                //fprintf(stderr,"Done.");
-                                
+                //fprintf(stderr,"Done.\n");
+                 
                 PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
                 
-                PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker calls align and returns domains
-                
+                PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
+
                 if (mum==Py_None){
                     Py_DECREF(idx);
                     Py_DECREF(arglist);
                     Py_DECREF(multimums);
                     Py_DECREF(mum);
                     PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);      //UNLOCK PYTHON
+                    pthread_mutex_unlock(&python);
                     pthread_mutex_lock(&mutex);
                     aw--;
                     pthread_mutex_unlock(&mutex);
@@ -666,7 +666,7 @@ void *aligner(void *arg) {
                     Py_DECREF(arglist);
                     Py_DECREF(multimums);
                     PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+                    pthread_mutex_unlock(&python);
 
                     free(mmum.sp);
                     break;
@@ -675,26 +675,28 @@ void *aligner(void *arg) {
                 PyObject *sp=NULL;
                 PyObject *tmp=NULL;
                
-                
-                 
                 PyArg_ParseTuple(mum,"iOiiO",&mmum.l,&tmp,&mmum.n,&mmum.score,&sp);
                 
                 for (i=0; i<mmum.n; i++){
                     PyObject * pos=PyList_GetItem(sp,i);
                     if (pos==NULL){
-                        PyErr_SetString(PyExc_TypeError, "**** invalid results from mumpicker");
-                        err_flag=1;
-                        Py_DECREF(idx);
-                        PyGILState_Release(gstate);
-                        pthread_mutex_unlock(&python);          //UNLOCK PYTHON
-
-                        free(mmum.sp);
-                        break;
+                        fprintf(stderr,"**** invalid results from mumpicker\n");
+                        //PyErr_SetString(PyExc_TypeError, "**** invalid results from mumpicker");
+                        //err_flag=1;
+                        //Py_DECREF(idx);
+                        //PyGILState_Release(gstate);
+                        //pthread_mutex_unlock(&python);          //UNLOCK PYTHON
+                        //free(mmum.sp);
+                        //break; //TODO: error here, break only breaks out of the first loop... duh
+                        mmum.sp[i]=0;
+                        continue;
                     }
                     mmum.sp[i]=PyInt_AS_LONG(pos);
                 }
                 
-                result = PyEval_CallObject(rw->graphalign, mum); //mumpicker calls align and returns domains
+                //fprintf(stderr,"Aligning...\n");
+                result = PyEval_CallObject(rw->graphalign, mum);
+                //fprintf(stderr,"Done.\n");
                 
                 Py_DECREF(arglist);
                 Py_DECREF(mum);
@@ -712,6 +714,9 @@ void *aligner(void *arg) {
                 
                 if (mmum.l==0){
                     Py_DECREF(idx);
+                    PyGILState_Release(gstate);
+                    pthread_mutex_unlock(&python);
+
                     pthread_mutex_lock(&mutex);
                     aw--;
                     pthread_mutex_unlock(&mutex);
@@ -719,9 +724,6 @@ void *aligner(void *arg) {
                     free(mmum.sp);
                     continue;                
                 }
-                
-                pthread_mutex_lock(&python);      //LOCK PYTHON            
-                gstate = PyGILState_Ensure();
                 
                 PyObject *sps;
                 PyObject *arglist;
@@ -740,7 +742,7 @@ void *aligner(void *arg) {
                     err_flag=1;
                     Py_DECREF(idx);
                     PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);      //UNLOCK PYTHON
+                    pthread_mutex_unlock(&python);
 
                     free(mmum.sp);
                     break;
@@ -750,8 +752,7 @@ void *aligner(void *arg) {
                     PyErr_SetString(PyExc_TypeError, "***** graphalign isn't callable");
                     err_flag=1;
                     PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);          //UNLOCK PYTHON
-
+                    pthread_mutex_unlock(&python);
                     free(mmum.sp);
                     break;
                 }
@@ -765,8 +766,7 @@ void *aligner(void *arg) {
                 err_flag=1;
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
-                pthread_mutex_unlock(&python);      //UNLOCK PYTHON
-
+                pthread_mutex_unlock(&python);
                 free(mmum.sp);
                 break;
             }
@@ -779,7 +779,7 @@ void *aligner(void *arg) {
             if (result==Py_None){
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
-                pthread_mutex_unlock(&python);      //UNLOCK PYTHON
+                pthread_mutex_unlock(&python);
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
@@ -793,12 +793,10 @@ void *aligner(void *arg) {
                 //no tuple returned by python call, apparently we're done...
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
-                pthread_mutex_unlock(&python);      //UNLOCK PYTHON
-                
+                pthread_mutex_unlock(&python);
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
-
                 free(mmum.sp);
                 continue;
             }
@@ -892,28 +890,25 @@ void *aligner(void *arg) {
             i_parallel->nsep=idx->nsep;
             i_parallel->main=idx->main;
             
-            Py_DECREF(result);
-
             PyGILState_Release(gstate);
-            pthread_mutex_unlock(&python);       //UNLOCK PYTHON
-            
-	      //fprintf(stderr,"split\n");
+            pthread_mutex_unlock(&python);
+
+	    //fprintf(stderr,"splitting...\n");
             split(idx, D, i_leading, i_trailing, i_parallel);
-            
-	      //fprintf(stderr,"bubble sort\n");
+	    //fprintf(stderr,"done.\n");
+
+	    //fprintf(stderr,"bubble sorting...\n");
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
-            //bubble_sort(i_trailing, mmum.sp, mmum.n, mmum.l);
-            //bubble_sort(i_parallel, mmum.sp, mmum.n, mmum.l);
-            //fprintf(stderr,"bubble sort done\n");
+            //fprintf(stderr,"done.\n");
             
             free(D);
             free(mmum.sp);
-
-            //pthread_mutex_lock(&python);       //LOCK PYTHON
-            //PyGILState_Ensure();
+            
+            pthread_mutex_lock(&python); 
+            gstate=PyGILState_Ensure();
+            
+            Py_DECREF(result);
             Py_DECREF(idx); //trigger gc for subindex
-            //PyGILState_Release(gstate);
-            //pthread_mutex_unlock(&python);       //UNLOCK PYTHON
 
             pthread_mutex_lock(&mutex);
             nmums++;
@@ -927,7 +922,10 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
+            } else {
+                Py_DECREF(i_leading);
             }
+
             if (i_trailing->n>0){
 		     //fprintf(stderr,"push trailing\n");
                 if (!(push_index(i_trailing)==0)){
@@ -937,7 +935,10 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
+            } else {
+                Py_DECREF(i_trailing);
             }
+
             if (i_parallel->n>0){
     		     //fprintf(stderr,"push parallel\n");
                 if (!(push_index(i_parallel)==0)){
@@ -947,11 +948,17 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
+            } else {
+                Py_DECREF(i_parallel);
             }
-            
+
+            PyGILState_Release(gstate);
+            pthread_mutex_unlock(&python);
+
             aw--;
             pthread_mutex_unlock(&mutex);
         } else {
+            //usleep(10);
             sleep(1);
         }
     }

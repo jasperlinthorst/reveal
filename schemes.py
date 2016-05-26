@@ -103,33 +103,37 @@ def mumpicker3(multimums,idx):
     return bestmum
 
 def multimumpicker(multimums,idx):
-    bestmum=None
-    for multimum in multimums:
-        l,n,sp=multimum
-        if l<minlength:
-            continue
-        
-        if bestmum!=None:
-            if n<bestmum[2]:
+    try:
+        bestmum=None
+        for multimum in multimums:
+            l,n,sp=multimum
+            if l<minlength:
                 continue
-            if n==bestmum[2] and l<=bestmum[0]:
+            
+            if bestmum!=None:
+                if n<bestmum[2]:
+                    continue
+                if n==bestmum[2] and l<=bestmum[0]:
+                    continue
+                    
+            ds=[start-ts[start].pop()[0] for start in sp]
+            ads=sum(ds)/n
+            spenalty=sum([abs(p-ads) for p in ds])
+            de=[ts[start].pop()[1]-(start+l) for start in sp]
+            ade=sum(de)/n
+            epenalty=sum([abs(p-ade) for p in de])
+            penalty=min([spenalty,epenalty])
+            score=(l*n)-penalty
+            
+            if score<minscore:
                 continue
-                
-        ds=[start-ts[start].pop()[0] for start in sp]
-        ads=sum(ds)/n
-        spenalty=sum([abs(p-ads) for p in ds])
-        de=[ts[start].pop()[1]-(start+l) for start in sp]
-        ade=sum(de)/n
-        epenalty=sum([abs(p-ade) for p in de])
-        penalty=min([spenalty,epenalty])
-        score=(l*n)-penalty
+            
+            bestmum=(l,idx,n,score,sp)
         
-        if score<minscore:
-            continue
-        
-        bestmum=(l,idx,n,score,sp)
-    
-    return bestmum
+        return bestmum
+    except e:
+        print "ERROR",e
+        return None
 
 
 def cluster(multimums,idx):

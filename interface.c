@@ -338,6 +338,7 @@ reveal_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self = (RevealIndex *)type->tp_alloc(type, 0);
 
     if (self!=NULL) {
+        //fprintf(stderr,"New index!\n");
         //pre-init here...
     }
     
@@ -543,6 +544,7 @@ static PyGetSetDef reveal_getseters[] = {
 static void
 reveal_dealloc(RevealIndex *self)
 {
+    //fprintf(stderr,"dealloc index %d!\n",self->depth);
     if (self->depth==0){ //only there for the main index
         //fprintf(stderr,"dealloc MAIN index!\n");
         if (self->T!=NULL){
@@ -633,7 +635,8 @@ initreveallib(void)
     
     m = Py_InitModule3("reveallib", NULL, "REcursiVe Exact matching ALigner");
     
-    //Py_Initialize();
+    Py_Initialize();
+    PyEval_InitThreads();
 
     Py_INCREF(&RevealIndexType);
     PyModule_AddObject(m, "index", (PyObject *)&RevealIndexType);

@@ -190,34 +190,42 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest)
 
 def graphalign(l,index,n,score,sp):
-    nodes=index.nodes
-    global o
-    if len(nodes)==0:
-        return
-    
-    if l==0:
-        return
-    
-    if l<schemes.minlength or score<schemes.minscore:
-        return
-    
-    mns=[]
-    topop=[]
-    for i,pos in enumerate(sp):
-        #assert(len(t[pos])==1) #be sure that there are no overlapping intervals in the tree!
-        #assert(len(t[pos+l-1])==1) #be sure that there are no overlapping intervals in the tree!
-        #assert(t[pos]==t[pos+l-1])
-        #if i>0:
-        #    assert(T[sp[i]:sp[i]+l]==T[sp[i-1]:sp[i-1]+l])
-        old=t[pos].pop()
-        mn,other=breaknode(old,pos,l)
-        mns.append(mn)
-        nodes.remove((old.begin,old.end))
-        for node in other:
-            nodes.append((node.begin,node.end))
-    mn=mergenodes(mns)
-    intervals=segmentgraph(mn,nodes)
-    return intervals
+
+    try:
+        nodes=index.nodes
+        global o
+        
+        #print "PICKED MUM",l,n,score
+
+        if len(nodes)==0:
+            return
+        
+        if l==0:
+            return
+        
+        if l<schemes.minlength or score<schemes.minscore:
+            return
+        
+        mns=[]
+        topop=[]
+        for i,pos in enumerate(sp):
+            #assert(len(t[pos])==1) #be sure that there are no overlapping intervals in the tree!
+            #assert(len(t[pos+l-1])==1) #be sure that there are no overlapping intervals in the tree!
+            #assert(t[pos]==t[pos+l-1])
+            #if i>0:
+            #    assert(T[sp[i]:sp[i]+l]==T[sp[i-1]:sp[i-1]+l])
+            old=t[pos].pop()
+            mn,other=breaknode(old,pos,l)
+            mns.append(mn)
+            nodes.remove((old.begin,old.end))
+            for node in other:
+                nodes.append((node.begin,node.end))
+        mn=mergenodes(mns)
+        intervals=segmentgraph(mn,nodes)
+        return intervals
+    except e:
+        print "ERROR",e
+        return None
 
 def prune_nodes(G,T):
     converged=False
