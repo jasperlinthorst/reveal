@@ -10,6 +10,7 @@
 
 /* The mutex lock */
 extern pthread_mutex_t mutex, python;
+
 extern RevealIndex **index_queue;
 extern int maxqsize,qsize,qstart,aw,nmums,err_flag,die;
 
@@ -586,30 +587,28 @@ void bubble_sort(RevealIndex* idx, int* sp, int n, int l){
 void *aligner(void *arg) {
     RevealWorker *rw = arg;
     PyGILState_STATE gstate;
-
     RevealIndex * idx;
     while(1) {
 	int hasindex=0;
         int i=0;
         
         pthread_mutex_lock(&mutex);/* acquire the mutex lock */
+        aw++;
         idx=pop_index();
-        if (idx==NULL){
+        if (idx==NULL) {
             hasindex=0;
+            aw--;
         } else {
             hasindex=1;
-            aw++;
         }
         pthread_mutex_unlock(&mutex);/* release the mutex lock */
         
         if (die==1 || (rw->threadid==-1 && hasindex==0)){
-	    //if (hasindex==0) fprintf(stderr,"no more indices\n");
-	    //if (die==1) fprintf(stderr,"die\n");
             break;
         }
-
+        
         if (hasindex==1){
-            //fprintf(stderr,"Starting alignment cycle...\n");
+            //fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
             //fprintf(stderr,"samples=%d\n",idx->nsamples);
             //fprintf(stderr,"depth=%d\n",idx->depth);
             
@@ -619,10 +618,10 @@ void *aligner(void *arg) {
             mmum.score=0;
             
             PyObject *result;
-            
+           
             pthread_mutex_lock(&python);
             gstate = PyGILState_Ensure();
-             
+
             if (rw->mumpicker!=Py_None){
                 
                 if (!PyCallable_Check(rw->mumpicker)) {
@@ -641,7 +640,6 @@ void *aligner(void *arg) {
                 //fprintf(stderr,"Done.\n");
                  
                 PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
-                
                 PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
 
                 if (mum==Py_None){
@@ -651,6 +649,7 @@ void *aligner(void *arg) {
                     Py_DECREF(mum);
                     PyGILState_Release(gstate);
                     pthread_mutex_unlock(&python);
+
                     pthread_mutex_lock(&mutex);
                     aw--;
                     pthread_mutex_unlock(&mutex);
@@ -780,6 +779,7 @@ void *aligner(void *arg) {
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
+
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
@@ -794,6 +794,7 @@ void *aligner(void *arg) {
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
+
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
@@ -938,7 +939,7 @@ void *aligner(void *arg) {
             } else {
                 Py_DECREF(i_trailing);
             }
-
+            
             if (i_parallel->n>0){
     		     //fprintf(stderr,"push parallel\n");
                 if (!(push_index(i_parallel)==0)){
@@ -951,15 +952,14 @@ void *aligner(void *arg) {
             } else {
                 Py_DECREF(i_parallel);
             }
-
+            
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
-
             aw--;
             pthread_mutex_unlock(&mutex);
-        } else {
-            //usleep(10);
-            sleep(1);
+        }
+        else {
+            usleep(1);
         }
     }
     //fprintf(stderr,"Stopping alignment thread %d.\n",rw->threadid);

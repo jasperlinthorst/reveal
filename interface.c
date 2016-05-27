@@ -6,6 +6,7 @@
 static PyObject *RevealError;
 
 pthread_mutex_t mutex, python;
+
 RevealIndex **index_queue;
 int maxqsize=QUEUE_BUF,qsize=0,qstart=0,aw,nmums,err_flag=0,die=0;
 
@@ -223,23 +224,22 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
         }
         
         while (1) {
-            pthread_mutex_lock(&mutex);
             if (aw==0 && qsize==qstart){
-                pthread_mutex_unlock(&mutex);
                 break; //successfully aligned quit
             }
-            pthread_mutex_unlock(&mutex);
-        
+             
             if (err_flag){
                 fprintf(stderr,"Error occurred in one the the alignment threads.\n");
                 //TODO: iterate over remaining indices in the queue and free them
                 break; //an error occurred in one of the threads
             }
-            sleep(1);
+            usleep(1);
         }
         
+        //fprintf(stderr,"Alignment done, terminating threads...\n");
+
         die=1; //signal workers to terminate
-    
+        
         //join worker threads
         for(i = 0; i < numThreads; i++) {
             pthread_join(tids[i], NULL);
@@ -264,6 +264,9 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     
     free(index_queue);
     
+    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&python);
+
     if (err_flag==0){
         Py_INCREF(Py_None);
         return Py_None;
@@ -563,9 +566,8 @@ reveal_dealloc(RevealIndex *self)
         //fprintf(stderr,"dealloc SUB index!\n");
     }
     
-    //TODO: DECREF all python objects: nodes, samples, main
-    //Py_DECREF(self->nodes);
-    //Py_DECREF(self->samples);
+    Py_DECREF(self->nodes);
+    Py_DECREF(self->samples);
     
     if (self->SA!=NULL){
         free(self->SA);
