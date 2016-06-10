@@ -10,6 +10,8 @@ import logging
 import os
 import schemes
 import sys
+import time
+
 
 def fasta_reader(fn,truncN=True):
     seq=""
@@ -84,6 +86,7 @@ def breaknode(node,pos,l):
         assert(not G.has_edge(sn,e[1]))
         assert(not G.has_edge(e[1],sn))
         G.add_edge(sn,e[1])
+    
     return mn,other #return merge node
 
 def mergenodes(mns):
@@ -190,13 +193,12 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest)
 
 def graphalign(l,index,n,score,sp):
-
     try:
         nodes=index.nodes
         global o
         
-        #print "PICKED MUM",l,n,score
-
+        #print "PICKED MUM",l,n,score,sp
+       
         if len(nodes)==0:
             return
         
@@ -217,14 +219,17 @@ def graphalign(l,index,n,score,sp):
             old=t[pos].pop()
             mn,other=breaknode(old,pos,l)
             mns.append(mn)
-            nodes.remove((old.begin,old.end))
+            if isinstance(old,Interval):
+                nodes.remove((old.begin,old.end))
             for node in other:
-                nodes.append((node.begin,node.end))
+                if isinstance(node,Interval):
+                    nodes.append((node.begin,node.end))
+        
         mn=mergenodes(mns)
         intervals=segmentgraph(mn,nodes)
         return intervals
-    except e:
-        print "ERROR",e
+    except:
+        print "ERROR"
         return None
 
 def prune_nodes(G,T):
@@ -284,22 +289,29 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             s=line.strip().split('\t')
             nodeid=s[1]
             ann={}
-            for v in s[4:]:
-                v=v.split(':')
-                if v[2].find(sep)!=-1: #multi-valued
-                    ann[v[0]]=v[2].rstrip(sep).split(sep)
-                else:
-                    ann[v[0]]=v[2]
+            
+            if len(s)>3:
+                for v in s[4:]:
+                    v=v.split(':')
+                    if v[2].find(sep)!=-1: #multi-valued
+                        ann[v[0]]=v[2].rstrip(sep).split(sep)
+                    else:
+                        ann[v[0]]=v[2]
             
             if "ORI" not in ann: #not a reveal graph, so no metadata on nodes, just index all
                 if index!=None:
-                    intv=index.addsequence(s[2].upper())
-                    intv=Interval(intv[0],intv[1])
-                    tree.add(intv)
-                    graph.add_node(intv,sample={gfafile},contig={nodeid},aligned=0)
+                    if len(s)<3:
+                        intv=None
+                    else:
+                        intv=index.addsequence(s[2].upper())
+                        intv=Interval(intv[0],intv[1])
+                        tree.add(intv)
+                    graph.add_node(intv,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,aligned=0)
                     mapping[nodeid]=intv
                 else:
-                    graph.add_node(gfafile+'_'+nodeid,sample={gfafile},contig={nodeid},seq=s[2].upper(),aligned=0)
+                    if len(s)<3:
+                        s.append("")
+                    graph.add_node(gfafile+'_'+nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=gfafile+'_'+nodeid
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
@@ -342,7 +354,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
 
 
-def write_gfa(G,T,outputfile="reference.gfa",vg=False):
+def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
     f=open(outputfile,'wb')
     sep=';'
     f.write('H\tVN:Z:1.0\n')
@@ -363,20 +375,26 @@ def write_gfa(G,T,outputfile="reference.gfa",vg=False):
         if 'seq' in data:
             f.write('S\t'+str(i)+'\t'+data['seq'].upper())
         else:
-            f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
+            if isinstance(node,Interval):
+                f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
+            else:
+                f.write('S\t'+str(i)+'\t')
         
-        if not vg:
+        if nometa:
+            f.write("\n")
+        else:
             f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\n" % 
                     (
                     sep.join(data['sample']),
-                    data['coordsample'].replace(sep,"").replace("\t",""),
-                    data['coordcontig'].replace(sep,"").replace("\t",""),
+                    data['coordsample'].replace(sep,"").replace("\t","") if data['coordsample']!=None else "",
+                    data['coordcontig'].replace(sep,"").replace("\t","") if data['coordcontig']!=None else "",
                     sep.join(data['contig']),
                     data['start'],
                     data['aligned']
                     )
                 )
-        else:
+        
+        if path:
             f.write("\n")
             for sample in data['sample']:
                 f.write("P\t"+str(i)+"\t"+sample+"\t+\t"+str(node.end-node.begin)+"M\n")
@@ -400,7 +418,11 @@ def write_gml(G,T,outputfile="reference",hwm=1000):
         if d.has_key('aligned'):
             G.node[n]['aligned']=str(d['aligned'])
         if 'seq' not in G.node[n]:
-            G.node[n]['seq']=T[n.begin:n.end].upper()
+            if isinstance(n,Interval):
+                G.node[n]['seq']=T[n.begin:n.end].upper()
+            else:
+                G.node[n]['seq']=""
+
         G.node[n]['l']=len(G.node[n]['seq'])
     G=nx.relabel_nodes(G,mapping,copy=True)
     outputfiles=[]
@@ -448,6 +470,7 @@ def main():
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
+    parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
     #parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph by traversing up and down from a specific node.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
@@ -462,7 +485,7 @@ def main():
     parser_aln.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
-    parser_aln.add_argument("--vg", dest="vg", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by vg.")
+    parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
     parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align)
 
@@ -487,6 +510,9 @@ def main():
     #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
     #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
     parser_plot.set_defaults(func=plot)
+    
+    parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
+    parser_comp.set_defaults(func=comp)
 
     parser_convert.add_argument('graph', nargs=1, help='The gfa graph to convert to gml.')
     parser_convert.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
@@ -504,7 +530,6 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
-
 
 def align(args):
 
@@ -534,7 +559,7 @@ def align(args):
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
     else:
-        write_gfa(G,T,vg=args.vg, outputfile=args.output+'.gfa')
+        write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
     logging.info("Done.")
     
@@ -568,19 +593,22 @@ def align_genomes(args):
         else: #consider it to be a fasta file
             G.graph['samples'].append(os.path.basename(sample))
             for name,seq in fasta_reader(sample):
-                intv=idx.addsequence(seq)#.upper())
+                intv=idx.addsequence(seq.upper())
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 #schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),start=0,aligned=0)
     
+    if not nx.is_directed_acyclic_graph(G):
+        logging.error("*** Input is not a DAG! Experimental output...")
+    
     schemes.ts=t
     
     logging.info("Constructing index...")
     idx.construct()
     logging.info("Done.")
-    
+
     if len(args.inputfiles)>2:
         logging.info("Constructing multi-alignment...")
         idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
@@ -702,6 +730,7 @@ def call(args):
         logging.info("Writing variants.")
         c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
 
+
 def plot(args):
     from matplotlib import pyplot as plt
     
@@ -816,6 +845,16 @@ def plot(args):
         fn2=args.fastas[1][0:args.fastas[1].rfind('.')] if args.fastas[1].find('.')!=-1 else args.fastas[1]
         plt.savefig(fn1+"_"+fn2+".png")
 
+def comp(args):
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    t=IntervalTree()
+    read_gfa(args.graph[0],None,t,G,targetsample=None)
+    for node in G.node:
+        G.node[node]['seq']=rc(G.node[node]['seq'])
+    G.reverse(copy=False)
+    write_gfa(G,"",outputfile=args.graph[0].replace('.gfa','.rc.gfa'), nometa=True)
+
 def convert(args):
     if not args.graph[0].endswith(".gfa") or len(args.graph)!=1:
         logging.fatal("Specify a gfa file.")
@@ -824,14 +863,12 @@ def convert(args):
     G=nx.DiGraph()
     G.graph['samples']=[]
     t=IntervalTree()
-    idx=reveallib.index()
     
-    read_gfa(args.graph[0],idx,t,G,minsamples=args.minsamples,
+    read_gfa(args.graph[0],None,t,G,minsamples=args.minsamples,
                          maxsamples=args.maxsamples,
                          targetsample=args.targetsample)
     
-    T=idx.T 
-    graph=write_gml(G,T, hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
+    graph=write_gml(G,"", hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
     logging.info("GML graph written to: %s"%graph)
 
 def extract(args):

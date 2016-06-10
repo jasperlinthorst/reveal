@@ -16,7 +16,7 @@ extern int maxqsize,qsize,qstart,aw,nmums,err_flag,die;
 
 /* pops an index of the queue */
 RevealIndex* pop_index() {
-    //fprintf(stderr,"qsize=%d qstart=%d\n",qsize,qstart);
+    //fprintf(stderr,"qend=%d qstart=%d qsize=%d\n",qsize,qstart,qsize-qstart);
     //if(qsize > qstart) { FIFO
     if(qsize > 0) { //LIFO
         return index_queue[--qsize]; //LIFO
@@ -239,7 +239,7 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     mum->score=0;
     mum->n=0;
     int i=0,j=0,la,lb;
-    int *flag_so=calloc( index->nsamples,sizeof(int));
+    int *flag_so=calloc(index->nsamples, sizeof(int));
     int flag_maximal=0;
     int flag_unique=0;
     int flag_lcp;
@@ -370,6 +370,9 @@ PyObject * getmultimums(RevealIndex *index) {
     int *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
     int depth=0;
     int i,lb,i_lb,i_ub,i_lcp;
+    
+    //int minl=10;
+
     stack_lcp[0]=0;
     stack_lb[0]=0;
     stack_ub[0]=0;
@@ -384,20 +387,22 @@ PyObject * getmultimums(RevealIndex *index) {
             depth--;
             int n=(i_ub-i_lb)+1;
             
-            if (n<=main->nsamples){
-                if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                    int x;
-                    PyObject *sp=PyList_New(n);
-                    for (x=0;x<n;x++) {
-                        PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-                        PyList_SET_ITEM(sp, x, v);
+            //if (i_lcp>minl){
+                if (n<=main->nsamples){
+                    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                        int x;
+                        PyObject *sp=PyList_New(n);
+                        for (x=0;x<n;x++) {
+                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                            PyList_SET_ITEM(sp, x, v);
+                        }
+                        PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
+                        PyList_Append(multimums,multimum);
+                        Py_DECREF(multimum);
                     }
-                    PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
-                    PyList_Append(multimums,multimum);
-                    Py_DECREF(multimum);
                 }
-            }
-            
+            //}
+
             assert(depth>=0);
             lb = i_lb;
         }
@@ -476,8 +481,12 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
             if (D[i]==3){ //suffixes that have been matched
                 //fprintf(stderr,"MUM! %d\n",idx->SA[i]);
             } else{
-                assert(D[i]==0); //parallel paths
-                
+                if (D[i]!=4){
+                    assert(idx->T[idx->SA[i]]=='$'); //can only happen after first alignment step
+                    //fprintf(stderr,"D=%d i=%d n=%d\n",D[i],i,i_par->n);
+                    continue;
+                }
+
                 //if (ip>=i_par->n)
                 //    fprintf(stderr,"ip=%d n=%d\n",ip,i_par->n);
                 
@@ -611,6 +620,8 @@ void *aligner(void *arg) {
             //fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
             //fprintf(stderr,"samples=%d\n",idx->nsamples);
             //fprintf(stderr,"depth=%d\n",idx->depth);
+            
+            assert(idx->nsamples>0);
             
             RevealMultiMUM mmum;
             mmum.sp=(int *) malloc(idx->nsamples*sizeof(int));
@@ -760,6 +771,7 @@ void *aligner(void *arg) {
                 Py_DECREF(arglist);
             }
             
+            
             if (result==NULL){
                 fprintf(stderr,"***** Python callback raised exception, stopping all threads!\n");
                 err_flag=1;
@@ -787,7 +799,7 @@ void *aligner(void *arg) {
                 free(mmum.sp);
                 continue;                
             }
-            
+
             if (!PyArg_ParseTuple(result, "OOO", &leading_intervals, &trailing_intervals, &rest)){
                 fprintf(stderr,"Failed to parse result of call to graph_align, expecting a tuple with two lists!\n");
                 //no tuple returned by python call, apparently we're done...
@@ -801,50 +813,124 @@ void *aligner(void *arg) {
                 free(mmum.sp);
                 continue;
             }
-            
+
             uint8_t *D=calloc(idx->n,sizeof(uint8_t));
+            int *flag_so=calloc( ((RevealIndex *) idx->main)->nsamples,sizeof(int));
             
             int i,j,begin,end,trailingn=0,leadingn=0,parn=0;
-            int nintv_leading=0, nintv_trailing=0;//, nintv_par=0;
+            int nintv_leading=0, nintv_trailing=0, nintv_par=0;
+            int leadingsamples=0, trailingsamples=0, parsamples=0;
+            
+
             nintv_leading=PyList_Size(leading_intervals);
             for (i=0;i<nintv_leading;i++){
                 PyObject *tup;
                 tup=PyList_GetItem(leading_intervals,i);
                 PyArg_ParseTuple(tup,"ii",&begin,&end);
+
                 for (j=begin; j<end; j++){
-                    D[idx->SAi[j]]=1;
+                    D[idx->SAi[j]]=1; //leading
                     leadingn++;
                 }
+                
+                if (((RevealIndex *) idx->main)->nsamples > 2){
+                    if (flag_so[idx->SO[begin]]==0){
+                        flag_so[idx->SO[begin]]=1;
+                        leadingsamples++;
+                    }
+                } else {
+                    if (begin < idx->nsep[0] && flag_so[0]==0){
+                        flag_so[0]=1;
+                        leadingsamples++;
+                    }
+                    if (begin > idx->nsep[0] && flag_so[1]==0){
+                        flag_so[1]=1;
+                        leadingsamples++;
+                    }
+                }
             }
+            memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
+
             nintv_trailing=PyList_Size(trailing_intervals);
             for (i=0;i<nintv_trailing;i++){
                 PyObject *tup;
                 tup=PyList_GetItem(trailing_intervals,i);
                 PyArg_ParseTuple(tup,"ii",&begin,&end);
                 for (j=begin; j<end; j++){
-                    D[idx->SAi[j]]=2;
+                    D[idx->SAi[j]]=2; //trailing
                     trailingn++;
                 }
+                if (((RevealIndex *) idx->main)->nsamples > 2){
+                    if (flag_so[idx->SO[begin]]==0){
+                        flag_so[idx->SO[begin]]=1;
+                        trailingsamples++;
+                    }
+                } else {
+                    if (begin < idx->nsep[0] && flag_so[0]==0){
+                        flag_so[0]=1;
+                        trailingsamples++;
+                    }
+                    if (begin > idx->nsep[0] && flag_so[1]==0){
+                        flag_so[1]=1;
+                        trailingsamples++;
+                    }
+                }
+
             }
+            memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
             
-            for (i=0;i<mmum.n;i++){
-                for (j=mmum.sp[i];j<mmum.sp[i]+mmum.l;j++){
-                    D[idx->SAi[j]]=3;
+            nintv_par=PyList_Size(rest);
+            for (i=0;i<nintv_par;i++){
+                PyObject *tup;
+                tup=PyList_GetItem(rest,i);
+                PyArg_ParseTuple(tup,"ii",&begin,&end);
+                for (j=begin; j<end; j++){
+                    D[idx->SAi[j]]=4; //parallel paths
+                    parn++;
+                }
+
+                if (((RevealIndex *) idx->main)->nsamples > 2){
+                    if (flag_so[idx->SO[begin]]==0){
+                        flag_so[idx->SO[begin]]=1;
+                        parsamples++;
+                    }
+                } else {
+                    if (begin < idx->nsep[0] && flag_so[0]==0){
+                        flag_so[0]=1;
+                        parsamples++;
+                    }
+                    if (begin > idx->nsep[0] && flag_so[1]==0){
+                        flag_so[1]=1;
+                        parsamples++;
+                    }
                 }
             }
-            //fprintf(stderr,"Trailingn %d\n",trailingn);
-            //fprintf(stderr,"Leadingn %d\n",leadingn);
+
+            free(flag_so);
+
+            for (i=0;i<mmum.n;i++){
+                for (j=mmum.sp[i];j<mmum.sp[i]+mmum.l;j++){
+                    D[idx->SAi[j]]=3; //matching
+                }
+            }
+
+            //fprintf(stderr,"Trailingsamples %d\n",trailingsamples);
+            //fprintf(stderr,"Leadingsamples %d\n",leadingsamples);
+            //fprintf(stderr,"Parsamples %d\n",parsamples);
             //fprintf(stderr,"mmum l %d\n",mmum.l);
             //fprintf(stderr,"mmum n %d\n",mmum.n);
             //fprintf(stderr,"Index n %d\n",idx->n);
-            parn=idx->n-(trailingn+leadingn+(mmum.l*mmum.n));
-            //assert that parn equals length of all intervals in rest
-            //fprintf(stderr,"parn %d\n",parn);
 
+            //assert that parn equals length of all intervals in rest
+            //fprintf(stderr,"parn intervalsrest=%d %d %d\n",nintv_par, parn, idx->n-(trailingn+leadingn+(mmum.l*mmum.n)));
+            
+            //assert(parn==idx->n-(trailingn+leadingn+(mmum.l*mmum.n)));
+            
             int newdepth=idx->depth+1; //update depth in recursion tree
             
             assert(newdepth>0);
             
+            assert(leadingn>=0);
             Py_INCREF(leading_intervals);
             //fprintf(stderr,"Allocating leading (%zd nodes) %d\n", PyList_Size(leading_intervals), leadingn);
             RevealIndex *i_leading=newIndex();
@@ -856,10 +942,11 @@ void *aligner(void *arg) {
             i_leading->SAi=idx->SAi;
             i_leading->T=idx->T;
             i_leading->SO=idx->SO;
-            i_leading->nsamples=mmum.n;
+            i_leading->nsamples=leadingsamples;
             i_leading->nsep=idx->nsep;
             i_leading->main=idx->main;
             
+            assert(trailingn>=0);
             Py_INCREF(trailing_intervals);
             //fprintf(stderr,"Allocating trailing (%zd nodes) %d\n", PyList_Size(trailing_intervals), trailingn);
             RevealIndex *i_trailing=newIndex();
@@ -871,11 +958,11 @@ void *aligner(void *arg) {
             i_trailing->SAi=idx->SAi;
             i_trailing->T=idx->T;
             i_trailing->SO=idx->SO;
-            
-            i_trailing->nsamples=mmum.n;
+            i_trailing->nsamples=trailingsamples;
             i_trailing->nsep=idx->nsep;
             i_trailing->main=idx->main;
             
+            assert(parn>=0);
             Py_INCREF(rest);
             //fprintf(stderr,"Allocating parallel (%zd nodes) %d %d %d %d\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
             RevealIndex *i_parallel=newIndex();
@@ -887,13 +974,13 @@ void *aligner(void *arg) {
             i_parallel->SAi=idx->SAi;
             i_parallel->T=idx->T;
             i_parallel->SO=idx->SO;
-            i_parallel->nsamples=idx->nsamples;//-mmum.n;
+            i_parallel->nsamples=parsamples;//idx->nsamples-(mmum.n);
             i_parallel->nsep=idx->nsep;
             i_parallel->main=idx->main;
             
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
-
+            
 	    //fprintf(stderr,"splitting...\n");
             split(idx, D, i_leading, i_trailing, i_parallel);
 	    //fprintf(stderr,"done.\n");
@@ -901,15 +988,20 @@ void *aligner(void *arg) {
 	    //fprintf(stderr,"bubble sorting...\n");
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
             //fprintf(stderr,"done.\n");
-            
+
             free(D);
             free(mmum.sp);
+            if (idx->depth==0){
+                free(idx->SA);
+                free(idx->LCP);
+            }
             
             pthread_mutex_lock(&python); 
             gstate=PyGILState_Ensure();
             
             Py_DECREF(result);
             Py_DECREF(idx); //trigger gc for subindex
+            
 
             pthread_mutex_lock(&mutex);
             nmums++;

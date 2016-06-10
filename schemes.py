@@ -115,16 +115,21 @@ def multimumpicker(multimums,idx):
                     continue
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
-                    
-            ds=[start-ts[start].pop()[0] for start in sp]
-            ads=sum(ds)/n
-            spenalty=sum([abs(p-ads) for p in ds])
-            de=[ts[start].pop()[1]-(start+l) for start in sp]
-            ade=sum(de)/n
-            epenalty=sum([abs(p-ade) for p in de])
-            penalty=min([spenalty,epenalty])
-            score=(l*n)-penalty
             
+            if idx.nsamples==len(idx.nodes):
+                ds=[start-ts[start].pop()[0] for start in sp]
+                ads=sum(ds)/n
+                spenalty=sum([abs(p-ads) for p in ds])
+
+                de=[ts[start].pop()[1]-(start+l) for start in sp]
+                ade=sum(de)/n
+                epenalty=sum([abs(p-ade) for p in de])
+
+                penalty=min([spenalty,epenalty])
+                score=(l*n)-penalty
+            else:
+                score=minscore #in case of multi aligning graph (havent tried yet) we cant penalize gaps this easily..
+
             if score<minscore:
                 continue
             
@@ -132,7 +137,7 @@ def multimumpicker(multimums,idx):
         
         return bestmum
     except e:
-        print "ERROR",e
+        print "MULITMUMPICKER ERROR",e
         return None
 
 

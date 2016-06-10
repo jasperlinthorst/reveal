@@ -562,18 +562,22 @@ reveal_dealloc(RevealIndex *self)
         if (self->nsep!=NULL){
             free(self->nsep);
         }
+
+        Py_DECREF(self->nodes);
+        Py_DECREF(self->samples);
+
     } else {
         //fprintf(stderr,"dealloc SUB index!\n");
-    }
-    
-    Py_DECREF(self->nodes);
-    Py_DECREF(self->samples);
-    
-    if (self->SA!=NULL){
-        free(self->SA);
-    }
-    if (self->LCP!=NULL){
-        free(self->LCP);
+        
+        Py_DECREF(self->nodes);
+        Py_DECREF(self->samples);
+        
+        if (self->SA!=NULL){
+            free(self->SA);
+        }
+        if (self->LCP!=NULL){
+            free(self->LCP);
+        }
     }
 }
 
