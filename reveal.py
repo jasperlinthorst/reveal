@@ -206,6 +206,7 @@ def graphalign(l,index,n,score,sp):
             return
         
         if l<schemes.minlength or score<schemes.minscore:
+            print "rejected",l,score
             return
         
         mns=[]
@@ -311,8 +312,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 else:
                     if len(s)<3:
                         s.append("")
-                    graph.add_node(gfafile+'_'+nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,seq=s[2].upper(),aligned=0)
-                    mapping[nodeid]=gfafile+'_'+nodeid
+                    graph.add_node(nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=nodeid
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
                     ann['ORI']=[ann['ORI']]
@@ -323,14 +324,14 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 ann['CTG']=set(ann['CTG'])
                 
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
-                    mapping[nodeid]=gfafile+'_'+nodeid
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=nodeid
                 elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
-                    mapping[nodeid]=gfafile+'_'+nodeid
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=nodeid
                 elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
-                    graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
-                    mapping[nodeid]=gfafile+'_'+nodeid
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=nodeid
                 else:
                     if index!=None:
                         intv=index.addsequence(s[2].upper())
@@ -339,8 +340,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0)
                         mapping[nodeid]=intv
                     else:
-                        graph.add_node(gfafile+'_'+nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
-                        mapping[nodeid]=gfafile+'_'+nodeid
+                        graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                        mapping[nodeid]=nodeid
         
         #L      206     +       155     +       0M
         if line.startswith('L'):
@@ -472,6 +473,7 @@ def main():
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
     #parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph by traversing up and down from a specific node.")
+    parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -526,10 +528,198 @@ def main():
     #parser_subgraph.add_argument("-n", dest="nnodes", type=int, default=10, help="Number of nodes to traverse up and down.")
     #parser_subgraph.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     #parser_subgraph.set_defaults(func=subgraph)
-    
+
+    parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
+    parser_bubbles.set_defaults(func=bubbles)
+
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
+
+def bubbles(args):
+
+    if len(args.graph)<1:
+        logging.fatal("Specify a gfa file to extract bubbles.")
+        return
+
+    G=nx.DiGraph()
+    read_gfa(args.graph[0],None,"",G)
+    
+    #G.add_edge(1,2)
+    #G.add_edge(1,3)
+    #G.add_edge(2,3)
+    #G.add_edge(3,4)
+    #G.add_edge(4,8)
+    #G.add_edge(3,5)
+    #G.add_edge(5,6)
+    #G.add_edge(5,9)
+    #G.add_edge(9,10)
+    #G.add_edge(6,10)
+    #G.add_edge(10,7)
+    #G.add_edge(6,7)
+    #G.add_edge(7,8)
+    #G.add_edge(3,11)
+    #G.add_edge(11,12)
+    #G.add_edge(12,8)
+    #G.add_edge(8,13)
+    #G.add_edge(8,14)
+    #G.add_edge(13,14)
+    #G.add_edge(13,15)
+    #G.add_edge(15,14)
+    
+    #methods defined by paper
+    def entrance(G,v):
+        for c in G.successors(v): #lemma 3
+            if len(G.predecessors(c))==1:
+                return True
+        return False    
+    def exit(G,v):
+        for p in G.predecessors(v): #lemma 2
+            if len(G.successors(p))==1:
+                return True
+        return False
+    def insertentrance(candidates,v):
+        candidates.append((v,"entrance"))
+    def insertexit(candidates,v):
+        candidates.append((v,"exit"))
+    def head(candidates):
+        return candidates[0]
+    def tail(candidates):
+        return candidates[-1]
+    def deletetail(candidates):
+        del candidates[-1]
+    def nextc(candidates,v):
+        #for candidate in candidates[:candidates.index((v,"entrance"))][::-1]:
+        for candidate in candidates[candidates.index((v,"entrance"))+1:]:
+            if candidate[1]=="entrance":
+                return candidate
+    
+    def calcoutarrays(ordD,G):
+        outparent=[None]*(len(ordD)+1)
+        for i,c in enumerate(ordD):
+            tmp=[]
+            for p in G.predecessors(c):
+                tmp.append(ordD[p])
+            if len(tmp)>0:
+                outparent[ordD[c]]=min(tmp)
+        outchild=[None]*(len(ordD)+1)
+        for i,c in enumerate(ordD):
+            tmp=[]
+            for p in G.successors(c):
+                tmp.append(ordD[p])
+            if len(tmp)>0:
+                outchild[ordD[c]]=max(tmp)
+        return outparent,outchild
+
+    def superbubble(G):
+        candidates=[]
+        prevEnt=None
+        alternativeEntrance={}
+        previousEntrance={}
+        
+        ordD={}
+        for i,v in enumerate(nx.topological_sort(G)):
+            ordD[v]=i+1
+        
+        #fix ordD for testing
+        #ordD[1]=1
+        #ordD[2]=2
+        #ordD[3]=3
+        #ordD[4]=11
+        #ordD[5]=6
+        #ordD[6]=8
+        #ordD[7]=10
+        #ordD[8]=12
+        #ordD[9]=7
+        #ordD[10]=9
+        #ordD[11]=4
+        #ordD[12]=5
+        #ordD[13]=13
+        #ordD[14]=15
+        #ordD[15]=14
+        outparent,outchild=calcoutarrays(ordD,G)
+        for v in nx.topological_sort(G):
+            alternativeEntrance[v]=None
+            previousEntrance[v]=prevEnt
+            if exit(G,v):
+                insertexit(candidates,v)
+            if entrance(G,v):
+                insertentrance(candidates,v)
+                prevEnt=v
+        
+        while len(candidates)!=0: #candidates!=[]
+            if tail(candidates)[1]=='entrance':
+                deletetail(candidates)
+            else:
+                reportsuperbubble(head(candidates),tail(candidates),candidates,previousEntrance,alternativeEntrance,G,ordD, outchild, outparent)
+    
+    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,outchild,outparent):
+        if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
+            deletetail(candidates)
+            return
+        s=previousEntrance[vexit[0]]
+        
+        while ordD[s] >= ordD[vstart[0]]:
+            valid = validatesuperbubble(s, vexit[0], ordD, outchild, outparent, previousEntrance, G)
+            if valid==s or valid==alternativeEntrance[s] or valid==-1:
+                break
+            alternativeEntrance[s] = valid
+            s = valid
+        
+        deletetail(candidates)
+        if (valid == s):
+            print "supbub",(s, vexit[0])
+            while (tail(candidates)[0] is not s):
+                if tail(candidates)[1]=='exit':
+                    if nextc(candidates,s)!=None:
+                        reportsuperbubble(nextc(candidates,s), tail(candidates), candidates, previousEntrance, alternativeEntrance, G, ordD, outchild, outparent)
+                    else:
+                        deletetail(candidates)
+                else:
+                    deletetail(candidates)
+        return
+    
+    def vertex(ordD, i):
+        for v in ordD:
+            if ordD[v]==i:
+                return v
+    
+    def validatesuperbubble(startVertex, endVertex, ordD, outchild, outparent, previousEntrance, G):
+        start=ordD[startVertex]
+        end=ordD[endVertex]
+        #print "outparent",outparent        
+        #print "outchild",outchild
+        #print start,end
+        
+        if start+1!=end:
+            #print outchild[start:end]
+            oc=max([v for v in outchild[start:end] if v!=None])
+            #print outparent[start+1:end+1]
+            op=min([v for v in outparent[start+1:end+1] if v!=None])
+        else:
+            oc=outchild[start]
+            op=outparent[end]
+
+        #print startVertex, endVertex,"start=",start,"end=",end,"oc=",oc,"op=",op
+        if oc!=end:
+            #print "invalid 1",oc,end
+            return -1
+        if op==start:
+            #print "valid 2",oc,op
+            return startVertex
+        elif entrance(G, vertex(ordD,op)):
+            #print "valid 3"
+            return vertex(ordD,op)
+        else:
+            #print "valid 4"
+            return previousEntrance[vertex(ordD,op)]
+        
+        #print "valid"
+        return startVertex
+    
+    
+
+    superbubble(G)
 
 def align(args):
 
