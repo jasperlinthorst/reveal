@@ -13,7 +13,7 @@ import sys
 import time
 
 
-def fasta_reader(fn,truncN=True):
+def fasta_reader(fn,truncN=False):
     seq=""
     with open(fn,'r') as ff:
         for line in ff:
@@ -40,7 +40,7 @@ def fasta_reader(fn,truncN=True):
             yield name,seq
 
 def rc(seq):
-    d = d = {'A':'T','C':'G','G':'C','T':'A','N':'N','a':'t','c':'g',\
+    d = {'A':'T','C':'G','G':'C','T':'A','N':'N','a':'t','c':'g',\
         'g':'c','t':'a','n':'n','Y':'R','R':'Y','K':'M','M':'K',\
         'S':'S','W':'W','B':'V','V':'B','D':'H','H':'D','N':'N',\
         'X':'X','-':'-'}
