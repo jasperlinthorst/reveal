@@ -543,186 +543,148 @@ def bubbles(args):
         return
 
     G=nx.DiGraph()
-    read_gfa(args.graph[0],None,"",G)
+    #read_gfa(args.graph[0],None,"",G)
     
-    #G.add_edge(1,2)
-    #G.add_edge(1,3)
-    #G.add_edge(2,3)
-    #G.add_edge(3,4)
-    #G.add_edge(4,8)
-    #G.add_edge(3,5)
-    #G.add_edge(5,6)
-    #G.add_edge(5,9)
-    #G.add_edge(9,10)
-    #G.add_edge(6,10)
-    #G.add_edge(10,7)
-    #G.add_edge(6,7)
-    #G.add_edge(7,8)
-    #G.add_edge(3,11)
-    #G.add_edge(11,12)
-    #G.add_edge(12,8)
-    #G.add_edge(8,13)
-    #G.add_edge(8,14)
-    #G.add_edge(13,14)
-    #G.add_edge(13,15)
-    #G.add_edge(15,14)
+    G.add_edge(1,2)
+    G.add_edge(1,3)
+    G.add_edge(2,3)
+    G.add_edge(3,4)
+    G.add_edge(4,8)
+    G.add_edge(3,5)
+    G.add_edge(5,6)
+    G.add_edge(5,9)
+    G.add_edge(9,10)
+    G.add_edge(6,10)
+    G.add_edge(10,7)
+    G.add_edge(6,7)
+    G.add_edge(7,8)
+    G.add_edge(3,11)
+    G.add_edge(11,12)
+    G.add_edge(12,8)
+    G.add_edge(8,13)
+    G.add_edge(8,14)
+    G.add_edge(13,14)
+    G.add_edge(13,15)
+    G.add_edge(15,14)
     
-    #methods defined by paper
     def entrance(G,v):
-        for c in G.successors(v): #lemma 3
+        for c in G.successors(v):
             if len(G.predecessors(c))==1:
                 return True
-        return False    
+        return False 
+
     def exit(G,v):
-        for p in G.predecessors(v): #lemma 2
+        for p in G.predecessors(v):
             if len(G.successors(p))==1:
                 return True
         return False
-    def insertentrance(candidates,v):
-        candidates.append((v,"entrance"))
-    def insertexit(candidates,v):
-        candidates.append((v,"exit"))
-    def head(candidates):
-        return candidates[0]
-    def tail(candidates):
-        return candidates[-1]
-    def deletetail(candidates):
-        del candidates[-1]
-    def nextc(candidates,v):
-        #for candidate in candidates[:candidates.index((v,"entrance"))][::-1]:
-        for candidate in candidates[candidates.index((v,"entrance"))+1:]:
-            if candidate[1]=="entrance":
+    
+    def nextentrance(candidates,v):
+        #TODO: rewrite this
+        for candidate in candidates[candidates.index((v,0))+1:]:
+            if candidate[1]==0:
                 return candidate
     
-    def calcoutarrays(ordD,G):
-        outparent=[None]*(len(ordD)+1)
+    def superbubble(G):
+        candidates=[]
+        sspairs=[]
+        #prevEnt=None
+        prevEnti=None
+        alternativeEntrance={}
+        previousEntrance={}
+        ordD={}
+        ordD_=nx.topological_sort(G)
+        
+        #construct candidates array
+        for i,v in enumerate(ordD_):
+            ordD[v]=i
+            alternativeEntrance[v]=None
+            previousEntrance[v]=prevEnti
+            if exit(G,v):
+                candidates.append((v,1))
+            if entrance(G,v):
+                candidates.append((v,0))
+                #prevEnt=v
+                prevEnti=i
+        
+        #construct outparent
+        outparent=[None]*(len(ordD))
         for i,c in enumerate(ordD):
             tmp=[]
             for p in G.predecessors(c):
                 tmp.append(ordD[p])
             if len(tmp)>0:
                 outparent[ordD[c]]=min(tmp)
-        outchild=[None]*(len(ordD)+1)
+        
+        #construct outchild
+        outchild=[None]*(len(ordD))
         for i,c in enumerate(ordD):
             tmp=[]
             for p in G.successors(c):
                 tmp.append(ordD[p])
             if len(tmp)>0:
                 outchild[ordD[c]]=max(tmp)
-        return outparent,outchild
-
-    def superbubble(G):
-        candidates=[]
-        prevEnt=None
-        alternativeEntrance={}
-        previousEntrance={}
         
-        ordD={}
-        for i,v in enumerate(nx.topological_sort(G)):
-            ordD[v]=i+1
-        
-        #fix ordD for testing
-        #ordD[1]=1
-        #ordD[2]=2
-        #ordD[3]=3
-        #ordD[4]=11
-        #ordD[5]=6
-        #ordD[6]=8
-        #ordD[7]=10
-        #ordD[8]=12
-        #ordD[9]=7
-        #ordD[10]=9
-        #ordD[11]=4
-        #ordD[12]=5
-        #ordD[13]=13
-        #ordD[14]=15
-        #ordD[15]=14
-        outparent,outchild=calcoutarrays(ordD,G)
-        for v in nx.topological_sort(G):
-            alternativeEntrance[v]=None
-            previousEntrance[v]=prevEnt
-            if exit(G,v):
-                insertexit(candidates,v)
-            if entrance(G,v):
-                insertentrance(candidates,v)
-                prevEnt=v
-        
-        while len(candidates)!=0: #candidates!=[]
-            if tail(candidates)[1]=='entrance':
-                deletetail(candidates)
+        #loop
+        while len(candidates)!=0:
+            if candidates[-1][1]==0:
+                del candidates[-1]
             else:
-                reportsuperbubble(head(candidates),tail(candidates),candidates,previousEntrance,alternativeEntrance,G,ordD, outchild, outparent)
-    
-    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,outchild,outparent):
-        if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
-            deletetail(candidates)
-            return
-        s=previousEntrance[vexit[0]]
+                reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs)
         
+        print sspairs
+        return sspairs
+    
+    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs):
+        if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
+            del candidates[-1]
+            return
+        si=previousEntrance[vexit[0]]
+        s=ordD_[si]
         while ordD[s] >= ordD[vstart[0]]:
-            valid = validatesuperbubble(s, vexit[0], ordD, outchild, outparent, previousEntrance, G)
+            valid = validatesuperbubble(s, vexit[0], ordD, ordD_, outchild, outparent, previousEntrance, G)
             if valid==s or valid==alternativeEntrance[s] or valid==-1:
                 break
             alternativeEntrance[s] = valid
             s = valid
-        
-        deletetail(candidates)
+
+        del candidates[-1]
         if (valid == s):
-            print "supbub",(s, vexit[0])
-            while (tail(candidates)[0] is not s):
-                if tail(candidates)[1]=='exit':
-                    if nextc(candidates,s)!=None:
-                        reportsuperbubble(nextc(candidates,s), tail(candidates), candidates, previousEntrance, alternativeEntrance, G, ordD, outchild, outparent)
+            sspairs.append((s, vexit[0]))
+            while (candidates[-1][0] is not s):
+                if candidates[-1][1]==1:
+                    
+                    ne=nextentrance(candidates,s)
+
+                    if ne!=None:
+                        reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs)
                     else:
-                        deletetail(candidates)
+                        del candidates[-1]
                 else:
-                    deletetail(candidates)
-        return
+                    del candidates[-1]
     
-    def vertex(ordD, i):
-        for v in ordD:
-            if ordD[v]==i:
-                return v
-    
-    def validatesuperbubble(startVertex, endVertex, ordD, outchild, outparent, previousEntrance, G):
+    def validatesuperbubble(startVertex, endVertex, ordD, ordD_, outchild, outparent, previousEntrance, G):
         start=ordD[startVertex]
         end=ordD[endVertex]
-        #print "outparent",outparent        
-        #print "outchild",outchild
-        #print start,end
-        
         if start+1!=end:
-            #print outchild[start:end]
-            oc=max([v for v in outchild[start:end] if v!=None])
-            #print outparent[start+1:end+1]
-            op=min([v for v in outparent[start+1:end+1] if v!=None])
+            oc=max(outchild[start:end])
+            op=min(outparent[start+1:end+1])
         else:
             oc=outchild[start]
             op=outparent[end]
-
-        #print startVertex, endVertex,"start=",start,"end=",end,"oc=",oc,"op=",op
         if oc!=end:
-            #print "invalid 1",oc,end
             return -1
         if op==start:
-            #print "valid 2",oc,op
             return startVertex
-        elif entrance(G, vertex(ordD,op)):
-            #print "valid 3"
-            return vertex(ordD,op)
+        elif entrance(G, ordD_[op]):
+            return ordD_[op]
         else:
-            #print "valid 4"
-            return previousEntrance[vertex(ordD,op)]
-        
-        #print "valid"
+            return ordD_[previousEntrance[ordD_[op]]]
         return startVertex
     
-    
-
     superbubble(G)
 
 def align(args):
-
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
@@ -754,7 +716,6 @@ def align(args):
     logging.info("Done.")
     
     logging.info("Alignment graph written to: %s"%graph)
-
 
 def align_genomes(args):
     #globale variables to simplify callbacks from c extension
@@ -920,16 +881,16 @@ def call(args):
         logging.info("Writing variants.")
         c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
 
-
 def plot(args):
     from matplotlib import pyplot as plt
     
+    print "indexing"
     if len(args.fastas)==2:    
         #get mmems for forward orientation
         idx=reveallib.index()
         for sample in args.fastas:
             idx.addsample(sample)
-            for name,seq in fasta_reader(sample):
+            for name,seq in fasta_reader(sample,truncN=False):
                 intv=idx.addsequence(seq.upper())
                 break #expect only one sequence per fasta for now
         idx.construct()
@@ -940,7 +901,7 @@ def plot(args):
         idx=reveallib.index()
         sample=args.fastas[0]
         idx.addsample(sample)
-        for name,seq in fasta_reader(sample):
+        for name,seq in fasta_reader(sample,truncN=False):
             horzgaps=[i for i,c in enumerate(seq) if c=='N']
             intv=idx.addsequence(seq.upper())
             break #expect only one sequence per fasta for now
@@ -948,7 +909,7 @@ def plot(args):
         sample=args.fastas[1]
         idx.addsample(sample)
         ls=0
-        for name,seq in fasta_reader(sample):
+        for name,seq in fasta_reader(sample,truncN=False):
             vertgaps=[i for i,c in enumerate(seq) if c=='N']
             ls+=len(seq)
             intv=idx.addsequence(rc(seq.upper()))
@@ -961,7 +922,7 @@ def plot(args):
         idx=reveallib.index()
         sample=args.fastas[0]
         idx.addsample(sample)
-        for name,seq in fasta_reader(sample):
+        for name,seq in fasta_reader(sample, truncN=False):
             horzgaps=[i for i,c in enumerate(seq) if c=='N']
             intv=idx.addsequence(seq.upper())
             break #expect only one sequence per fasta for now
@@ -969,7 +930,7 @@ def plot(args):
         sample=args.fastas[0]+"_rc"
         idx.addsample(sample)
         ls=0
-        for name,seq in fasta_reader(sample):
+        for name,seq in fasta_reader(sample, truncN=False):
             vertgaps=[i for i,c in enumerate(seq) if c=='N']
             ls+=len(seq)
             intv=idx.addsequence(rc(seq.upper()))
@@ -979,11 +940,12 @@ def plot(args):
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
-
+    
     print len(mmems),"max exact matches."
     
     pos=None
     
+    print "plotting mums"
     for mem in mmems:
         sps=sorted(mem[1:3])
         l=mem[0]
@@ -1016,13 +978,26 @@ def plot(args):
             assert(mem[3]==1)
             plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
     
+    lgap=0
+    g=0
     for gap in horzgaps:
+        if lgap==gap-1:
+            lgap=gap
+            continue
         plt.axvline(gap)
-
-    for gap in vertgaps:
-        plt.axhline(gap)
+        g+=1
+        lgap=gap
     
-    #plt.savefig(str(pos)+'.png')
+    g=0
+    lgap=0
+    for gap in vertgaps:
+        if lgap==gap-1:
+            lgap=gap
+            continue
+        plt.axhline(gap)
+        g+=1
+        lgap=gap
+
     plt.title(args.fastas[0]+" vs. "+args.fastas[1])
     plt.xlabel(args.fastas[0])
     plt.ylabel(args.fastas[1])
