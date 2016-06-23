@@ -405,7 +405,7 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
     
     f.close()
 
-def write_gml(G,T,outputfile="reference",hwm=1000):
+def write_gml(G,T,outputfile="reference",hwm=4000):
     mapping={}
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
@@ -472,7 +472,7 @@ def main():
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
-    #parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph by traversing up and down from a specific node.")
+    parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
@@ -523,11 +523,10 @@ def main():
     parser_convert.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_convert.set_defaults(func=convert)
 
-    #parser_subgraph.add_argument('graph', nargs=1, help='The gfa graph from which to extract subgraph.')
-    #parser_subgraph.add_argument('position', nargs=1, help='The reference position from where you want to start traversing.')
-    #parser_subgraph.add_argument("-n", dest="nnodes", type=int, default=10, help="Number of nodes to traverse up and down.")
-    #parser_subgraph.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
-    #parser_subgraph.set_defaults(func=subgraph)
+    parser_subgraph.add_argument('inputfiles', nargs='*', help='The gfa graph followed by node ids that make up the subgraph.')
+    parser_subgraph.add_argument("-o", dest="outfile", type=str, default="~tmp", help="Prefix of the file to which subgraph will be written.")
+    parser_subgraph.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead of gfa.")
+    parser_subgraph.set_defaults(func=subgraph)
 
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_bubbles.set_defaults(func=bubbles)
@@ -543,29 +542,29 @@ def bubbles(args):
         return
 
     G=nx.DiGraph()
-    #read_gfa(args.graph[0],None,"",G)
+    read_gfa(args.graph[0],None,"",G)
     
-    G.add_edge(1,2)
-    G.add_edge(1,3)
-    G.add_edge(2,3)
-    G.add_edge(3,4)
-    G.add_edge(4,8)
-    G.add_edge(3,5)
-    G.add_edge(5,6)
-    G.add_edge(5,9)
-    G.add_edge(9,10)
-    G.add_edge(6,10)
-    G.add_edge(10,7)
-    G.add_edge(6,7)
-    G.add_edge(7,8)
-    G.add_edge(3,11)
-    G.add_edge(11,12)
-    G.add_edge(12,8)
-    G.add_edge(8,13)
-    G.add_edge(8,14)
-    G.add_edge(13,14)
-    G.add_edge(13,15)
-    G.add_edge(15,14)
+    #G.add_edge(1,2)
+    #G.add_edge(1,3)
+    #G.add_edge(2,3)
+    #G.add_edge(3,4)
+    #G.add_edge(4,8)
+    #G.add_edge(3,5)
+    #G.add_edge(5,6)
+    #G.add_edge(5,9)
+    #G.add_edge(9,10)
+    #G.add_edge(6,10)
+    #G.add_edge(10,7)
+    #G.add_edge(6,7)
+    #G.add_edge(7,8)
+    #G.add_edge(3,11)
+    #G.add_edge(11,12)
+    #G.add_edge(12,8)
+    #G.add_edge(8,13)
+    #G.add_edge(8,14)
+    #G.add_edge(13,14)
+    #G.add_edge(13,15)
+    #G.add_edge(15,14)
     
     def entrance(G,v):
         for c in G.successors(v):
@@ -632,8 +631,7 @@ def bubbles(args):
             else:
                 reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs)
         
-        print sspairs
-        return sspairs
+        return ordD,ordD_,sspairs
     
     def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs):
         if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
@@ -653,9 +651,7 @@ def bubbles(args):
             sspairs.append((s, vexit[0]))
             while (candidates[-1][0] is not s):
                 if candidates[-1][1]==1:
-                    
                     ne=nextentrance(candidates,s)
-
                     if ne!=None:
                         reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs)
                     else:
@@ -678,11 +674,92 @@ def bubbles(args):
             return startVertex
         elif entrance(G, ordD_[op]):
             return ordD_[op]
+        elif previousEntrance[ordD_[op]]==None: #
+            return -1
         else:
+            #print ordD_[op]
+            #print previousEntrance[ordD_[op]]
             return ordD_[previousEntrance[ordD_[op]]]
         return startVertex
     
-    superbubble(G)
+    ordD,ordD_,sspairs=superbubble(G)
+    
+    gori=sorted(G.graph['samples'])
+    
+    sg=set()
+    for pair in sspairs:
+        size=(ordD[pair[1]]-ordD[pair[0]])-1
+        bubblenodes=ordD_[ordD[pair[0]]:ordD[pair[1]]+1]
+
+        source=G.node[pair[0]]['sample']
+        sink=G.node[pair[1]]['sample']
+        
+        #TODO: supbub algorithm detects invalid bubbles; filter them out here
+        if source!=sink:
+            continue
+        
+        #determine genotypes...
+        gt=G.successors(pair[0])
+        gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
+        
+        if len(gt)<size:
+            #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
+            genotypes=['N']*len(gt)
+            calls={}
+            for i,node in enumerate(gt):
+                n=G.node[node]
+                for sample in n['sample']:
+                    calls[sample]=i
+        else:
+            genotypes=[None]*len(gt)
+            calls={}
+            for i,node in enumerate(gt):
+                n=G.node[node]
+                if node==pair[1]: #should always be last of the iteration
+                    genotypes[i]="-"
+                    for sample in source: #all thats left..
+                        calls[sample]=i #TODO: need sample annotations on edges to properly make this call! For now, use this... works in case of monoploids
+                else:
+                    genotypes[i]=n['seq']
+                    for sample in n['sample']:
+                        calls[sample]=i
+                        source.discard(sample)
+         
+        sys.stdout.write("%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),",".join(genotypes)))
+            
+        for sample in gori:
+            if sample in calls:
+                sys.stdout.write("\t%s"%calls[sample])
+            else:
+                sys.stdout.write("\t-")
+        sys.stdout.write("\n")
+        
+            #    for ori in node['ORI']:
+            #        calls[ori]=i
+
+        #    for v in ordD_[ordD[pair[0]]:ordD[pair[1]]+1]:
+        #        sg.add(v)
+    
+    #bubbles=G.subgraph(sg)
+    #write_gml(bubbles,"",outputfile="complex_bubbles")
+
+def subgraph(args):
+    if len(args.inputfiles)<=1:
+        logging.fatal("Specify 1 gfa file followed by node ids for which subgraph is to be extracted.")
+        return
+    if not args.inputfiles[0].endswith('.gfa'):
+        logging.fatal("Specify gfa file as first argument of subgraph subcommand.")
+        return
+    G=nx.DiGraph()
+    read_gfa(args.inputfiles[0],None,"",G)
+    nodes=set()
+    for node in args.inputfiles[1:]:
+        nodes.add(node)
+    sg=G.subgraph(nodes)
+    if args.gml:
+        write_gml(sg,"",outputfile=args.outfile)
+    else:
+        write_gfa(sg,"",outputfile=args.outfile+".gfa")
 
 def align(args):
     if len(args.inputfiles)<=1:
