@@ -206,7 +206,7 @@ def graphalign(l,index,n,score,sp):
             return
         
         if l<schemes.minlength or score<schemes.minscore:
-            print "rejected",l,score
+            #print "rejected",l,score
             return
         
         mns=[]
@@ -229,8 +229,8 @@ def graphalign(l,index,n,score,sp):
         mn=mergenodes(mns)
         intervals=segmentgraph(mn,nodes)
         return intervals
-    except:
-        print "ERROR"
+    except Exception as e:
+        print "Exception in graphalign",type(e),str(e)
         return None
 
 def prune_nodes(G,T):
@@ -684,7 +684,10 @@ def bubbles(args):
     
     ordD,ordD_,sspairs=superbubble(G)
     
-    gori=sorted(G.graph['samples'])
+    if 'samples' in G.graph:
+        gori=sorted(G.graph['samples'])
+    else:
+        gori=[]
     
     sg=set()
     for pair in sspairs:
@@ -696,6 +699,7 @@ def bubbles(args):
         
         #TODO: supbub algorithm detects invalid bubbles; filter them out here
         if source!=sink:
+            #print "ERROR, skipping invalid bubble"
             continue
         
         #determine genotypes...
@@ -722,26 +726,35 @@ def bubbles(args):
                 else:
                     genotypes[i]=n['seq']
                     for sample in n['sample']:
-                        calls[sample]=i
-                        source.discard(sample)
+                        if sample in calls:
+                            print "WARNING, multiple paths (diploid variant?), report only one allele..."
+                        else:
+                            calls[sample]=i
+        
+        d=G.node[pair[0]]
+        if 'coordcontig' in d:
+            crdctg=d['coordcontig']
+        else:
+            crdctg='N/A'
+        
+        if 'coordsample' in d:
+            crdsmpl=d['coordsample']
+        else:
+            crdsmpl='N/A'
+        
+        if 'start' in d:
+            pos=d['start']+len(d['seq'])+1
+        else:
+            pos='N/A'
+        
+        sys.stdout.write("%s\t%s\t%s\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),crdsmpl,crdctg,pos,",".join(genotypes)))
          
-        sys.stdout.write("%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),",".join(genotypes)))
-            
         for sample in gori:
             if sample in calls:
                 sys.stdout.write("\t%s"%calls[sample])
             else:
                 sys.stdout.write("\t-")
         sys.stdout.write("\n")
-        
-            #    for ori in node['ORI']:
-            #        calls[ori]=i
-
-        #    for v in ordD_[ordD[pair[0]]:ordD[pair[1]]+1]:
-        #        sg.add(v)
-    
-    #bubbles=G.subgraph(sg)
-    #write_gml(bubbles,"",outputfile="complex_bubbles")
 
 def subgraph(args):
     if len(args.inputfiles)<=1:
@@ -760,6 +773,44 @@ def subgraph(args):
         write_gml(sg,"",outputfile=args.outfile)
     else:
         write_gfa(sg,"",outputfile=args.outfile+".gfa")
+
+def align_seq(s1,s2,minlength=1,minscore=0):
+    global t,G,reference,o
+
+    t=IntervalTree()
+    idx=reveallib.index()
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    reference=None
+    o=0
+    
+    idx.addsample("s1")
+    intv=idx.addsequence(s1.upper())
+    Intv=Interval(intv[0],intv[1])
+    t.add(Intv)
+    G.add_node(Intv,sample={"s1"},contig={"s1"},coordsample="s1",coordcontig="s1",start=0,aligned=0)
+
+    idx.addsample("s2")
+    intv=idx.addsequence(s2.upper())
+    Intv=Interval(intv[0],intv[1])
+    t.add(Intv)
+    G.add_node(Intv,sample={"s2"},contig={"s2"},coordsample="s2",coordcontig="s2",start=0,aligned=0)
+    
+    schemes.ts=t
+    schemes.minlength=minlength
+    schemes.minscore=minscore
+
+    idx.construct()
+    
+    idx.align(None,graphalign)
+    
+    alignedbases=0
+    totbases=min([idx.n-idx.nsep[0],idx.nsep[0]])
+    for node,data in G.nodes(data=True):
+        if data['aligned']!=0:
+            alignedbases+=(node.end-node.begin)
+    
+    return alignedbases/float(totbases)
 
 def align(args):
     if len(args.inputfiles)<=1:
@@ -961,7 +1012,6 @@ def call(args):
 def plot(args):
     from matplotlib import pyplot as plt
     
-    print "indexing"
     if len(args.fastas)==2:    
         #get mmems for forward orientation
         idx=reveallib.index()
@@ -1022,7 +1072,6 @@ def plot(args):
     
     pos=None
     
-    print "plotting mums"
     for mem in mmems:
         sps=sorted(mem[1:3])
         l=mem[0]
