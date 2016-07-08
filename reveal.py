@@ -192,12 +192,12 @@ def segmentgraph(node,nodes):
     rest = nodes - (leading | trailing)
     return list(leading), list(trailing), list(rest)
 
-def graphalign(l,index,n,score,sp):
+def graphalign(l,index,n,score,sp,penalty):
     try:
         nodes=index.nodes
         global o
         
-        #print "PICKED MUM",l,n,score,sp
+        #print "PICKED MUM",l,n,score
        
         if len(nodes)==0:
             return
@@ -205,10 +205,23 @@ def graphalign(l,index,n,score,sp):
         if l==0:
             return
         
-        if l<schemes.minlength or score<schemes.minscore:
-            #print "rejected",l,score
-            return
+        #allow matches that are shorter than minlength, but have a positive score and contain more than 70% of the alignable segment
         
+        if score<schemes.minscore:
+            return
+
+        if l<schemes.minlength:
+            if l*n < 0.5*index.n:
+                return
+        
+        #if l<schemes.minlength or score<schemes.minscore:
+            #print "rejected",l,score
+        #    return
+        
+        #if penalty>10:
+        #    print "Accepted MUM",n,l,penalty,score,sp
+        
+        assert(score==(l*n)-penalty)
         mns=[]
         topop=[]
         for i,pos in enumerate(sp):
@@ -467,7 +480,6 @@ def main():
     
     subparsers = parser.add_subparsers()
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
-    parser_call = subparsers.add_parser('call',prog="reveal call", description="Extract variants from a graph.")
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
@@ -491,16 +503,6 @@ def main():
     parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align)
 
-    parser_call.add_argument('graph', nargs=1, help='A graph in gfa format from which variants should be extracted.')    
-    parser_call.add_argument("--minlen", dest="minlen", type=int, default=1, help="Output variants in a gfa graph that are larger or equal to this size (default=1).")
-    parser_call.add_argument("--maxlen", dest="maxlen", type=int, default=1000, help="Output variants in a gfa graph that are smaller or equal to this size (to limit memory consumption for nw-alignments for inversions) (default=1000).")
-    parser_call.add_argument("--snps", dest="snps", action="store_true", default=False, help="Output snps in a gfa graph.")
-    parser_call.add_argument("--indels", dest="indels", action="store_true", default=False, help="Output indels in a gfa graph.")
-    parser_call.add_argument("--inv", dest="inv", action="store_true", default=False, help="Output inversions in a gfa graph.")
-    parser_call.add_argument("--multi", dest="multi", action="store_true", default=False, help="Output variants with multiple alleles in a gfa graph.")
-    parser_call.add_argument("--all", dest="allvar", action="store_true", default=False, help="Output all variants in a gfa graph.")
-    parser_call.set_defaults(func=call)
-    
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
     parser_extract.add_argument('samples', nargs='*', help='Name of the sample to be extracted from the graph.')
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
@@ -717,11 +719,12 @@ def bubbles(args):
         else:
             genotypes=[None]*len(gt)
             calls={}
+            tmpsource=source.copy()
             for i,node in enumerate(gt):
                 n=G.node[node]
                 if node==pair[1]: #should always be last of the iteration
                     genotypes[i]="-"
-                    for sample in source: #all thats left..
+                    for sample in tmpsource: #all thats left..
                         calls[sample]=i #TODO: need sample annotations on edges to properly make this call! For now, use this... works in case of monoploids
                 else:
                     genotypes[i]=n['seq']
@@ -730,6 +733,7 @@ def bubbles(args):
                             print "WARNING, multiple paths (diploid variant?), report only one allele..."
                         else:
                             calls[sample]=i
+                            tmpsource.discard(sample)
         
         d=G.node[pair[0]]
         if 'coordcontig' in d:
@@ -999,15 +1003,6 @@ def align_contigs(args):
     G=nx.relabel_nodes(G,mapping, copy=True)
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%(((alignedbases*2)/float(totbases))*100,alignedbases,totbases))
     return G,idx
-
-#extract variants from gfa graphs
-def call(args):
-    if args.graph[0].endswith(".gfa"):
-        import caller
-        logging.info("Parsing GFA file.")
-        c=caller.Caller(args.graph[0],logger=logging)
-        logging.info("Writing variants.")
-        c.call(minlength=args.minlen,maxlength=args.maxlen,allvar=args.allvar,inversions=args.inv,indels=args.indels,snps=args.snps,multi=args.multi)
 
 def plot(args):
     from matplotlib import pyplot as plt

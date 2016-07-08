@@ -37,6 +37,7 @@ typedef struct
     int n;   //number of samples in which the exact match occurs
     int u;   //whether the match is unique (1) or not (0)
     int score;
+    int penalty;
 } RevealMultiMUM;
 
 int getbestmum(RevealIndex *index, RevealMultiMUM *mum);

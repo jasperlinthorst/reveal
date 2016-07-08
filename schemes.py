@@ -129,12 +129,12 @@ def multimumpicker(multimums,idx):
                 score=(l*n)-penalty
             else:
                 score=minscore #in case of multi aligning graph (havent tried yet) we cant penalize gaps this easily..
-
+            
             if score<minscore:
                 continue
             
-            bestmum=(l,idx,n,score,sp)
-        
+            bestmum=(l,idx,n,score,sp,penalty)
+            
         return bestmum
     except e:
         print "MULITMUMPICKER ERROR",e

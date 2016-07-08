@@ -174,7 +174,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     PyObject *graphalign;
 
     static char *kwlist[] = {"mumpicker","align","threads",NULL};
-    int numThreads = 4; /* Number of alignment threads */
+    int numThreads = 0; /* Number of alignment threads */
 
     if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|i", kwlist, &mumpicker, &graphalign, &numThreads))
         return NULL;

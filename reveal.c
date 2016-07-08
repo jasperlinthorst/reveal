@@ -93,6 +93,7 @@ int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     mum->u=1;
     mum->l=0;
     mum->score=0;
+    mum->penalty=0;
     mum->n=2;
     for (i=1;i<index->n;i++){
         if (index->LCP[i]>mum->l){
@@ -143,6 +144,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
     mum->u=1;
     mum->l=0;
     mum->score=-2147483648;
+    mum->penalty=0;
     mum->n=2;
     for (i=1;i<index->n;i++){
         if (index->LCP[i]>mum->score){
@@ -215,7 +217,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 }
             }
 	    
-            int w_score=1;
+            int w_score=2;
             int w_penalty=1;
             int score=(w_score*index->LCP[i])-(w_penalty*penalty);
 	    
@@ -224,6 +226,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
             if (score > mum->score){
                 //mum->score=index->LCP[i]-penalty;
                 mum->score=score;
+                mum->penalty=w_penalty*penalty;
                 mum->l=index->LCP[i];
                 mum->sp[0]=aStart;
                 mum->sp[1]=bStart;
@@ -237,6 +240,7 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     mum->u=1;
     mum->l=0;
     mum->score=0;
+    mum->penalty=0;
     mum->n=0;
     int i=0,j=0,la,lb;
     int *flag_so=calloc(index->nsamples, sizeof(int));
@@ -438,7 +442,7 @@ PyObject * getmultimums(RevealIndex *index) {
                 }
                 PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
                 PyList_Append(multimums,multimum);
-        	     Py_DECREF(multimum);
+                Py_DECREF(multimum);
             }
         }
     }
@@ -627,6 +631,7 @@ void *aligner(void *arg) {
             mmum.sp=(int *) malloc(idx->nsamples*sizeof(int));
             mmum.l=0;
             mmum.score=0;
+            mmum.penalty=0;
             
             PyObject *result;
            
@@ -685,7 +690,7 @@ void *aligner(void *arg) {
                 PyObject *sp=NULL;
                 PyObject *tmp=NULL;
                
-                PyArg_ParseTuple(mum,"iOiiO",&mmum.l,&tmp,&mmum.n,&mmum.score,&sp);
+                PyArg_ParseTuple(mum,"iOiiOi", &mmum.l, &tmp, &mmum.n, &mmum.score, &sp, &mmum.penalty);
                 
                 for (i=0; i<mmum.n; i++){
                     PyObject * pos=PyList_GetItem(sp,i);
@@ -718,6 +723,7 @@ void *aligner(void *arg) {
                 } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
                     //getlongestmum(idx, &mmum);
                     getbestmum(idx, &mmum);
+                    //getbestmultimum(idx, &mmum, idx->nsamples);
                 }
                 
                 //fprintf(stderr,"mum: n=%d l=%d\n",mmum.n,mmum.l);
@@ -746,7 +752,7 @@ void *aligner(void *arg) {
                     PyList_SetItem(sps,i,pos);
                 }
                 
-                arglist = Py_BuildValue("(i,O,i,i,O)", mmum.l, idx, mmum.n, mmum.score, sps);
+                arglist = Py_BuildValue("(i,O,i,i,O,i)", mmum.l, idx, mmum.n, mmum.score, sps, mmum.penalty);
                 if (arglist==NULL){
                     PyErr_SetString(PyExc_TypeError, "***** Building argument list failed");
                     err_flag=1;
