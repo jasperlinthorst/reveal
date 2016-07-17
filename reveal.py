@@ -52,13 +52,24 @@ def breaknode(node,pos,l):
     out_edges=G.out_edges(node)
     mn=Interval(pos,pos+l)
     other=set()
+    
     if mn==node: #no breaking needed
         t.remove(node)
         return node,other
-    G.add_node(mn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],start=att['start']+(pos-node.begin),aligned=0)#create merge node
+    
+    moffsets=dict()
+    for s in att['offsets']:
+        moffsets[s]=att['offsets'][s]+(pos-node.begin)
+    
+    soffsets=dict()
+    for s in att['offsets']:
+        soffsets[s]=att['offsets'][s]+((pos+l)-node.begin)
+    
+    G.add_node(mn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=moffsets,start=att['start']+(pos-node.begin),aligned=0)#create merge node
+    
     if (node[0]!=pos):
         pn=Interval(node[0],pos)
-        G.add_node(pn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],start=att['start'],aligned=0)#create prefix node
+        G.add_node(pn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=att['offsets'],start=att['start'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
         G.add_edge(pn,mn)
@@ -68,7 +79,7 @@ def breaknode(node,pos,l):
         pn=mn
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
-        G.add_node(sn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],start=att['start']+((pos+l)-node.begin),aligned=0)#create suffix node
+        G.add_node(sn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=soffsets,start=att['start']+((pos+l)-node.begin),aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
         G.add_edge(mn,sn)
@@ -103,8 +114,20 @@ def mergenodes(mns):
     else:
         refnode=mns[ri]
     
+    #create offset dict for gap penalty calculation from alignment graph
+    newoffsets=dict()
+    for node in mns:
+        d=G.node[node]
+        for sample in d['offsets']:
+            if sample in newoffsets:
+                print "Error, merging nodes that originate from the same sample."
+            assert(sample not in newoffsets)
+            newoffsets[sample]=d['offsets'][sample]
+    
+    G.node[refnode]['offsets']=newoffsets
     G.node[refnode]['sample']=set.union(*[G.node[node]['sample'] for node in mns])
     G.node[refnode]['contig']=set.union(*[G.node[node]['contig'] for node in mns])
+    assert(len(G.node[refnode]['sample'])==len(newoffsets))
     o+=1 #increment counter, to be able to keep track of when nodes were aligned 
     G.node[refnode]['aligned']=o
     #mns.remove(refnode)
@@ -112,22 +135,15 @@ def mergenodes(mns):
     assert(tmp==refnode)
     for mn in mns: #leave the first node, remove the rest
         for e in G.in_edges(mn):
-            #assert(e[0]!=refnode)
-            #assert(not G.has_edge(e[0],refnode))
-            #if G.has_edge(refnode,e[0]):
-            #    print mns, refnode
-            #    write_gml(G,T,outputfile="test.gml")
             assert(not G.has_edge(refnode,e[0]))
             G.add_edge(e[0],refnode)
         for e in G.out_edges(mn):
-            #assert(e[1]!=refnode)
             assert(not G.has_edge(e[1],refnode))
-            #assert(not G.has_edge(refnode,e[1]))
             G.add_edge(refnode,e[1])
         G.remove_node(mn)
     return refnode
 
-def bfs(G, source, reverse=False):
+def bfs(G, source, reverse=False, ignore=set()):
     if reverse and isinstance(G, nx.DiGraph):
         neighbors = G.predecessors_iter
     else:
@@ -146,6 +162,9 @@ def bfs(G, source, reverse=False):
                 elif (G.node[child]['aligned']==0):
                     queue.append((child, neighbors(child)))
                     yield child,0
+                elif (G.node[child]['aligned']!=0 and child in ignore): #keep searching
+                    queue.append((child, neighbors(child)))
+                    yield child,0
                 else:
                     yield child,1
         except StopIteration:
@@ -157,21 +176,35 @@ def segmentgraph(node,nodes):
     reverse_trailing=set()
     reverse_leading=set()
     nodes=set(nodes)
+    
+    trace=False
+    #if node.begin==2220993 and node.end==2221062:
+    #    trace=True
+    
+    #forward search
     endpoints=set()
     for c,t in bfs(G,node):
         if t==0:
             trailing.add(c)
         else:
             endpoints.add(c)
-        
+    
+    if trace:
+        print "fwd endpoints",endpoints
+        print "fwd trailing",trailing
+
     #reverse search for each endpoint
     if len(endpoints)>1:
         for endpoint in endpoints:
-            for c,t in bfs(G,endpoint,reverse=True):
+            for c,t in bfs(G,endpoint,reverse=True,ignore=endpoints):
                 if t==0:
                     reverse_trailing.add(c)
         trailing=trailing.intersection(reverse_trailing)
     
+    if trace:
+        print "fwd trailing after intersect",trailing
+    
+    #backward search
     endpoints=set()
     for c,t in bfs(G,node,reverse=True):
         if t==0:
@@ -179,57 +212,62 @@ def segmentgraph(node,nodes):
         else:
             endpoints.add(c)
     
+    if trace:
+        print "bwd endpoints",endpoints
+        print "bwd leading",leading
+    
     #reverse search for each endpoint
     if len(endpoints)>1:
         for endpoint in endpoints:
-            for c,t in bfs(G,endpoint):
+            for c,t in bfs(G,endpoint,ignore=endpoints):
                 if t==0:
                     reverse_leading.add(c)
         leading=leading.intersection(reverse_leading)
     
-    leading = set([(i.begin,i.end) for i in leading if isinstance(i,Interval)]).intersection(nodes)
+    if trace:
+        print "bwd leading after intersect",leading
+        print "nodes", nodes
+    
+    leading = set([(i.begin,i.end) for i in leading if isinstance(i,Interval)]).intersection(nodes) #TODO: remove "if isinstance(i,Interval)]"
     trailing = set([(i.begin,i.end) for i in trailing if isinstance(i,Interval)]).intersection(nodes)
+    
     rest = nodes - (leading | trailing)
-    return list(leading), list(trailing), list(rest)
+    
+    if trace:
+        print "final leading",leading
+        print "final trailing",trailing
+        print "final rest",rest
+
+    #if len(rest)>0:
+    #    print "Not leading or trailing!",rest
+    
+    return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(l,index,n,score,sp,penalty):
     try:
         nodes=index.nodes
         global o
         
-        #print "PICKED MUM",l,n,score
-       
+        #print "PICKED MUM",l,n,score,penalty,sp, index.T[sp[0]:sp[0]+l]
+        
         if len(nodes)==0:
             return
         
         if l==0:
             return
-        
-        #allow matches that are shorter than minlength, but have a positive score and contain more than 70% of the alignable segment
-        
+         
         if score<schemes.minscore:
+            #print "reject, minscore",l,n,score,penalty,sp,schemes.minscore
             return
-
+        
         if l<schemes.minlength:
-            if l*n < 0.5*index.n:
-                return
+            #print "reject, minlength",l,n,score,penalty,sp,index.n,schemes.minlength
+            return
         
-        #if l<schemes.minlength or score<schemes.minscore:
-            #print "rejected",l,score
-        #    return
-        
-        #if penalty>10:
-        #    print "Accepted MUM",n,l,penalty,score,sp
-        
-        assert(score==(l*n)-penalty)
         mns=[]
         topop=[]
+        
         for i,pos in enumerate(sp):
-            #assert(len(t[pos])==1) #be sure that there are no overlapping intervals in the tree!
-            #assert(len(t[pos+l-1])==1) #be sure that there are no overlapping intervals in the tree!
-            #assert(t[pos]==t[pos+l-1])
-            #if i>0:
-            #    assert(T[sp[i]:sp[i]+l]==T[sp[i-1]:sp[i-1]+l])
             old=t[pos].pop()
             mn,other=breaknode(old,pos,l)
             mns.append(mn)
@@ -238,13 +276,92 @@ def graphalign(l,index,n,score,sp,penalty):
             for node in other:
                 if isinstance(node,Interval):
                     nodes.append((node.begin,node.end))
-        
+
         mn=mergenodes(mns)
+        
+        msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
+        
+        #if 'GCA_001545055.1_ASM154505v1_genomic.fna' not in msamples:
+        #    print "INCORRECT",l,n,score,penalty,index.left,index.right
+        
         intervals=segmentgraph(mn,nodes)
-        return intervals
+        
+        leading,trailing,rest,merged=intervals
+
+        #ideally do some graph pruning while aligning to reduce memory
+        #T=index.T
+        #prunedr=prune(Interval(mn[0],mn[1]),T)
+        #prunedl=prune(Interval(mn[0],mn[1]),T,reverse=True)
+        #print "pruned",prunedr, prunedl, nodes
+        #if prunedr!=None:
+        #    for node in prunedr:
+        #        assert((node[0],node[1]) in nodes)
+        #        rest.remove((node[0],node[1]))
+        #        t.remove(node)
+        #if prunedl!=None:
+        #    for node in prunedl:
+        #        assert((node[0],node[1]) in nodes)
+        #        rest.remove((node[0],node[1]))
+        #        t.remove(node)
+        
+        newleft=mn
+        newright=mn
+        
+        for intv in leading:
+            if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the left
+                newright=index.right
+                break
+        
+        for intv in trailing:
+            if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the right
+                newleft=index.left
+                break
+        
+        return leading,trailing,rest,merged,newleft,newright
+
     except Exception as e:
         print "Exception in graphalign",type(e),str(e)
         return None
+
+
+def prune(node,T,reverse=False):
+    seqs={}
+    pruned=[]
+    if reverse:
+        neis=G.predecessors(node)
+    else:
+        neis=G.successors(node)
+    for nei in neis:
+        if G.node[nei]['aligned']==0:
+            if 'seq' not in G.node[nei]:
+                seq=T[nei.begin:nei.end]
+            else:
+                seq=G.node[nei]['seq']
+            if seq in seqs:
+                seqs[seq].append(nei)
+            else:
+                seqs[seq]=[nei]
+    
+    for key in seqs.keys():
+        group=seqs[key]
+        tmpgroup=list(group)
+        if len(group)>1:
+            sink=[]
+            merge=True
+            for v in group:
+                if reverse:
+                    if len(G.predecessors(v))>1:
+                        merge=False
+                        break
+                else:
+                    if len(G.successors(v))>1:
+                        merge=False
+                        break
+            if merge:
+                merged=mergenodes(group)
+                converged=False
+                pruned+=group
+    return pruned
 
 def prune_nodes(G,T):
     converged=False
@@ -271,30 +388,40 @@ def prune_nodes(G,T):
                                 seqs[seq].append(nei)
                             else:
                                 seqs[seq]=[nei]
+
                     for key in seqs.keys():
                         group=seqs[key]
                         if len(group)>1:
                             sink=[]
+                            merge=True
                             for v in group:
-                                sink+=G.neighbors(v)
-                            if len(set(sink))>1:
-                                continue
-                            if len(G.subgraph(group).edges())>0: #if interconnected don't merge!
-                                continue
-                            mergenodes(group)
-                            converged=False
+                                if run==0:
+                                    if len(G.predecessors(v))>1:
+                                        merge=False
+                                        break
+                                else:
+                                    if len(G.successors(v))>1:
+                                        merge=False
+                                        break
+                            if merge:
+                                mergenodes(group)
+                                converged=False
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None):
     f=open(gfafile,'r')
     sep=";"
     mapping={} #temp mapping object
     edges=[] #tmp list for edges
+    id2sample={}
+    i=0
     for line in f:
         if line.startswith('H'):
             h=line.split()
             tag=h[1].split(':')
             if tag[0]=="ORI":
                 for sample in tag[2].rstrip(sep).split(sep):
+                    id2sample[i]=sample
+                    i+=1
                     if 'samples' in graph.graph:
                         graph.graph['samples'].append(sample)
                     else:
@@ -320,40 +447,51 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                    graph.add_node(intv,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,aligned=0)
+                    graph.add_node(intv,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},offsets={gfafile:0},start=0,aligned=0)
                     mapping[nodeid]=intv
                 else:
                     if len(s)<3:
                         s.append("")
-                    graph.add_node(nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},start=0,seq=s[2].upper(),aligned=0)
+                    graph.add_node(nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},offsets={gfafile:0},start=0,seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=nodeid
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
                     ann['ORI']=[ann['ORI']]
                 if not(isinstance(ann['CTG'], list)):
                     ann['CTG']=[ann['CTG']]
+                if not(isinstance(ann['OFFSETS'], list)):
+                    ann['OFFSETS']=[ann['OFFSETS']]
                 
-                ann['ORI']=set(ann['ORI'])
+                offsets=dict()
+                if 'OFFSETS' in ann: #create dictionary by sample name
+                    for sampleid,offset in zip(ann['ORI'],ann['OFFSETS']):
+                        offsets[id2sample[int(sampleid)]]=int(offset)
+                
+                tmp=set()
+                for ori in ann['ORI']: #map sample ids back to sample names
+                    tmp.add(id2sample[int(ori)])
+                ann['ORI']=tmp
+
                 ann['CTG']=set(ann['CTG'])
                 
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 else:
                     if index!=None:
                         intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                        graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0)
+                        graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0,offsets=offsets)
                         mapping[nodeid]=intv
                     else:
-                        graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0)
+                        graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
                         mapping[nodeid]=nodeid
         
         #L      206     +       155     +       0M
@@ -367,19 +505,23 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.add_edge(mapping[e[1]],mapping[e[3]],ofrom=e[2],oto=e[4],cigar=e[5])
 
 
-
 def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
     f=open(outputfile,'wb')
     sep=';'
     f.write('H\tVN:Z:1.0\n')
     f.write('H\tORI:Z:')
+    
+    sample2id=dict() #not used yet, but we want a mapping to reduce space in gfa file
+    i=0
     for sample in G.graph['samples']:
         for subsample in sample.rstrip().rstrip(sep).split(sep):
             f.write(subsample+sep)
+            sample2id[subsample]=i
+            i+=1
     f.write('\n')
     
     mapping={}
-
+    
     for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
         mapping[node]=i+1 #one-based for vg
     
@@ -394,17 +536,26 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
             else:
                 f.write('S\t'+str(i)+'\t')
         
+        #make a list out of samples and sort by id
+        tmp=list(data['sample'])
+        tmp.sort(key=lambda s: sample2id[s])
+        data['sample']=tmp
+        
+        if not isinstance(data['offsets'],dict):
+            print "ERROR", data['offsets']
+
         if nometa:
             f.write("\n")
         else:
-            f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\n" % 
+            f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\tOFFSETS:Z:%s\n" % 
                     (
-                    sep.join(data['sample']),
+                    sep.join([str(sample2id[s]) for s in data['sample']]),
                     data['coordsample'].replace(sep,"").replace("\t","") if data['coordsample']!=None else "",
                     data['coordcontig'].replace(sep,"").replace("\t","") if data['coordcontig']!=None else "",
                     sep.join(data['contig']),
                     data['start'],
-                    data['aligned']
+                    data['aligned'],
+                    sep.join([str(data['offsets'][s]) for s in data['sample']])
                     )
                 )
         
@@ -429,6 +580,8 @@ def write_gml(G,T,outputfile="reference",hwm=4000):
         G.node[n]['coordsample']=str(d['coordsample'])
         G.node[n]['coordcontig']=str(d['coordcontig'])
         G.node[n]['start']=str(d['start'])
+        if d.has_key('offsets'):
+            G.node[n]['offsets']=str(d['offsets'])
         if d.has_key('aligned'):
             G.node[n]['aligned']=str(d['aligned'])
         if 'seq' not in G.node[n]:
@@ -493,7 +646,9 @@ def main():
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
-    parser_aln.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
+    parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
+    
+    parser_aln.add_argument("-g", dest="minsamples", type=int, default=1, help="Only index nodes that occur in this many samples or more (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
     parser_aln.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
     parser_aln.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
@@ -508,11 +663,11 @@ def main():
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
     parser_extract.set_defaults(func=extract)
     
-    parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a dotplot should be generated.')
+    parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a mumplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
-    #parser_plot.add_argument("", dest="pos", default=None, help="Position on the reference genome to vizualize.")
-    #parser_plot.add_argument("", dest="env", default=100, help="Size of the region aroung the targeted position to vizualize.")
+    parser_plot.add_argument("-p", dest="pos", default=None, type=int, help="Position on the reference genome to vizualize.")
+    parser_plot.add_argument("-e", dest="env", default=1000, type=int, help="Size of the region aroung the targeted position to vizualize.")
     parser_plot.set_defaults(func=plot)
     
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
@@ -545,28 +700,6 @@ def bubbles(args):
 
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
-    
-    #G.add_edge(1,2)
-    #G.add_edge(1,3)
-    #G.add_edge(2,3)
-    #G.add_edge(3,4)
-    #G.add_edge(4,8)
-    #G.add_edge(3,5)
-    #G.add_edge(5,6)
-    #G.add_edge(5,9)
-    #G.add_edge(9,10)
-    #G.add_edge(6,10)
-    #G.add_edge(10,7)
-    #G.add_edge(6,7)
-    #G.add_edge(7,8)
-    #G.add_edge(3,11)
-    #G.add_edge(11,12)
-    #G.add_edge(12,8)
-    #G.add_edge(8,13)
-    #G.add_edge(8,14)
-    #G.add_edge(13,14)
-    #G.add_edge(13,15)
-    #G.add_edge(15,14)
     
     def entrance(G,v):
         for c in G.successors(v):
@@ -695,12 +828,14 @@ def bubbles(args):
     for pair in sspairs:
         size=(ordD[pair[1]]-ordD[pair[0]])-1
         bubblenodes=ordD_[ordD[pair[0]]:ordD[pair[1]]+1]
-
-        source=G.node[pair[0]]['sample']
-        sink=G.node[pair[1]]['sample']
+        
+        sourcenode=G.node[pair[0]]
+        sourcesamples=sourcenode['sample']
+        sinknode=G.node[pair[1]]
+        sinksamples=sinknode['sample']
         
         #TODO: supbub algorithm detects invalid bubbles; filter them out here
-        if source!=sink:
+        if sourcesamples!=sinksamples:
             #print "ERROR, skipping invalid bubble"
             continue
         
@@ -708,7 +843,20 @@ def bubbles(args):
         gt=G.successors(pair[0])
         gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
         
-        if len(gt)<size:
+        sucs=set(gt)
+        pres=set(G.predecessors(pair[1]))
+        sucs.discard(pair[1])
+        pres.discard(pair[0])
+        
+        simple=True
+        for suc in sucs:
+            if len(G.successors(suc))!=1:
+                simple=False
+        for pre in pres:
+            if len(G.predecessors(pre))!=1:
+                simple=False
+
+        if len(gt)<size or not simple:
             #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
             genotypes=['N']*len(gt)
             calls={}
@@ -719,7 +867,7 @@ def bubbles(args):
         else:
             genotypes=[None]*len(gt)
             calls={}
-            tmpsource=source.copy()
+            tmpsource=sourcesamples.copy()
             for i,node in enumerate(gt):
                 n=G.node[node]
                 if node==pair[1]: #should always be last of the iteration
@@ -730,7 +878,7 @@ def bubbles(args):
                     genotypes[i]=n['seq']
                     for sample in n['sample']:
                         if sample in calls:
-                            print "WARNING, multiple paths (diploid variant?), report only one allele..."
+                            print "WARNING, multiple paths (diploid variant?), report only one allele...", bubblenodes
                         else:
                             calls[sample]=i
                             tmpsource.discard(sample)
@@ -778,7 +926,7 @@ def subgraph(args):
     else:
         write_gfa(sg,"",outputfile=args.outfile+".gfa")
 
-def align_seq(s1,s2,minlength=1,minscore=0):
+def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     global t,G,reference,o
 
     t=IntervalTree()
@@ -792,17 +940,18 @@ def align_seq(s1,s2,minlength=1,minscore=0):
     intv=idx.addsequence(s1.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s1"},contig={"s1"},coordsample="s1",coordcontig="s1",start=0,aligned=0)
+    G.add_node(Intv,sample={"s1"},contig={"s1"},coordsample="s1",coordcontig="s1",offsets={"s1":0},start=0,aligned=0)
 
     idx.addsample("s2")
     intv=idx.addsequence(s2.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s2"},contig={"s2"},coordsample="s2",coordcontig="s2",start=0,aligned=0)
+    G.add_node(Intv,sample={"s2"},contig={"s2"},coordsample="s2",coordcontig="s2",offsets={"s2":0},start=0,aligned=0)
     
     schemes.ts=t
     schemes.minlength=minlength
     schemes.minscore=minscore
+    schemes.minn=minn
 
     idx.construct()
     
@@ -835,10 +984,31 @@ def align(args):
     
     logging.info("Merging nodes...")
     T=idx.T
+    
     if len(G.graph['samples'])>2:
-        prune_nodes(G,T) #TODO: do this after every alignment step to reduce graph size during alignment
+        prune_nodes(G,T) #TODO: do this after every alignment step to reduce memory usage of graph
+    
     logging.info("Done.")
     
+    alignedbases=0
+    alignednodes=0
+    totnodes=nx.number_of_nodes(G)
+
+    if idx.nsamples>2: #was multi-alignment
+        totbases=idx.n-totnodes
+        for node,data in G.nodes(data=True):
+            if data['aligned']!=0:
+                alignedbases+=(node.end-node.begin)*len(data['sample'])
+                alignednodes+=1
+    else: #assume seq to graph
+        totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
+        for node,data in G.nodes(data=True):
+            if data['aligned']!=0:
+                alignedbases+=(node.end-node.begin)
+                alignednodes+=1
+    
+    logging.info("Done (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
+
     logging.info("Writing graph...")
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
@@ -863,10 +1033,13 @@ def align_genomes(args):
     #schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
-    
+    schemes.minn=args.minn
+    graph=False
+
     for i,sample in enumerate(args.inputfiles):
         idx.addsample(os.path.basename(sample))
         if sample.endswith(".gfa"):
+            graph=True
             #TODO: now applies to all graphs! probably want to have this graph specific if at all...
             logging.info("Reading graph: %s ..." % sample)
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
@@ -881,12 +1054,13 @@ def align_genomes(args):
                 t.add(Intv)
                 #schemes.ts.add(Intv)
                 schemes.interval2sampleid[Intv]=i
-                G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),start=0,aligned=0)
+                G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),offsets={os.path.basename(sample):0},start=0,aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! Experimental output...")
     
     schemes.ts=t
+    schemes.G=G
     
     logging.info("Constructing index...")
     idx.construct()
@@ -897,21 +1071,11 @@ def align_genomes(args):
         idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
     else:
         logging.info("Constructing pairwise-alignment...")
-        idx.align(None,graphalign,threads=args.threads)
+        if graph:
+            idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
+        else:
+            idx.align(None,graphalign,threads=args.threads)
     
-    alignedbases=0
-    if idx.nsamples>2:
-        totbases=idx.n-nx.number_of_nodes(G)
-        for node,data in G.nodes(data=True):
-            if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)*len(data['sample'])
-    else:
-        totbases=min([idx.n-idx.nsep[0],idx.nsep[0]])
-        for node,data in G.nodes(data=True):
-            if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)
-    
-    logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases))
     
     return G,idx
 
@@ -921,6 +1085,8 @@ def align_contigs(args):
     reference=args.reference
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
+    schemes.minn=args.minn
+
     G=nx.DiGraph()
     G.graph['samples']=[]
     
@@ -942,7 +1108,7 @@ def align_contigs(args):
             intv=idx.addsequence(chrom.upper())
             Intv=Interval(intv[0],intv[1])
             t.add(Intv)
-            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordsample=ref,coordcontig=chromname.replace(";",""),start=0,aligned=0)
+            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordsample=ref,coordcontig=chromname.replace(";",""),offsets={ref:0},start=0,aligned=0)
     
     totbases=idx.n-nx.number_of_nodes(G)
     alignedbases=0
@@ -954,7 +1120,7 @@ def align_contigs(args):
         intv=idx.addsequence(contig.upper())
         Intv=Interval(intv[0],intv[1])
         t.add(Intv)
-        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),start=0,aligned=0)
+        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),offsets={contigs:0},start=0,aligned=0)
 
     logging.info("Constructing index... (size=%d)"%idx.n)
     idx.construct()
@@ -1007,7 +1173,7 @@ def align_contigs(args):
 def plot(args):
     from matplotlib import pyplot as plt
     
-    if len(args.fastas)==2:    
+    if len(args.fastas)==2:
         #get mmems for forward orientation
         idx=reveallib.index()
         for sample in args.fastas:
@@ -1065,10 +1231,12 @@ def plot(args):
     
     print len(mmems),"max exact matches."
     
-    pos=None
-    
+    pos=args.pos
+    dist=args.env
+
     for mem in mmems:
-        sps=sorted(mem[1:3])
+        #print mem
+        sps=sorted(mem[2])
         l=mem[0]
         sp1=sps[0]
         sp2=sps[1]-sep
@@ -1096,7 +1264,6 @@ def plot(args):
         if mem[3]==0:
             plt.plot([sp1,ep1],[sp2,ep2],'r-')
         else:
-            assert(mem[3]==1)
             plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
     
     lgap=0
@@ -1173,13 +1340,16 @@ def extract(args):
             seq=""
             try:
                 sys.stdout.write(">"+sample+" "+str(i)+"\n")
+                nodecount=0
                 for node in nx.topological_sort(G.subgraph(contig)):
                     seq+=G.node[node]['seq']
+                    nodecount+=1
                 f=0
                 for i in xrange(width,len(seq),width):
                     sys.stdout.write(seq[f:i]+'\n')
                     f=i
                 sys.stdout.write(seq[f:]+'\n')
+                sys.stderr.write("Walked %d nodes\n"%nodecount)
             except IOError:
                 try:
                     sys.stdout.close()

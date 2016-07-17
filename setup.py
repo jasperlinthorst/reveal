@@ -11,7 +11,7 @@ from setuptools import setup, Extension
 
 setup(name="reveal", version="0.1",
         install_requires=['intervaltree','networkx'],
-        scripts = ["reveal.py","schemes.py","caller.py"],
+        scripts = ["reveal.py","schemes.py"],
         ext_modules=[ \
                 Extension("reveallib", ["reveal.c","interface.c"],  libraries=['z','divsufsort','pthread'], undef_macros=['NDEBUG'] ), \
                 ],

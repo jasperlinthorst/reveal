@@ -330,6 +330,10 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->nsamples=0;
     self->samples = PyList_New(0);
     self->nodes = PyList_New(0);
+    Py_INCREF(Py_None);
+    self->left=Py_None;
+    Py_INCREF(Py_None);
+    self->right=Py_None;
     return 0;
 }
 
@@ -500,6 +504,20 @@ reveal_getnodes(RevealIndex *self, void *closure)
     return self->nodes;
 }
 
+static PyObject *
+reveal_left(RevealIndex *self, void *closure)
+{
+    Py_INCREF(self->left);
+    return self->left;
+}
+
+static PyObject *
+reveal_right(RevealIndex *self, void *closure)
+{
+    Py_INCREF(self->right);
+    return self->right;
+}
+
 static PyGetSetDef reveal_getseters[] = {
     {"n",
         (getter)reveal_getn, NULL,
@@ -516,6 +534,14 @@ static PyGetSetDef reveal_getseters[] = {
     {"nodes",
         (getter)reveal_getnodes, NULL,
         "Returns the set of intervals or nodes associated with the index.",
+        NULL},
+    {"left",
+        (getter)reveal_left, NULL,
+        "Returns the interval of the node bounding the index on the left.",
+        NULL},
+    {"right",
+        (getter)reveal_right, NULL,
+        "Returns the interval of the node bounding the index on the right.",
         NULL},
     {"nsep",
         (getter)reveal_getnsep, NULL,
@@ -565,13 +591,15 @@ reveal_dealloc(RevealIndex *self)
 
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
-
+        Py_DECREF(self->left);
+        Py_DECREF(self->right);
     } else {
         //fprintf(stderr,"dealloc SUB index!\n");
         
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
-        
+        Py_DECREF(self->left);
+        Py_DECREF(self->right);
         if (self->SA!=NULL){
             free(self->SA);
         }

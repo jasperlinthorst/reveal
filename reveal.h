@@ -8,17 +8,21 @@ typedef struct
 {
     PyObject_HEAD
     char         * T;   //initial input Text
-    int          * SA;  //Suffix array
-    int          * SAi; //Suffix array
-    int          * LCP; //LCP array
+    int32_t          * SA;  //Suffix array
+    int32_t          * SAi; //Suffix array
+    int32_t          * LCP; //LCP array
     uint16_t          * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
-    int          n;   //lenght of SA and LCP
+    int n;   //lenght of SA and LCP
     int depth; //depth within the hierarchical alignment tree
     int *nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int nsamples; //number of samples in T
     PyObject * main; //main index
     PyObject * samples; //list of sample names that are contained in the index
     PyObject * nodes; //list of intervals in T that are associated with this index
+    PyObject * left;
+    PyObject * leftoffsets;
+    PyObject * right;
+    PyObject * rightoffsets;
 } RevealIndex;
 
 RevealIndex* newIndex();
