@@ -54,6 +54,6 @@ or align two graphs:
 
 To extract variants from a GFA graph, you need to install [seqal](https://github.com/mhulsman/seqal), and run:
 
-**reveal call 1a&#95;1b.gfa --all**
+**reveal bubbles 1a&#95;1b.gfa**
 
-This will print a list of different variants (SNPs, indels, inversions) and their positions (with respect to the genome used as a reference if specified during alignment) and the actual varying alleles. Consider the --minlen and --maxlen arguments to filter the output variants by size. For now, inverions are detected by needle-man wunsch alignment of the reverse complemented alleles so be aware of the memory requirements of detecting large inversions from the graph. 
+This will print a list of bubbles source/sink pairs and nodes within the bubble, the different variants (SNPs, indels, highly variable alleles etc.) and their positions (with respect to the genome specified as a reference) and the actual varying alleles.
