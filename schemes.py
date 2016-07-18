@@ -14,7 +14,6 @@ minlength=20
 minscore=0
 pcutoff=1e-3
 ts=IntervalTree()
-interval2sampleid=dict()
 G=nx.DiGraph()
 
 #take multi-mum that is observed in all samples until it drops below maxl
@@ -165,6 +164,8 @@ def multimumpicker(multimums,idx):
                     print "score too low"
                 continue
             
+            if isinstance(sp,tuple):
+                sp=list(sp)
             bestmum=(l,idx,n,score,sp,penalty)
 
             if trace:
@@ -172,7 +173,7 @@ def multimumpicker(multimums,idx):
         
         if trace:
             print bestmum
-        
+       
         return bestmum
     except:
         print "MULITMUMPICKER ERROR", sys.exc_info()[0]

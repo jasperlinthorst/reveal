@@ -100,7 +100,7 @@ def breaknode(node,pos,l):
     
     return mn,other #return merge node
 
-def mergenodes(mns):
+def mergenodes(mns,mark=True):
     global o
     ri=0
     if reference!=None:
@@ -128,8 +128,9 @@ def mergenodes(mns):
     G.node[refnode]['sample']=set.union(*[G.node[node]['sample'] for node in mns])
     G.node[refnode]['contig']=set.union(*[G.node[node]['contig'] for node in mns])
     assert(len(G.node[refnode]['sample'])==len(newoffsets))
-    o+=1 #increment counter, to be able to keep track of when nodes were aligned 
-    G.node[refnode]['aligned']=o
+    if mark:
+        o+=1 #increment counter, to be able to keep track of when nodes were aligned 
+        G.node[refnode]['aligned']=o
     #mns.remove(refnode)
     tmp=mns.pop(ri)
     assert(tmp==refnode)
@@ -364,35 +365,36 @@ def prune(node,T,reverse=False):
     return pruned
 
 def prune_nodes(G,T):
+    trace=False
     converged=False
-    reverse=False
     while not(converged):
         converged=True
         for node,data in G.nodes_iter(data=True):
+            if node not in G:
+                continue
             for run in [0,1]:
                 if data['aligned']!=0:
                     if run==0:
-                        reverse=False
                         neis=G.successors(node)
                     else:
-                        reverse=True
                         neis=G.predecessors(node)
                     seqs={}
                     for nei in neis:
-                        if G.node[nei]['aligned']==0:
-                            if 'seq' not in G.node[nei]:
-                                seq=T[nei.begin:nei.end]
-                            else:
-                                seq=G.node[nei]['seq']
-                            if seq in seqs:
-                                seqs[seq].append(nei)
-                            else:
-                                seqs[seq]=[nei]
+                        #if G.node[nei]['aligned']==0:
+                        if 'seq' not in G.node[nei]:
+                            if not isinstance(nei,Interval):
+                                continue
+                            seq=T[nei.begin:nei.end]
+                        else:
+                            seq=G.node[nei]['seq']
+                        if seq in seqs:
+                            seqs[seq].append(nei)
+                        else:
+                            seqs[seq]=[nei]
 
                     for key in seqs.keys():
                         group=seqs[key]
                         if len(group)>1:
-                            sink=[]
                             merge=True
                             for v in group:
                                 if run==0:
@@ -404,7 +406,7 @@ def prune_nodes(G,T):
                                         merge=False
                                         break
                             if merge:
-                                mergenodes(group)
+                                mergenodes(group,mark=False)
                                 converged=False
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None):
@@ -474,6 +476,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
                 ann['CTG']=set(ann['CTG'])
                 
+                assert(isinstance(ann['ORI'],set))
+
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
                     graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
@@ -526,6 +530,10 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
         mapping[node]=i+1 #one-based for vg
     
     for i,node in enumerate(nx.topological_sort(G)):
+        if isinstance(node,str):
+            if node=='start' or node=='end':
+                continue
+
         i+=1
         data=G.node[node]
         if 'seq' in data:
@@ -537,13 +545,16 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
                 f.write('S\t'+str(i)+'\t')
         
         #make a list out of samples and sort by id
+        if 'sample' not in data:
+            print "ERROR",node,data
+        
         tmp=list(data['sample'])
         tmp.sort(key=lambda s: sample2id[s])
         data['sample']=tmp
         
         if not isinstance(data['offsets'],dict):
-            print "ERROR", data['offsets']
-
+            print "ERROR offset data:", data['offsets']
+        
         if nometa:
             f.write("\n")
         else:
@@ -569,54 +580,68 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
     
     f.close()
 
-def write_gml(G,T,outputfile="reference",hwm=4000):
+def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
+
+    G=G.copy()
+
     mapping={}
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
-        G.node[n]['n']=len(d['sample'])
-        G.node[n]['sample']=str(d['sample'])
-        G.node[n]['contig']=str(d['contig'])
-        G.node[n]['coordsample']=str(d['coordsample'])
-        G.node[n]['coordcontig']=str(d['coordcontig'])
-        G.node[n]['start']=str(d['start'])
-        if d.has_key('offsets'):
-            G.node[n]['offsets']=str(d['offsets'])
-        if d.has_key('aligned'):
-            G.node[n]['aligned']=str(d['aligned'])
+
+        if 'sample' in d:
+            G.node[n]['n']=len(d['sample'])
+        
+        for key in d:
+            G.node[n][key]=str(d[key])
+        
+        #G.node[n]['sample']=str(d['sample'])
+        #G.node[n]['contig']=str(d['contig'])
+        #G.node[n]['coordsample']=str(d['coordsample'])
+        #G.node[n]['coordcontig']=str(d['coordcontig'])
+        #G.node[n]['start']=str(d['start'])
+        #if d.has_key('offsets'):
+        #    G.node[n]['offsets']=str(d['offsets'])
+        #if d.has_key('aligned'):
+        #    G.node[n]['aligned']=str(d['aligned'])
         if 'seq' not in G.node[n]:
             if isinstance(n,Interval):
                 G.node[n]['seq']=T[n.begin:n.end].upper()
             else:
                 G.node[n]['seq']=""
-
+        
         G.node[n]['l']=len(G.node[n]['seq'])
     G=nx.relabel_nodes(G,mapping,copy=True)
     outputfiles=[]
     
-    i=0
-    for subset in nx.connected_components(G.to_undirected()):
-        sgn=[]
-        g=G.subgraph(subset)
-        gn=len(G.graph['samples'])
-        for n in nx.topological_sort(g):
-            if sgn==[]:
-                fr=n
-            sgn.append(n)
-            if G.node[n]['n']==gn: #join/split node
-                if len(sgn)>=hwm:
-                    sg=G.subgraph(sgn)
-                    fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
-                    nx.write_gml(sg,fn)
-                    outputfiles.append(fn)
-                    sgn=[]
-                    i+=1
-        if len(sgn)>0:
-            sg=G.subgraph(sgn)
-            fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
-            nx.write_gml(sg,fn)
-            i+=1
-            outputfiles.append(fn)
+    if partition:
+        i=0
+        for subset in nx.connected_components(G.to_undirected()):
+            sgn=[]
+            g=G.subgraph(subset)
+            gn=len(G.graph['samples'])
+            for n in nx.topological_sort(g):
+                if sgn==[]:
+                    fr=n
+                sgn.append(n)
+                if G.node[n]['n']==gn: #join/split node
+                    if len(sgn)>=hwm:
+                        sg=G.subgraph(sgn)
+                        fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
+                        nx.write_gml(sg,fn)
+                        outputfiles.append(fn)
+                        sgn=[]
+                        i+=1
+            if len(sgn)>0:
+                sg=G.subgraph(sgn)
+                fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
+                nx.write_gml(sg,fn)
+                i+=1
+                outputfiles.append(fn)
+    else:
+        fn=outputfile+'.gml'
+        nx.write_gml(G,fn)
+        outputfiles.append(fn)
     
     return outputfiles
 
@@ -639,6 +664,8 @@ def main():
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
+    parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign all complex bubbles in a graph.")
+    parser_compare = subparsers.add_parser('compare', prog="reveal compare", description="Estimation whether two graphs are the same.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -656,12 +683,12 @@ def main():
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
     parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
-    parser_aln.set_defaults(func=align)
+    parser_aln.set_defaults(func=align_cmd)
 
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
     parser_extract.add_argument('samples', nargs='*', help='Name of the sample to be extracted from the graph.')
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
-    parser_extract.set_defaults(func=extract)
+    parser_extract.set_defaults(func=extract_cmd)
     
     parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a mumplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
@@ -686,21 +713,104 @@ def main():
     parser_subgraph.set_defaults(func=subgraph)
 
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
-    parser_bubbles.set_defaults(func=bubbles)
+    parser_bubbles.set_defaults(func=bubbles_cmd)
+    
+    parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format from which complex bubbles are to be realigned.')
+    parser_realign.set_defaults(func=realign_cmd)
+    
+    parser_compare.add_argument("graphs", nargs=2, help='Two graphs in gfa format which should be compared.')
+    parser_compare.set_defaults(func=compare_cmd)
 
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
 
-def bubbles(args):
 
+def bubbles_cmd(args,):
     if len(args.graph)<1:
         logging.fatal("Specify a gfa file to extract bubbles.")
         return
 
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
-    
+
+    if 'samples' in G.graph:
+        gori=sorted(G.graph['samples'])
+    else:
+        gori=[]    
+
+    for pair,bubblenodes,size,ordD in bubbles(G):
+        #determine genotypes...
+        gt=G.successors(pair[0])
+        gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
+        
+        sourcesamples=G.node[pair[0]]['sample']
+        sucs=set(gt)
+        pres=set(G.predecessors(pair[1]))
+        sucs.discard(pair[1])
+        pres.discard(pair[0])
+        
+        simple=True
+        for suc in sucs:
+            if len(G.successors(suc))!=1:
+                simple=False
+        for pre in pres:
+            if len(G.predecessors(pre))!=1:
+                simple=False
+
+        if len(gt)<size or not simple:
+            #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
+            genotypes=['N']*len(gt)
+            calls={}
+            for i,node in enumerate(gt):
+                n=G.node[node]
+                for sample in n['sample']:
+                    calls[sample]=i
+        else:
+            genotypes=[None]*len(gt)
+            calls={}
+            tmpsource=sourcesamples.copy()
+            for i,node in enumerate(gt):
+                n=G.node[node]
+                if node==pair[1]: #should always be last of the iteration
+                    genotypes[i]="-"
+                    for sample in tmpsource: #all thats left..
+                        calls[sample]=i #TODO: need sample annotations on edges to properly make this call! For now, use this... works in case of monoploids
+                else:
+                    genotypes[i]=n['seq']
+                    for sample in n['sample']:
+                        if sample in calls:
+                            print "WARNING, multiple paths (diploid variant?), report only one allele...", bubblenodes
+                        else:
+                            calls[sample]=i
+                            tmpsource.discard(sample)
+        
+        d=G.node[pair[0]]
+        if 'coordcontig' in d:
+            crdctg=d['coordcontig']
+        else:
+            crdctg='N/A'
+        
+        if 'coordsample' in d:
+            crdsmpl=d['coordsample']
+        else:
+            crdsmpl='N/A'
+        
+        if 'start' in d:
+            pos=d['start']+len(d['seq'])+1
+        else:
+            pos='N/A'
+        
+        sys.stdout.write("%s\t%s\t%s\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),crdsmpl,crdctg,pos,",".join(genotypes)))
+         
+        for sample in gori:
+            if sample in calls:
+                sys.stdout.write("\t%s"%calls[sample])
+            else:
+                sys.stdout.write("\t-")
+        sys.stdout.write("\n")
+
+def bubbles(G):
     def entrance(G,v):
         for c in G.successors(v):
             if len(G.predecessors(c))==1:
@@ -819,16 +929,10 @@ def bubbles(args):
     
     ordD,ordD_,sspairs=superbubble(G)
     
-    if 'samples' in G.graph:
-        gori=sorted(G.graph['samples'])
-    else:
-        gori=[]
-    
     sg=set()
     for pair in sspairs:
         size=(ordD[pair[1]]-ordD[pair[0]])-1
         bubblenodes=ordD_[ordD[pair[0]]:ordD[pair[1]]+1]
-        
         sourcenode=G.node[pair[0]]
         sourcesamples=sourcenode['sample']
         sinknode=G.node[pair[1]]
@@ -838,75 +942,7 @@ def bubbles(args):
         if sourcesamples!=sinksamples:
             #print "ERROR, skipping invalid bubble"
             continue
-        
-        #determine genotypes...
-        gt=G.successors(pair[0])
-        gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
-        
-        sucs=set(gt)
-        pres=set(G.predecessors(pair[1]))
-        sucs.discard(pair[1])
-        pres.discard(pair[0])
-        
-        simple=True
-        for suc in sucs:
-            if len(G.successors(suc))!=1:
-                simple=False
-        for pre in pres:
-            if len(G.predecessors(pre))!=1:
-                simple=False
-
-        if len(gt)<size or not simple:
-            #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
-            genotypes=['N']*len(gt)
-            calls={}
-            for i,node in enumerate(gt):
-                n=G.node[node]
-                for sample in n['sample']:
-                    calls[sample]=i
-        else:
-            genotypes=[None]*len(gt)
-            calls={}
-            tmpsource=sourcesamples.copy()
-            for i,node in enumerate(gt):
-                n=G.node[node]
-                if node==pair[1]: #should always be last of the iteration
-                    genotypes[i]="-"
-                    for sample in tmpsource: #all thats left..
-                        calls[sample]=i #TODO: need sample annotations on edges to properly make this call! For now, use this... works in case of monoploids
-                else:
-                    genotypes[i]=n['seq']
-                    for sample in n['sample']:
-                        if sample in calls:
-                            print "WARNING, multiple paths (diploid variant?), report only one allele...", bubblenodes
-                        else:
-                            calls[sample]=i
-                            tmpsource.discard(sample)
-        
-        d=G.node[pair[0]]
-        if 'coordcontig' in d:
-            crdctg=d['coordcontig']
-        else:
-            crdctg='N/A'
-        
-        if 'coordsample' in d:
-            crdsmpl=d['coordsample']
-        else:
-            crdsmpl='N/A'
-        
-        if 'start' in d:
-            pos=d['start']+len(d['seq'])+1
-        else:
-            pos='N/A'
-        
-        sys.stdout.write("%s\t%s\t%s\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),crdsmpl,crdctg,pos,",".join(genotypes)))
-         
-        for sample in gori:
-            if sample in calls:
-                sys.stdout.write("\t%s"%calls[sample])
-            else:
-                sys.stdout.write("\t-")
-        sys.stdout.write("\n")
+        yield pair,bubblenodes,size,ordD
 
 def subgraph(args):
     if len(args.inputfiles)<=1:
@@ -965,7 +1001,7 @@ def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     
     return alignedbases/float(totbases)
 
-def align(args):
+def align_cmd(args):
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
@@ -1016,11 +1052,10 @@ def align(args):
         write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
     logging.info("Done.")
-    
     logging.info("Alignment graph written to: %s"%graph)
 
 def align_genomes(args):
-    #globale variables to simplify callbacks from c extension
+    #global variables to simplify callbacks from c extension
     global t,G,reference,o
     
     reference=args.reference
@@ -1052,12 +1087,12 @@ def align_genomes(args):
                 intv=idx.addsequence(seq.upper())
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                #schemes.ts.add(Intv)
-                schemes.interval2sampleid[Intv]=i
+                #schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),offsets={os.path.basename(sample):0},start=0,aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
-        logging.error("*** Input is not a DAG! Experimental output...")
+        logging.error("*** Input is not a DAG! ...")
+        return
     
     schemes.ts=t
     schemes.G=G
@@ -1075,7 +1110,6 @@ def align_genomes(args):
             idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
         else:
             idx.align(None,graphalign,threads=args.threads)
-    
     
     return G,idx
 
@@ -1169,6 +1203,88 @@ def align_contigs(args):
     G=nx.relabel_nodes(G,mapping, copy=True)
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%(((alignedbases*2)/float(totbases))*100,alignedbases,totbases))
     return G,idx
+
+
+def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False):
+    #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
+    #   - fasta filename
+    #   - gfa filename
+    #   - tuple of the form (name,seq)
+    
+    #global variables to simplify callbacks from c extension
+    global t,G,reference,o
+    reference=ref
+    t=IntervalTree()
+    idx=reveallib.index()
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    o=0
+    schemes.minlength=minlength
+    schemes.minscore=minscore
+    schemes.minn=minn
+    graph=False
+    
+    for aobj in seq:
+        if isinstance(aobj,tuple):
+            assert(len(aobj)==2)
+            name,seq=aobj
+            idx.addsample(name)
+            intv=idx.addsequence(seq.upper())
+            if intv[1]-intv[0]>0:
+                Intv=Interval(intv[0],intv[1])
+                t.add(Intv)
+                G.graph['samples'].append(name)
+                G.add_node(Intv,sample={name},contig={name},coordsample=name,coordcontig=None,offsets={name:0},start=0,aligned=0)
+        elif isinstance(aobj,str):
+            if not os.path.isfile(aobj):
+                logging.fatal("Not a file, expecting fasta or gfa file.")
+                return
+            idx.addsample(os.path.basename(aobj))
+            if aobj.endswith(".gfa"):
+                read_gfa(sample,idx,t,G)
+                graph=True
+            else: #assume a file in fastaformat
+                for name,seq in fasta_reader(sample):
+                    intv=idx.addsequence(seq.upper())
+                    if intv[1]-intv[0]>0:
+                        Intv=Interval(intv[0],intv[1])
+                        t.add(Intv)
+                        G.graph['samples'].append(os.path.basename(sample))
+                        G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),offsets={os.path.basename(sample):0},start=0,aligned=0)
+    
+    #connect all sequence at end and beginning
+    if global_align:
+        G.add_node('start',aligned=1)
+        G.add_node('end',aligned=1)
+        for node in G.nodes():
+            if not isinstance(node,Interval):
+                continue
+            if len(G.successors(node))==0:
+                G.add_edge(node,'end')
+            if len(G.predecessors(node))==0:
+                G.add_edge('start',node)
+    
+    if not nx.is_directed_acyclic_graph(G):
+        logging.error("*** Input is not a DAG! Not supported.")
+        return
+    
+    #write_gml(G,idx.T,outputfile="before",partition=False)
+
+    schemes.ts=t
+    schemes.G=G
+    
+    idx.construct()
+    
+    if len(seq)>2:
+        idx.align(schemes.multimumpicker,graphalign,threads=threads)
+    else:
+        if graph:
+            idx.align(schemes.graphmumpicker,graphalign,threads=threads)
+        else:
+            idx.align(None,graphalign,threads=threads)
+    
+    return G,idx
+
 
 def plot(args):
     from matplotlib import pyplot as plt
@@ -1298,64 +1414,240 @@ def plot(args):
         fn2=args.fastas[1][0:args.fastas[1].rfind('.')] if args.fastas[1].find('.')!=-1 else args.fastas[1]
         plt.savefig(fn1+"_"+fn2+".png")
 
-def comp(args):
+def realign_cmd(args):
+    if len(args.graph)<1:
+        logging.fatal("Specify a gfa file for which bubbles should be realigned.")
+        return
+    
     G=nx.DiGraph()
-    G.graph['samples']=[]
+    read_gfa(args.graph[0],None,"",G)
+    toplevelbubbles=[]
+    totalbubbles=0
+    converged=False
+    
+    while not converged:
+        converged=True
+        for pair,bubblenodes,size,ordD in bubbles(G):
+            sourcesamples=G.node[pair[0]]['sample']
+            sinksamples=G.node[pair[1]]['sample']
+            if not isinstance(sourcesamples,set):
+                continue
+            if sourcesamples!=sinksamples:
+                continue
+            sucs=set(G.successors(pair[0]))
+            pres=set(G.predecessors(pair[1]))
+            sucs.discard(pair[1])
+            pres.discard(pair[0])
+            simple=True
+            for suc in sucs:
+                if len(G.successors(suc))!=1:
+                    simple=False
+            for pre in pres:
+                if len(G.predecessors(pre))!=1:
+                    simple=False
+            if not simple:
+                totalbubbles+=1
+                bubblenodes=set(bubblenodes)
+                update=False
+                ignore=False
+                for tlbubble in toplevelbubbles:
+                    tlpair,tlbubblenodes,tlsize=tlbubble
+                    tlbubblenodes=set(tlbubblenodes)
+                    if bubblenodes.issuperset(tlbubblenodes):
+                        update=True
+                        break
+                    elif bubblenodes.issubset(tlbubblenodes):
+                        ignore=True
+                        break
+                if update:
+                    toplevelbubbles.remove(tlbubble)
+                    toplevelbubbles.append((pair,list(bubblenodes),size))
+                elif ignore:
+                    pass
+                else:
+                    toplevelbubbles.append((pair,list(bubblenodes),size))
+        
+        print "Realigning",len(toplevelbubbles),"top level complex bubbles"
+        nn=max([int(n) for n in G.nodes()])+1
+        
+        for pair,bubblenodes,size in toplevelbubbles:
+            print "Realigning bubble",pair
+            if pair[0] not in G:
+                print "skipping"
+                continue
+            if pair[1] not in G:
+                print "skipping"
+                continue
+            sg=G.subgraph(bubblenodes)
+            d={}
+            aobjs=[]
+            assert(sourcesamples==sinksamples)
+            
+            #extract all paths
+            for sample in sourcesamples.intersection(sinksamples): #should be equal..
+                #TODO: can also be that input was an assembly graph! What to do...
+                for i,seq in enumerate(extract(sg,sample)): #has to be just one component
+                    pass
+                assert(i==0)
+                if len(seq)>0:
+                    aobjs.append((sample,seq))
+                #TODO: check that bubbles dont that get too big for multi alignment, put some upper limit!
+            
+            ng,idx=align(aobjs,global_align=False)
+            T=idx.T
+            prune_nodes(ng,T)
+
+            if ng.number_of_nodes()==sg.number_of_nodes() and ng.number_of_edges()==sg.number_of_edges():
+                continue #dont substitute
+            else:
+                converged=False
+            
+            seq2node(ng,T)
+            mapping={}
+            startnodes=set()
+            endnodes=set()
+            for node,data in ng.nodes(data=True): 
+                if len(ng.predecessors(node))==0:
+                    startnodes.add(nn)
+                if len(ng.successors(node))==0:
+                    endnodes.add(nn)
+                corrected=dict()
+                for sample in data['offsets']:
+                    corrected[sample]=data['offsets'][sample]+G.node[pair[0]]['offsets'][sample]
+                ng.node[node]['offsets']=corrected
+                ng.node[node]['start']=corrected[ng.node[node]['coordsample']]
+                mapping[node]=nn
+                nn+=1
+            
+            ng=nx.relabel_nodes(ng,mapping) #relabel nodes to get rid of Intervals
+            
+            #store edges that have to be reconnected after removing
+            pre=G.predecessors(pair[0])
+            suc=G.successors(pair[1])
+            
+            for node in bubblenodes: #remove all bubblenodes from the original graph except for source and sink
+                G.remove_node(node)
+            for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph, except for source and sink, update those with seq attribute
+                G.add_node(node,data)
+
+            for edge in ng.edges():
+                G.add_edge(*edge)
+            
+            #reconnect nodes
+            for p in pre:
+                for start in startnodes:
+                    G.add_edge(p,start)
+            for s in suc:
+                for end in endnodes:
+                    G.add_edge(end,s)
+        
+    write_gfa(G,"",outputfile=args.graph[0].replace(".gfa",".realigned.gfa"))
+
+def seq2node(G,T):
+    for node in G:
+        if isinstance(node,Interval):
+            G.node[node]['seq']=T[node.begin:node.end]
+
+def comp(args):
+    g=nx.DiGraph()
+    g.graph['samples']=[]
     t=IntervalTree()
-    read_gfa(args.graph[0],None,t,G,targetsample=None)
-    for node in G.node:
-        G.node[node]['seq']=rc(G.node[node]['seq'])
-    G.reverse(copy=False)
-    write_gfa(G,"",outputfile=args.graph[0].replace('.gfa','.rc.gfa'), nometa=True)
+    read_gfa(args.graph[0],None,t,g,targetsample=None)
+    for node in g.node:
+        g.node[node]['seq']=rc(g.node[node]['seq'])
+    g.reverse(copy=false)
+    write_gfa(g,"",outputfile=args.graph[0].replace('.gfa','.rc.gfa'), nometa=true)
 
 def convert(args):
     if not args.graph[0].endswith(".gfa") or len(args.graph)!=1:
-        logging.fatal("Specify a gfa file.")
+        logging.fatal("specify a gfa file.")
         return
     
-    G=nx.DiGraph()
-    G.graph['samples']=[]
+    g=nx.DiGraph()
+    g.graph['samples']=[]
     t=IntervalTree()
     
-    read_gfa(args.graph[0],None,t,G,minsamples=args.minsamples,
+    read_gfa(args.graph[0],None,t,g,minsamples=args.minsamples,
                          maxsamples=args.maxsamples,
                          targetsample=args.targetsample)
     
-    graph=write_gml(G,"", hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
-    logging.info("GML graph written to: %s"%graph)
+    graph=write_gml(g,"", hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
+    logging.info("gml graph written to: %s"%graph)
 
-def extract(args):
+def extract_cmd(args):
     if not args.graph[0].endswith(".gfa"):
         logging.fatal("Invalid gfa file.")
         return
+    width=args.width
     G=nx.DiGraph()
     read_gfa(args.graph[0], None, None, G)
-    for sample in args.samples:
-        sg=[]
-        for node,data in G.nodes(data=True):
-            if sample in data['sample']:
-                sg.append(node)
-        width=args.width
-        for i,contig in enumerate(nx.connected_components(G.subgraph(sg).to_undirected())):
-            seq=""
-            try:
+    try:
+        i=0
+        for sample in args.samples:
+            for seq in extract(G,sample):
                 sys.stdout.write(">"+sample+" "+str(i)+"\n")
-                nodecount=0
-                for node in nx.topological_sort(G.subgraph(contig)):
-                    seq+=G.node[node]['seq']
-                    nodecount+=1
                 f=0
                 for i in xrange(width,len(seq),width):
                     sys.stdout.write(seq[f:i]+'\n')
                     f=i
                 sys.stdout.write(seq[f:]+'\n')
-                sys.stderr.write("Walked %d nodes\n"%nodecount)
-            except IOError:
-                try:
-                    sys.stdout.close()
-                except IOError:
-                    pass
-                try:
-                    sys.stderr.close()
-                except IOError:
-                    pass
+                i+=1
+    except IOError:
+        try:
+            sys.stdout.close()
+        except IOError:
+            pass
+        try:
+            sys.stderr.close()
+        except IOError:
+            pass
+
+def extract(G,sample):
+    sg=[]
+    for node,data in G.nodes(data=True):
+        if sample in data['sample']:
+            sg.append(node)
+    for i,contig in enumerate(nx.connected_components(G.subgraph(sg).to_undirected())):
+        seq=""
+        nodecount=0
+        for node in nx.topological_sort(G.subgraph(contig)):
+            seq+=G.node[node]['seq']
+        yield seq
+
+def compare_cmd(args): #NOTE, for now only look at sequence content. It is not a proper comparison, should look into graph isomorphism approximations...
+    
+    if not len(args.graphs)==2:
+        logging.fatal("Specify two graphs.")
+        return
+
+    if not args.graphs[0].endswith(".gfa"):
+        logging.fatal(args.graphs[0],"is not a gfa graph.")
+        return
+
+    if not args.graphs[1].endswith(".gfa"):
+        logging.fatal(args.graphs[1],"is not a gfa graph.")
+        return
+
+    G1=nx.DiGraph()
+    G2=nx.DiGraph()
+
+    read_gfa(args.graphs[0], None, None, G1)
+    read_gfa(args.graphs[1], None, None, G2)
+
+    G1seq=set()
+    G2seq=set()
+    
+    for node in G1.nodes():
+        G1seq.add(G1.node[node]['seq'])
+    
+    for node in G2.nodes():
+        G2seq.add(G2.node[node]['seq'])
+    
+    for seq in G1seq:
+        if seq not in G2seq:
+            print "Not in G2",seq
+
+    for seq in G2seq:
+        if seq not in G1seq:
+            print "Not in G1",seq
+
