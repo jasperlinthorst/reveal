@@ -1623,10 +1623,10 @@ def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100):
         else:
             distinctbubbles[(source,sink)]=nodes
     
-    print "Total of %d bubbles to realign"%len(distinctbubbles)
+    #print "Total of %d bubbles to realign"%len(distinctbubbles)
     i=1
     for source,sink in distinctbubbles:
-        print i,"realigning",source,sink
+        #print i,"realigning",source,sink
         G=realign_bubble(G,source,sink,minscore=minscore,minlength=minlength,minn=minn)
         i+=1
     
