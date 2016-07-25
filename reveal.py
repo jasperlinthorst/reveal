@@ -65,11 +65,11 @@ def breaknode(node,pos,l):
     for s in att['offsets']:
         soffsets[s]=att['offsets'][s]+((pos+l)-node.begin)
     
-    G.add_node(mn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=moffsets,start=att['start']+(pos-node.begin),aligned=0)#create merge node
+    G.add_node(mn,sample=att['sample'],offsets=moffsets,aligned=0)#create merge node
     
     if (node[0]!=pos):
         pn=Interval(node[0],pos)
-        G.add_node(pn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=att['offsets'],start=att['start'],aligned=0)#create prefix node
+        G.add_node(pn,sample=att['sample'],offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
         G.add_edge(pn,mn)
@@ -79,7 +79,7 @@ def breaknode(node,pos,l):
         pn=mn
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
-        G.add_node(sn,sample=att['sample'],contig=att['contig'],coordsample=att['coordsample'],coordcontig=att['coordcontig'],offsets=soffsets,start=att['start']+((pos+l)-node.begin),aligned=0)#create suffix node
+        G.add_node(sn,sample=att['sample'],offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
         G.add_edge(mn,sn)
@@ -126,7 +126,7 @@ def mergenodes(mns,mark=True):
     
     G.node[refnode]['offsets']=newoffsets
     G.node[refnode]['sample']=set.union(*[G.node[node]['sample'] for node in mns])
-    G.node[refnode]['contig']=set.union(*[G.node[node]['contig'] for node in mns])
+    #G.node[refnode]['contig']=set.union(*[G.node[node]['contig'] for node in mns])
     assert(len(G.node[refnode]['sample'])==len(newoffsets))
     if mark:
         o+=1 #increment counter, to be able to keep track of when nodes were aligned 
@@ -318,6 +318,25 @@ def graphalign(l,index,n,score,sp,penalty):
                 newleft=index.left
                 break
         
+        #from matplotlib import pyplot as plt
+        #import numpy as np
+        #plt.clf()
+        #nx.write_dot(G,'tmp.dot')
+        #pos=nx.graphviz_layout(G,prog='dot')
+        #nodesizes=[np.log2(node.end-node.begin)*20 for node in G.nodes()]
+        #valmap={}
+        #for node in G.nodes():
+        #    if G.node[node]['aligned']!=0:
+        #        valmap[node]=0.5
+        #    elif node.begin<index.nsep[0]:
+        #        valmap[node]=0
+        #    else:
+        #        valmap[node]=1
+        #nodecolors=[valmap[node] for node in G.nodes()]
+        #nx.draw(G,pos=pos,node_size=nodesizes, cmap=plt.get_cmap('jet'), node_color=nodecolors )#,labels=labels,arrows=True)
+        #plt.savefig(str(o)+".png", format="PNG")
+        #write_gml(G,index.T,outputfile=str(o))
+        
         return leading,trailing,rest,merged,newleft,newright
 
     except Exception as e:
@@ -372,12 +391,15 @@ def prune_nodes(G,T):
         for node,data in G.nodes_iter(data=True):
             if node not in G:
                 continue
+            
             for run in [0,1]:
                 if data['aligned']!=0:
                     if run==0:
                         neis=G.successors(node)
                     else:
                         neis=G.predecessors(node)
+                        if trace:
+                            print "predecessors",neis
                     seqs={}
                     for nei in neis:
                         #if G.node[nei]['aligned']==0:
@@ -391,7 +413,10 @@ def prune_nodes(G,T):
                             seqs[seq].append(nei)
                         else:
                             seqs[seq]=[nei]
-
+                    
+                    if trace:
+                        print "seqs",seqs
+                    
                     for key in seqs.keys():
                         group=seqs[key]
                         if len(group)>1:
@@ -406,6 +431,8 @@ def prune_nodes(G,T):
                                         merge=False
                                         break
                             if merge:
+                                if trace:
+                                    print "mergenode",group
                                 mergenodes(group,mark=False)
                                 converged=False
 
@@ -430,7 +457,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         graph.graph['samples']=[sample]
         if line.startswith('S'):
             s=line.strip().split('\t')
-            nodeid=s[1]
+            nodeid=int(s[1])
             ann={}
             
             if len(s)>3:
@@ -449,53 +476,47 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                    graph.add_node(intv,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},offsets={gfafile:0},start=0,aligned=0)
+                    graph.add_node(intv,sample={gfafile},offsets={gfafile:0},aligned=0)
                     mapping[nodeid]=intv
                 else:
                     if len(s)<3:
                         s.append("")
-                    graph.add_node(nodeid,sample={gfafile},contig={nodeid},coordsample={gfafile},coordcontig={nodeid},offsets={gfafile:0},start=0,seq=s[2].upper(),aligned=0)
+                    graph.add_node(nodeid,sample={gfafile},offsets={gfafile:0},seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=nodeid
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
                     ann['ORI']=[ann['ORI']]
-                if not(isinstance(ann['CTG'], list)):
-                    ann['CTG']=[ann['CTG']]
                 if not(isinstance(ann['OFFSETS'], list)):
                     ann['OFFSETS']=[ann['OFFSETS']]
-                
                 offsets=dict()
                 if 'OFFSETS' in ann: #create dictionary by sample name
                     for sampleid,offset in zip(ann['ORI'],ann['OFFSETS']):
                         offsets[id2sample[int(sampleid)]]=int(offset)
-                
                 tmp=set()
                 for ori in ann['ORI']: #map sample ids back to sample names
                     tmp.add(id2sample[int(ori)])
                 ann['ORI']=tmp
-
-                ann['CTG']=set(ann['CTG'])
                 
                 assert(isinstance(ann['ORI'],set))
 
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=nodeid
                 else:
                     if index!=None:
                         intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                        graph.add_node(intv,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),aligned=0,offsets=offsets)
+                        graph.add_node(intv,sample=ann['ORI'],aligned=0,offsets=offsets)
                         mapping[nodeid]=intv
                     else:
-                        graph.add_node(nodeid,sample=ann['ORI'],contig=ann['CTG'],coordsample=ann['CRD'],coordcontig=ann['CRDCTG'],start=int(ann['START']),seq=s[2].upper(),aligned=0,offsets=offsets)
+                        graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
                         mapping[nodeid]=nodeid
         
         #L      206     +       155     +       0M
@@ -504,24 +525,30 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
     for line in edges:
         e=line.strip().split()
-        assert(not graph.has_edge(mapping[e[1]],mapping[e[3]]))
-        assert(not graph.has_edge(mapping[e[3]],mapping[e[1]]))
-        graph.add_edge(mapping[e[1]],mapping[e[3]],ofrom=e[2],oto=e[4],cigar=e[5])
+        assert(not graph.has_edge(mapping[int(e[1])],mapping[int(e[3])]))
+        assert(not graph.has_edge(mapping[int(e[3])],mapping[int(e[1])]))
+        graph.add_edge(mapping[int(e[1])],mapping[int(e[3])],ofrom=e[2],oto=e[4],cigar=e[5])
 
 
 def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
+    
+    if not outputfile.endswith(".gfa"):
+        outputfile+=".gfa"
+    
     f=open(outputfile,'wb')
     sep=';'
     f.write('H\tVN:Z:1.0\n')
     f.write('H\tORI:Z:')
     
-    sample2id=dict() #not used yet, but we want a mapping to reduce space in gfa file
+    sample2id=dict()
     i=0
+    
     for sample in G.graph['samples']:
         for subsample in sample.rstrip().rstrip(sep).split(sep):
             f.write(subsample+sep)
             sample2id[subsample]=i
             i+=1
+    
     f.write('\n')
     
     mapping={}
@@ -558,14 +585,9 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
         if nometa:
             f.write("\n")
         else:
-            f.write("\t*\tORI:Z:%s\tCRD:Z:%s\tCRDCTG:Z:%s\tCTG:Z:%s\tSTART:Z:%s\tALIGNED:Z:%s\tOFFSETS:Z:%s\n" % 
+            f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\n" % 
                     (
                     sep.join([str(sample2id[s]) for s in data['sample']]),
-                    data['coordsample'].replace(sep,"").replace("\t","") if data['coordsample']!=None else "",
-                    data['coordcontig'].replace(sep,"").replace("\t","") if data['coordcontig']!=None else "",
-                    sep.join(data['contig']),
-                    data['start'],
-                    data['aligned'],
                     sep.join([str(data['offsets'][s]) for s in data['sample']])
                     )
                 )
@@ -581,37 +603,33 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
     f.close()
 
 def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
-
     G=G.copy()
-
     mapping={}
+    totn=len(G.graph['samples'])
+
+    for key in G.graph:
+        G.graph[key]=str(G.graph[key])
+    
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
-
+                
         if 'sample' in d:
             G.node[n]['n']=len(d['sample'])
         
         for key in d:
-            G.node[n][key]=str(d[key])
+            v=d[key]
+            if not isinstance(v,str) and not isinstance(v,int):
+                G.node[n][key]=str(v)
         
-        #G.node[n]['sample']=str(d['sample'])
-        #G.node[n]['contig']=str(d['contig'])
-        #G.node[n]['coordsample']=str(d['coordsample'])
-        #G.node[n]['coordcontig']=str(d['coordcontig'])
-        #G.node[n]['start']=str(d['start'])
-        #if d.has_key('offsets'):
-        #    G.node[n]['offsets']=str(d['offsets'])
-        #if d.has_key('aligned'):
-        #    G.node[n]['aligned']=str(d['aligned'])
         if 'seq' not in G.node[n]:
             if isinstance(n,Interval):
                 G.node[n]['seq']=T[n.begin:n.end].upper()
             else:
                 G.node[n]['seq']=""
-        
         G.node[n]['l']=len(G.node[n]['seq'])
-    G=nx.relabel_nodes(G,mapping,copy=True)
+    
+    G=nx.relabel_nodes(G,mapping)
     outputfiles=[]
     
     if partition:
@@ -619,22 +637,22 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
         for subset in nx.connected_components(G.to_undirected()):
             sgn=[]
             g=G.subgraph(subset)
-            gn=len(G.graph['samples'])
+            gn=G.graph['samples']
             for n in nx.topological_sort(g):
                 if sgn==[]:
                     fr=n
                 sgn.append(n)
-                if G.node[n]['n']==gn: #join/split node
+                if G.node[n]['n']==totn: #join/split node
                     if len(sgn)>=hwm:
                         sg=G.subgraph(sgn)
-                        fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
+                        fn=outputfile+'.'+str(i)+'.gml'
                         nx.write_gml(sg,fn)
                         outputfiles.append(fn)
                         sgn=[]
                         i+=1
             if len(sgn)>0:
                 sg=G.subgraph(sgn)
-                fn=outputfile+'.'+str(i)+'_'+G.node[fr]['start']+'_'+G.node[n]['start']+'.gml'
+                fn=outputfile+'.'+str(i)+'.gml'
                 nx.write_gml(sg,fn)
                 i+=1
                 outputfiles.append(fn)
@@ -664,7 +682,7 @@ def main():
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
-    parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign all complex bubbles in a graph.")
+    parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
     parser_compare = subparsers.add_parser('compare', prog="reveal compare", description="Estimation whether two graphs are the same.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
@@ -682,7 +700,7 @@ def main():
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
-    parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
+    #parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align_cmd)
 
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
@@ -700,11 +718,13 @@ def main():
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp)
 
-    parser_convert.add_argument('graph', nargs=1, help='The gfa graph to convert to gml.')
+    parser_convert.add_argument('graphs', nargs='*', help='The gfa graph to convert to gml.')
     parser_convert.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
     parser_convert.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
     parser_convert.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")
     parser_convert.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
+    parser_convert.add_argument("--gfa",  action="store_true", dest="gfa", default=False, help="Rewrite gfa file.")
+    parser_convert.add_argument("--partition",  action="store_true", dest="partition", default=False, help="Output graph as multiple subgraphs if possible.")
     parser_convert.set_defaults(func=convert)
 
     parser_subgraph.add_argument('inputfiles', nargs='*', help='The gfa graph followed by node ids that make up the subgraph.')
@@ -713,37 +733,46 @@ def main():
     parser_subgraph.set_defaults(func=subgraph)
 
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
+    parser_bubbles.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
     parser_bubbles.set_defaults(func=bubbles_cmd)
     
-    parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format from which complex bubbles are to be realigned.')
-    parser_realign.set_defaults(func=realign_cmd)
+    parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format for which a bubble should be realigned.') 
+    parser_realign.add_argument("source", nargs='?', type=int, help='Source node.')
+    parser_realign.add_argument("sink", nargs='?', type=int, help='Sink node.')
+    parser_realign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (default 20).")
+    parser_realign.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
+    parser_realign.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
+    parser_realign.add_argument("-o", dest="outfile", type=str, default=None, help="File to which realigned graph is to be written.")
+    parser_realign.add_argument("--all", action="store_true", dest="all", default=False, help="Trigger realignment for all complex bubbles.")
+    parser_realign.add_argument("--maxlen", dest="maxlen", default=10000000, help="Maximum length of the cumulative sum of all paths that run through the complex bubble.")
+    parser_realign.add_argument("--maxsize", dest="maxsize", default=100, help="Maximum allowed number of nodes that are contained in a complex bubble.")
+    parser_realign.set_defaults(func=realign_bubble_cmd)
     
     parser_compare.add_argument("graphs", nargs=2, help='Two graphs in gfa format which should be compared.')
     parser_compare.set_defaults(func=compare_cmd)
-
+    
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
 
 
-def bubbles_cmd(args,):
+def bubbles_cmd(args):
     if len(args.graph)<1:
         logging.fatal("Specify a gfa file to extract bubbles.")
         return
-
+    
+    reference=args.reference
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
-
+    
     if 'samples' in G.graph:
         gori=sorted(G.graph['samples'])
     else:
-        gori=[]    
-
+        gori=[]
+    
     for pair,bubblenodes,size,ordD in bubbles(G):
-        #determine genotypes...
         gt=G.successors(pair[0])
         gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
-        
         sourcesamples=G.node[pair[0]]['sample']
         sucs=set(gt)
         pres=set(G.predecessors(pair[1]))
@@ -758,51 +787,39 @@ def bubbles_cmd(args,):
             if len(G.predecessors(pre))!=1:
                 simple=False
 
+        #determine genotypes, associate genotype with numerical value
         if len(gt)<size or not simple:
             #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
             genotypes=['N']*len(gt)
-            calls={}
-            for i,node in enumerate(gt):
-                n=G.node[node]
-                for sample in n['sample']:
-                    calls[sample]=i
         else:
             genotypes=[None]*len(gt)
-            calls={}
-            tmpsource=sourcesamples.copy()
             for i,node in enumerate(gt):
-                n=G.node[node]
-                if node==pair[1]: #should always be last of the iteration
+                genotypes[i]=G.node[node]['seq']
+                if node==pair[1]:
                     genotypes[i]="-"
-                    for sample in tmpsource: #all thats left..
-                        calls[sample]=i #TODO: need sample annotations on edges to properly make this call! For now, use this... works in case of monoploids
-                else:
-                    genotypes[i]=n['seq']
-                    for sample in n['sample']:
-                        if sample in calls:
-                            print "WARNING, multiple paths (diploid variant?), report only one allele...", bubblenodes
-                        else:
-                            calls[sample]=i
-                            tmpsource.discard(sample)
+        
+        #make call, associate sample with the numerical value of the genotype
+        tmpsource=sourcesamples.copy()
+        calls={}
+        for i,node in enumerate(gt):
+            n=G.node[node]
+            for sample in n['offsets'].keys():
+                if sample not in tmpsource:
+                    continue
+                calls[sample]=i
+                tmpsource.discard(sample)
         
         d=G.node[pair[0]]
-        if 'coordcontig' in d:
-            crdctg=d['coordcontig']
-        else:
-            crdctg='N/A'
         
-        if 'coordsample' in d:
-            crdsmpl=d['coordsample']
+        if reference==None or reference not in d['offsets'].keys():
+            ref=d['offsets'].keys()[0]
+            pos=d['offsets'][ref]+len(d['seq'])+1
         else:
-            crdsmpl='N/A'
+            ref=reference
+            pos=d['offsets'][reference]+len(d['seq'])+1
         
-        if 'start' in d:
-            pos=d['start']+len(d['seq'])+1
-        else:
-            pos='N/A'
+        sys.stdout.write("%d\t%d\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join([str(x) for x in bubblenodes]),ref,pos,",".join(genotypes)))
         
-        sys.stdout.write("%s\t%s\t%s\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join(bubblenodes),crdsmpl,crdctg,pos,",".join(genotypes)))
-         
         for sample in gori:
             if sample in calls:
                 sys.stdout.write("\t%s"%calls[sample])
@@ -960,7 +977,7 @@ def subgraph(args):
     if args.gml:
         write_gml(sg,"",outputfile=args.outfile)
     else:
-        write_gfa(sg,"",outputfile=args.outfile+".gfa")
+        write_gfa(sg,"",outputfile=args.outfile)
 
 def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     global t,G,reference,o
@@ -976,13 +993,13 @@ def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     intv=idx.addsequence(s1.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s1"},contig={"s1"},coordsample="s1",coordcontig="s1",offsets={"s1":0},start=0,aligned=0)
+    G.add_node(Intv,sample={"s1"},offsets={"s1":0},aligned=0)
 
     idx.addsample("s2")
     intv=idx.addsequence(s2.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s2"},contig={"s2"},coordsample="s2",coordcontig="s2",offsets={"s2":0},start=0,aligned=0)
+    G.add_node(Intv,sample={"s2"},offsets={"s2":0},aligned=0)
     
     schemes.ts=t
     schemes.minlength=minlength
@@ -1006,14 +1023,15 @@ def align_cmd(args):
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
     
-    if args.contigs:
-        if len(args.inputfiles)!=2:
-            logging.fatal("Only pairwise alignment of contigs is possible.")
-            return
-        else:
-            G,idx=align_contigs(args)
-    else:
-        G,idx=align_genomes(args)
+    #if args.contigs:
+    #    if len(args.inputfiles)!=2:
+    #        logging.fatal("Only pairwise alignment of contigs is possible.")
+    #        return
+    #    else:
+    #        G,idx=align_contigs(args)
+    #else:
+    
+    G,idx=align_genomes(args)
     
     if args.output==None:
         args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
@@ -1070,7 +1088,7 @@ def align_genomes(args):
     schemes.minscore=args.minscore
     schemes.minn=args.minn
     graph=False
-
+    
     for i,sample in enumerate(args.inputfiles):
         idx.addsample(os.path.basename(sample))
         if sample.endswith(".gfa"):
@@ -1080,6 +1098,10 @@ def align_genomes(args):
             read_gfa(sample,idx,t,G,minsamples=args.minsamples,
                                     maxsamples=args.maxsamples,
                                     targetsample=args.targetsample)
+            
+            if len(G.graph['samples'])==0: #if not from reveal, might not have a header
+                G.graph['samples'].append(os.path.basename(sample))
+
             logging.info("Done.")
         else: #consider it to be a fasta file
             G.graph['samples'].append(os.path.basename(sample))
@@ -1088,7 +1110,7 @@ def align_genomes(args):
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 #schemes.interval2sampleid[Intv]=i
-                G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),offsets={os.path.basename(sample):0},start=0,aligned=0)
+                G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! ...")
@@ -1142,7 +1164,7 @@ def align_contigs(args):
             intv=idx.addsequence(chrom.upper())
             Intv=Interval(intv[0],intv[1])
             t.add(Intv)
-            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordsample=ref,coordcontig=chromname.replace(";",""),offsets={ref:0},start=0,aligned=0)
+            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordcontig=chromname.replace(";",""),offsets={ref:0},aligned=0)
     
     totbases=idx.n-nx.number_of_nodes(G)
     alignedbases=0
@@ -1154,7 +1176,7 @@ def align_contigs(args):
         intv=idx.addsequence(contig.upper())
         Intv=Interval(intv[0],intv[1])
         t.add(Intv)
-        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordsample=contigs,coordcontig=contigname.replace(";",""),offsets={contigs:0},start=0,aligned=0)
+        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordcontig=contigname.replace(";",""),offsets={contigs:0},aligned=0)
 
     logging.info("Constructing index... (size=%d)"%idx.n)
     idx.construct()
@@ -1205,7 +1227,7 @@ def align_contigs(args):
     return G,idx
 
 
-def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False):
+def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -1224,7 +1246,7 @@ def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=Fal
     schemes.minn=minn
     graph=False
     
-    for aobj in seq:
+    for aobj in aobjs:
         if isinstance(aobj,tuple):
             assert(len(aobj)==2)
             name,seq=aobj
@@ -1234,14 +1256,14 @@ def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=Fal
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 G.graph['samples'].append(name)
-                G.add_node(Intv,sample={name},contig={name},coordsample=name,coordcontig=None,offsets={name:0},start=0,aligned=0)
+                G.add_node(Intv,sample={name},offsets={name:0},aligned=0)
         elif isinstance(aobj,str):
             if not os.path.isfile(aobj):
                 logging.fatal("Not a file, expecting fasta or gfa file.")
                 return
             idx.addsample(os.path.basename(aobj))
             if aobj.endswith(".gfa"):
-                read_gfa(sample,idx,t,G)
+                read_gfa(aobj,idx,t,G)
                 graph=True
             else: #assume a file in fastaformat
                 for name,seq in fasta_reader(sample):
@@ -1250,7 +1272,7 @@ def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=Fal
                         Intv=Interval(intv[0],intv[1])
                         t.add(Intv)
                         G.graph['samples'].append(os.path.basename(sample))
-                        G.add_node(Intv,sample={os.path.basename(sample)},contig={name.replace(";","")},coordsample=os.path.basename(sample),coordcontig=name.replace(";",""),offsets={os.path.basename(sample):0},start=0,aligned=0)
+                        G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)
     
     #connect all sequence at end and beginning
     if global_align:
@@ -1268,14 +1290,12 @@ def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=Fal
         logging.error("*** Input is not a DAG! Not supported.")
         return
     
-    #write_gml(G,idx.T,outputfile="before",partition=False)
-
     schemes.ts=t
     schemes.G=G
     
     idx.construct()
     
-    if len(seq)>2:
+    if len(aobjs)>2:
         idx.align(schemes.multimumpicker,graphalign,threads=threads)
     else:
         if graph:
@@ -1283,6 +1303,8 @@ def align(seq,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=Fal
         else:
             idx.align(None,graphalign,threads=threads)
     
+    prune_nodes(G,idx.T)
+
     return G,idx
 
 
@@ -1414,134 +1436,201 @@ def plot(args):
         fn2=args.fastas[1][0:args.fastas[1].rfind('.')] if args.fastas[1].find('.')!=-1 else args.fastas[1]
         plt.savefig(fn1+"_"+fn2+".png")
 
-def realign_cmd(args):
+
+def realign_bubble_cmd(args):
     if len(args.graph)<1:
         logging.fatal("Specify a gfa file for which bubbles should be realigned.")
         return
     
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
-    toplevelbubbles=[]
-    totalbubbles=0
-    converged=False
     
-    while not converged:
-        converged=True
-        for pair,bubblenodes,size,ordD in bubbles(G):
-            sourcesamples=G.node[pair[0]]['sample']
-            sinksamples=G.node[pair[1]]['sample']
-            if not isinstance(sourcesamples,set):
-                continue
-            if sourcesamples!=sinksamples:
-                continue
-            sucs=set(G.successors(pair[0]))
-            pres=set(G.predecessors(pair[1]))
-            sucs.discard(pair[1])
-            pres.discard(pair[0])
-            simple=True
+    if args.all:
+        G=realign_all(G,minscore=args.minscore,minlength=args.minlength,minn=args.minn,maxsize=args.maxsize,maxlen=args.maxlen)
+    else:
+        G=realign_bubble(G,args.source,args.sink,minscore=args.minscore,minlength=args.minlength,minn=args.minn,maxsize=args.maxsize,maxlen=args.maxlen)
+    
+    if args.outfile==None:
+        fn=args.graph[0].replace(".gfa",".realigned.gfa")
+    else:
+        fn=args.outfile
+    
+    write_gfa(G,"",outputfile=fn)
+
+def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxlen=10000000):
+    #print "Realigning graph between %s and %s"%(source,sink)
+    nn=max(G.nodes())+1
+    bubblenodes=[]
+
+    assert(source in G)
+    assert(sink in G)
+    sourcesamples=G.node[source]['sample']
+    sinksamples=G.node[sink]['sample']
+    assert(sourcesamples==sinksamples)
+    
+    bubblesnodes=[]
+    add=False
+    for node in nx.topological_sort(G):
+        if node==source:
+            add=True
+        if add:
+            bubblenodes.append(node)
+        if node==sink:
+            add=False
+    
+    sg=G.subgraph(bubblenodes)
+    d={}
+    aobjs=[]
+    cumsum=0
+    
+    #extract all paths
+    for sample in sourcesamples.intersection(sinksamples): #should be equal..
+        #TODO: can also be that input was an assembly graph! What to do...
+        for i,seq in enumerate(extract(sg,sample)): #has to be just one component
+            pass
+        assert(i==0)
+        cumsum+=len(seq)
+        if len(seq)>0:
+            aobjs.append((sample,seq))
+        
+        if cumsum>maxlen:
+            print "Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink)
+            return G
+        #TODO: check that bubbles dont that get too big for multi alignment, put some upper limit!
+    
+    ng,idx=align(aobjs,global_align=False,minscore=minscore,minlength=minlength,minn=minn)
+    T=idx.T
+    prune_nodes(ng,T)
+    
+    seq2node(ng,T)
+    mapping={}
+    startnodes=set()
+    endnodes=set()
+    
+    for node,data in ng.nodes(data=True): 
+        if len(ng.predecessors(node))==0:
+            startnodes.add(nn)
+        if len(ng.successors(node))==0:
+            endnodes.add(nn)
+        corrected=dict()
+        for sample in data['offsets']:
+            corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sample]
+        ng.node[node]['offsets']=corrected
+        mapping[node]=nn
+        nn+=1
+    
+    ng=nx.relabel_nodes(ng,mapping) #relabel nodes to get rid of Intervals
+    
+    #store edges that have to be reconnected after removing
+    pre=G.predecessors(source)
+    suc=G.successors(sink)
+    
+    for node in bubblenodes: #remove all bubblenodes from the original graph except for source and sink
+        G.remove_node(node)
+    for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph, except for source and sink, update those with seq attribute
+        G.add_node(node,data)
+    for edge in ng.edges():
+        G.add_edge(*edge)
+    
+    #reconnect nodes
+    for p in pre:
+        for start in startnodes:
+            G.add_edge(p,start)
+    for s in suc:
+        for end in endnodes:
+            G.add_edge(end,s)
+    
+    return G
+
+def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100):
+    complexbubbles=dict()
+    source2sink=dict()
+    sink2source=dict()
+    
+    #detect all complex bubbles
+    for pair,bubblenodes,size,ordD in bubbles(G):
+        sourcesamples=G.node[pair[0]]['sample']
+        sinksamples=G.node[pair[1]]['sample']
+
+        if not isinstance(sourcesamples,set):
+            print pair,"skipping, not set"
+            continue
+        if sourcesamples!=sinksamples:
+            print pair,sourcesample,sinksamples
+            continue
+        
+        sucs=set(G.successors(pair[0]))
+        pres=set(G.predecessors(pair[1]))
+        sucs.discard(pair[1])
+        pres.discard(pair[0])
+        
+        simple=True
+        if len(sucs)!=len(pres) or len(sucs)<size or len(pres)<size:
+            simple=False
+        else:
             for suc in sucs:
                 if len(G.successors(suc))!=1:
                     simple=False
             for pre in pres:
                 if len(G.predecessors(pre))!=1:
                     simple=False
-            if not simple:
-                totalbubbles+=1
-                bubblenodes=set(bubblenodes)
-                update=False
-                ignore=False
-                for tlbubble in toplevelbubbles:
-                    tlpair,tlbubblenodes,tlsize=tlbubble
-                    tlbubblenodes=set(tlbubblenodes)
-                    if bubblenodes.issuperset(tlbubblenodes):
-                        update=True
-                        break
-                    elif bubblenodes.issubset(tlbubblenodes):
-                        ignore=True
-                        break
-                if update:
-                    toplevelbubbles.remove(tlbubble)
-                    toplevelbubbles.append((pair,list(bubblenodes),size))
-                elif ignore:
-                    pass
-                else:
-                    toplevelbubbles.append((pair,list(bubblenodes),size))
         
-        print "Realigning",len(toplevelbubbles),"top level complex bubbles"
-        nn=max([int(n) for n in G.nodes()])+1
-        
-        for pair,bubblenodes,size in toplevelbubbles:
-            print "Realigning bubble",pair
-            if pair[0] not in G:
-                print "skipping"
-                continue
-            if pair[1] not in G:
-                print "skipping"
-                continue
-            sg=G.subgraph(bubblenodes)
-            d={}
-            aobjs=[]
-            assert(sourcesamples==sinksamples)
-            
-            #extract all paths
-            for sample in sourcesamples.intersection(sinksamples): #should be equal..
-                #TODO: can also be that input was an assembly graph! What to do...
-                for i,seq in enumerate(extract(sg,sample)): #has to be just one component
-                    pass
-                assert(i==0)
-                if len(seq)>0:
-                    aobjs.append((sample,seq))
-                #TODO: check that bubbles dont that get too big for multi alignment, put some upper limit!
-            
-            ng,idx=align(aobjs,global_align=False)
-            T=idx.T
-            prune_nodes(ng,T)
-
-            if ng.number_of_nodes()==sg.number_of_nodes() and ng.number_of_edges()==sg.number_of_edges():
-                continue #dont substitute
-            else:
+        if not simple and size<maxsize:
+            complexbubbles[pair]=bubblenodes
+            source2sink[pair[0]]=pair[1]
+            sink2source[pair[1]]=pair[0]
+    
+    #join complex bubbles that share a source/sink nodes
+    converged=False
+    while not converged:
+        converged=True
+        for source,sink in complexbubbles:
+            if sink in source2sink:
+                #sink is also a source, combine the two
+                #print "sink is also source, merging",(source,sink),"with",(sink,source2sink[sink])
+                complexbubbles[(source,source2sink[sink])]=complexbubbles[(source,sink)]+complexbubbles[(sink,source2sink[sink])]
+                del complexbubbles[(sink, source2sink[sink])]
+                del complexbubbles[(source,sink)]
+                source2sink[source]=source2sink[sink]
+                sink2source[source2sink[sink]]=source
+                del sink2source[sink]
+                del source2sink[sink]
                 converged=False
-            
-            seq2node(ng,T)
-            mapping={}
-            startnodes=set()
-            endnodes=set()
-            for node,data in ng.nodes(data=True): 
-                if len(ng.predecessors(node))==0:
-                    startnodes.add(nn)
-                if len(ng.successors(node))==0:
-                    endnodes.add(nn)
-                corrected=dict()
-                for sample in data['offsets']:
-                    corrected[sample]=data['offsets'][sample]+G.node[pair[0]]['offsets'][sample]
-                ng.node[node]['offsets']=corrected
-                ng.node[node]['start']=corrected[ng.node[node]['coordsample']]
-                mapping[node]=nn
-                nn+=1
-            
-            ng=nx.relabel_nodes(ng,mapping) #relabel nodes to get rid of Intervals
-            
-            #store edges that have to be reconnected after removing
-            pre=G.predecessors(pair[0])
-            suc=G.successors(pair[1])
-            
-            for node in bubblenodes: #remove all bubblenodes from the original graph except for source and sink
-                G.remove_node(node)
-            for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph, except for source and sink, update those with seq attribute
-                G.add_node(node,data)
-
-            for edge in ng.edges():
-                G.add_edge(*edge)
-            
-            #reconnect nodes
-            for p in pre:
-                for start in startnodes:
-                    G.add_edge(p,start)
-            for s in suc:
-                for end in endnodes:
-                    G.add_edge(end,s)
-        
-    write_gfa(G,"",outputfile=args.graph[0].replace(".gfa",".realigned.gfa"))
+                break
+            elif source in sink2source:
+                #source is also sink, combine
+                #print "source is also sink, merging",(sink2source[source],source),"with",(source,sink)
+                complexbubbles[(sink2source[source],sink)]=complexbubbles[(source,sink)]+complexbubbles[(sink2source[source],source)]
+                del complexbubbles[(sink2source[source],source)]
+                del complexbubbles[(source,sink)]
+                source2sink[sink2source[source]]=sink
+                sink2source[sink]=sink2source[source]
+                del sink2source[source]
+                del source2sink[source]
+                converged=False
+                break
+    
+    #filter out any bubbles that are a subset of another complex bubble
+    distinctbubbles=dict()
+    values=complexbubbles.values()
+    for source,sink in complexbubbles:
+        nodes=complexbubbles[(source,sink)]
+        for bubble in values:
+            if set(bubble).issuperset(set(nodes)) and not set(bubble)==set(nodes):
+                #contained, dont add
+                #print source,sink,"is contained"
+                break
+        else:
+            distinctbubbles[(source,sink)]=nodes
+    
+    print "Total of %d bubbles to realign"%len(distinctbubbles)
+    i=1
+    for source,sink in distinctbubbles:
+        print i,"realigning",source,sink
+        G=realign_bubble(G,source,sink,minscore=minscore,minlength=minlength,minn=minn)
+        i+=1
+    
+    return G
 
 def seq2node(G,T):
     for node in G:
@@ -1555,24 +1644,28 @@ def comp(args):
     read_gfa(args.graph[0],None,t,g,targetsample=None)
     for node in g.node:
         g.node[node]['seq']=rc(g.node[node]['seq'])
-    g.reverse(copy=false)
-    write_gfa(g,"",outputfile=args.graph[0].replace('.gfa','.rc.gfa'), nometa=true)
+    g.reverse(copy=False)
+    write_gfa(g,"",outputfile=args.graph[0].replace('.gfa','.rc.gfa'), nometa=False)
 
 def convert(args):
-    if not args.graph[0].endswith(".gfa") or len(args.graph)!=1:
-        logging.fatal("specify a gfa file.")
-        return
-    
-    g=nx.DiGraph()
-    g.graph['samples']=[]
-    t=IntervalTree()
-    
-    read_gfa(args.graph[0],None,t,g,minsamples=args.minsamples,
-                         maxsamples=args.maxsamples,
-                         targetsample=args.targetsample)
-    
-    graph=write_gml(g,"", hwm=args.hwm, outputfile=args.graph[0].rstrip(".gfa"))
-    logging.info("gml graph written to: %s"%graph)
+    for graph in args.graphs:
+        if not graph.endswith(".gfa"):
+            logging.fatal("%s does not have a gfa extension."%graph)
+            return
+        
+        g=nx.DiGraph()
+        g.graph['samples']=[]
+        read_gfa(graph,None,None,g,minsamples=args.minsamples,
+                             maxsamples=args.maxsamples,
+                             targetsample=args.targetsample)
+        
+        if args.gfa:
+            fn=graph.replace(".gfa",".rewrite.gfa")
+            graph=write_gfa(g,"", outputfile=fn)
+            logging.info("gml graph written to: %s"%fn)
+        else:
+            fn=write_gml(g,"", hwm=args.hwm, outputfile=graph.replace(".gfa",""), partition=args.partition)
+            logging.info("gml graph written to: %s"%fn)
 
 def extract_cmd(args):
     if not args.graph[0].endswith(".gfa"):

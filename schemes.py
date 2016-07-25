@@ -108,6 +108,7 @@ def multimumpicker(multimums,idx):
     try:
         bestmum=None
         trace=False
+
         #if idx.left!=None and idx.right!=None:
         #    leftoffsets=G.node[idx.left]['offsets']
         #    rightoffsets=G.node[idx.right]['offsets']
@@ -116,9 +117,6 @@ def multimumpicker(multimums,idx):
         #            trace=True
         
         for multimum in multimums:
-            if trace:
-                print multimum
-            
             l,n,sp=multimum
             if l<minlength:
                 continue
@@ -127,45 +125,33 @@ def multimumpicker(multimums,idx):
             
             if bestmum!=None:
                 if n<bestmum[2]:
-                    if trace:
-                        print "n < bestmum"
                     continue
                 if n==bestmum[2] and l<=bestmum[0]:
-                    if trace:
-                        print "n equal and l <= bestmum"
                     continue
 
             if idx.nsamples==len(idx.nodes):
                 ds=[start-ts[start].pop()[0] for start in sp]
                 ads=sum(ds)/n
-                spenalty=sum([abs(p-ads) for p in ds])
-            
+                spenalty=max([abs(p-ads) for p in ds])
+                
                 de=[ts[start].pop()[1]-(start+l) for start in sp]
                 ade=sum(de)/n
-                epenalty=sum([abs(p-ade) for p in de])
-            
+                epenalty=max([abs(p-ade) for p in de])
+                
                 penalty=min([spenalty,epenalty])
                 
-                if trace:
-                    print "penalty",penalty
-                
                 score=(l*n)-penalty
-                
-                if trace:
-                    print "score", score
-                
             else:
-                if trace:
-                    "print nsamples != len(nodes)"
                 score=minscore #in case of multi aligning graph (havent tried yet) we cant penalize gaps this easily..
             
             if score<minscore:
                 if trace:
-                    print "score too low"
+                    print "score too low",l,score,n
                 continue
             
             if isinstance(sp,tuple):
                 sp=list(sp)
+            
             bestmum=(l,idx,n,score,sp,penalty)
 
             if trace:
@@ -173,7 +159,7 @@ def multimumpicker(multimums,idx):
         
         if trace:
             print bestmum
-       
+        
         return bestmum
     except:
         print "MULITMUMPICKER ERROR", sys.exc_info()[0]
@@ -228,21 +214,16 @@ def graphmumpicker(mums,idx,penalize=True):
                     continue
             
             if penalize:
+                spenalty=None
+                epenalty=None
                 if nleft!=None:
                     n1distfromlmapoints=dict()
                     for sample in n1samples:
                         n1distfromlmapoints[sample]=(n1data['offsets'][sample]+(sp[0]-n1[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
-                    
                     n2distfromlmapoints=dict()
                     for sample in n2samples:
                         n2distfromlmapoints[sample]=(n2data['offsets'][sample]+(sp[1]-n2[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
-                    
-                    a=n1distfromlmapoints.values()+n2distfromlmapoints.values()
-                    ads=sum(a)/n
-                    spenalty=sum([abs(p-ads) for p in a])
-                else:
-                    spenalty=0
-                
+                    spenalty=mindist(n1distfromlmapoints.values(),n2distfromlmapoints.values())
                 if nright!=None:
                     n1distfromrmapoints=dict()
                     for sample in n1samples:
@@ -250,13 +231,15 @@ def graphmumpicker(mums,idx,penalize=True):
                     n2distfromrmapoints=dict()
                     for sample in n2samples:
                         n2distfromrmapoints[sample]=nright['offsets'][sample] - ( n2data['offsets'][sample] + (sp[1]-n2[0]) + l )
-                    a=n1distfromrmapoints.values()+n2distfromrmapoints.values()
-                    ads=sum(a)/n
-                    epenalty=sum([abs(p-ads) for p in a])
+                    epenalty=mindist(n1distfromrmapoints.values(),n2distfromrmapoints.values())
+                if epenalty==None and spenalty==None:
+                    penalty=0
+                elif epenalty==None:
+                    penalty=spenalty
+                elif spenalty==None:
+                    penalty=epenalty
                 else:
-                    epenalty=0
-                
-                penalty=min([spenalty,epenalty]) #TODO: calculate indel penalty based on distances from graph
+                    penalty=min([spenalty,epenalty]) #TODO: calculate indel penalty based on distances from graph
             else:
                 penalty=0
             
@@ -269,15 +252,57 @@ def graphmumpicker(mums,idx,penalize=True):
                 continue
             
             bestmum=(l,idx,2,score,[sp[0],sp[1]],penalty)
+             
             bestn=n
+            
             if trace:
                 print bestmum
-            
+        
+        #if bestmum!=None:
+        #    if bestmum[5]!=0:
+        #        print bestmum
+
         return bestmum
     except:
         print "graphmumpicker",n1data['offsets'],len(n1data['offsets']),n2data['offsets'],len(n2data['offsets']),len(nleft['offsets']),len(nright['offsets'])
         print "GRAPHMUMPICKER ERROR", sys.exc_info()[0]
         return None 
+
+def mindist(x,y):
+    x=sorted(list(set(x)))
+    y=sorted(list(set(y)))
+    i=0
+    j=0
+    mind=abs(x[i]-y[j])
+    while True:
+        if i<len(x)-1:
+            xdif=abs(x[i+1] - y[j])
+        else:
+            xdif=abs(x[i] - y[j])
+
+        if j<len(y)-1:
+            ydif=abs(x[i] - y[j+1])
+        else:
+            ydif=abs(x[i] - y[j])
+        
+        if xdif < ydif:
+            if xdif<mind:
+                mind=xdif
+            i+=1
+            if i==len(x):
+                break
+        else:
+            if ydif<mind:
+                mind=ydif
+            j+=1
+            if j==len(y):
+                break
+        
+        if mind==0:
+            break
+    return mind
+
+
 
 def printSA(index,maxline=100,start=0,end=200):
     sa=index.SA
