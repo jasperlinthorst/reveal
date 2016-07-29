@@ -588,14 +588,20 @@ reveal_dealloc(RevealIndex *self)
         if (self->nsep!=NULL){
             free(self->nsep);
         }
-
+        if (self->SA!=NULL){
+            free(self->SA); //Should only be free'd here when no alignment was constructed!
+        }
+        if (self->LCP!=NULL){
+            free(self->LCP); //Should only be free'd here when no alignment was constructed!
+        }
+        
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
         Py_DECREF(self->left);
         Py_DECREF(self->right);
     } else {
         //fprintf(stderr,"dealloc SUB index!\n");
-        
+        //Py_DECREF(self->main);
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
         Py_DECREF(self->left);

@@ -81,9 +81,11 @@ PyObject * getmums(RevealIndex *index){
         //PyObject *mum=Py_BuildValue("i,i,O",i_lcp,n,sp);
         
 	PyObject *mum=Py_BuildValue("i,i,(i,i)",index->LCP[i],2,aStart,bStart);
-	if (PyList_Append(mums,mum)==0){
+	
+        if (PyList_Append(mums,mum)==0){
 	    Py_DECREF(mum);
 	} else {
+            Py_DECREF(mum); //append increments reference count!
 	    return NULL;
 	}
     }
@@ -1032,7 +1034,9 @@ void *aligner(void *arg) {
             free(mmum.sp);
             if (idx->depth==0){
                 free(idx->SA);
+                idx->SA=NULL;
                 free(idx->LCP);
+                idx->LCP=NULL;
             }
             
             pthread_mutex_lock(&python); 

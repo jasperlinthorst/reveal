@@ -174,22 +174,19 @@ def graphmumpicker(mums,idx,penalize=True):
         nright=None
         trace=False
         
-        #if (8306560, 8306677) in set(idx.nodes):#==set([(6742328, 6742408), (2221063, 2221143)]):
-        #    trace=True
-        #    print idx.left, idx.right, idx.n
-        #    print "nodes",idx.nodes
-        
         if idx.left!=None:
             nlefttup=idx.left
             nleft=G.node[Interval(nlefttup[0],nlefttup[1])]
-        
+            #if nlefttup[1]-nlefttup[0]==1354:
+            #    trace=True
+
         if idx.right!=None:
             nrighttup=idx.right
             nright=G.node[Interval(nrighttup[0],nrighttup[1])]
         
         for mum in mums:
-            if trace:
-                print mum
+            #if trace:
+            #    print mum
 
             l,n,sp=mum
             
@@ -223,7 +220,13 @@ def graphmumpicker(mums,idx,penalize=True):
                     n2distfromlmapoints=dict()
                     for sample in n2samples:
                         n2distfromlmapoints[sample]=(n2data['offsets'][sample]+(sp[1]-n2[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
+                    
+                    #if trace:
+                    #    print n1,n1data['offsets'],n1distfromlmapoints.values()
+                    #    print n2,n2data['offsets'],n2distfromlmapoints.values()
+                    
                     spenalty=mindist(n1distfromlmapoints.values(),n2distfromlmapoints.values())
+                    
                 if nright!=None:
                     n1distfromrmapoints=dict()
                     for sample in n1samples:
@@ -246,21 +249,17 @@ def graphmumpicker(mums,idx,penalize=True):
             score=(l*n)-penalty
             
             if trace:
-                print l, penalty, score, sp
+                print l, penalty, score
             
             if score<minscore:
                 continue
             
             bestmum=(l,idx,2,score,[sp[0],sp[1]],penalty)
-             
+            
             bestn=n
             
             if trace:
                 print bestmum
-        
-        #if bestmum!=None:
-        #    if bestmum[5]!=0:
-        #        print bestmum
 
         return bestmum
     except:

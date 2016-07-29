@@ -20,9 +20,9 @@ typedef struct
     PyObject * samples; //list of sample names that are contained in the index
     PyObject * nodes; //list of intervals in T that are associated with this index
     PyObject * left;
-    PyObject * leftoffsets;
+    //PyObject * leftoffsets;
     PyObject * right;
-    PyObject * rightoffsets;
+    //PyObject * rightoffsets;
 } RevealIndex;
 
 RevealIndex* newIndex();
