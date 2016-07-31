@@ -36,9 +36,17 @@ To validate whether everything is correctly installed you can run a test alignme
 
 **reveal align tests/1a.fa tests/1b.fa**  
 
-If everything is correctly installed, a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)). In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
+If everything is correctly installed, a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)).
+
+Important parameters to consider when running a (multi) alignment are -m, -c and -n. See subcommand help.
+
+In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
 **reveal align tests/1a.fa tests/1b.fa --gml**
+
+or run:
+
+**reveal convert 1a_1b.gfa**
 
 To generate a graph for more than two sequences you can either call:
 
@@ -52,8 +60,34 @@ or align two graphs:
 
 **reveal align 1a_1b.gfa 1c_1d.gfa**
 
-To extract variants from a GFA graph, you need to install [seqal](https://github.com/mhulsman/seqal), and run:
+To extract variants from a graph run:
 
 **reveal bubbles 1a&#95;1b.gfa**
 
 This will print a list of bubbles source/sink pairs and nodes within the bubble, the different variants (SNPs, indels, highly variable alleles etc.) and their positions (with respect to the genome specified as a reference) and the actual varying alleles.
+
+To realign parts of a graph (e.g. with different settings or after progressive alignment):
+
+**reveal realign <graph> <source-node> <sink-node>**
+
+To construct an interactive (-i, for zooming purposes) mumplot of two fasta files (single contig for now...):
+
+**reveal plot contig1.fasta contig2.fasta -i**
+
+NOTE, you need to have matplotlib for this.
+
+To extract a genome (name of the original fasta file) from the graph:
+
+**reveal extract <graph> <genome>**
+
+To reverse complement a graph:
+
+**reveal comp <graph>**
+
+To extract a subgraph of the graph, to for instance inspect a complex bubble structure:
+
+**reveal subgraph <graph> <node1> ...  <nodeN>**
+
+For the rest, most commands should print a help function, when you specify **reveal <subcommand> -h**
+
+Under notebooks you can find some IPython notebooks that show some experiments for some typical usecases.
