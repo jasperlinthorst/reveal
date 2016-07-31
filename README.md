@@ -68,7 +68,7 @@ This will print a list of bubbles source/sink pairs and nodes within the bubble,
 
 To realign parts of a graph (e.g. with different settings or after progressive alignment):
 
-**reveal realign <graph> <source-node> <sink-node>**
+**reveal realign \<graph\> \<source-node\> \<sink-node\>**
 
 To construct an interactive (-i, for zooming purposes) mumplot of two fasta files (single contig for now...):
 
