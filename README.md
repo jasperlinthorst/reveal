@@ -78,16 +78,16 @@ NOTE, you need to have matplotlib for this.
 
 To extract a genome (name of the original fasta file) from the graph:
 
-**reveal extract <graph> <genome>**
+**reveal extract \<graph\> \<genome\>**
 
 To reverse complement a graph:
 
-**reveal comp <graph>**
+**reveal comp \<graph\>**
 
 To extract a subgraph of the graph, to for instance inspect a complex bubble structure:
 
-**reveal subgraph <graph> <node1> ...  <nodeN>**
+**reveal subgraph \<graph\> \<node1\> ...  \<nodeN\>**
 
-For the rest, most commands should print a help function, when you specify **reveal <subcommand> -h**
+For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
 
 Under notebooks you can find some IPython notebooks that show some experiments for some typical usecases.
