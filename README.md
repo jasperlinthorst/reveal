@@ -8,7 +8,7 @@ Preprint can be found here: [Scalable multi whole-genome alignment using recursi
 
 How it works:
 
-![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/reveal.gif)
+![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/blob/master/reveal.gif)
 
 ##INSTALL
 
