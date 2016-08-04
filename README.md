@@ -6,6 +6,10 @@ REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole gen
 
 Preprint can be found here: [Scalable multi whole-genome alignment using recursive exact matching](http://www.biorxiv.org/content/early/2015/07/17/022715)
 
+How it works:
+
+![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/reveal.gif)
+
 ##INSTALL
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
