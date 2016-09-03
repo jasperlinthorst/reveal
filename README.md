@@ -23,7 +23,6 @@ To build and install libdivsufsort you need to have CMAKE. After that's installe
 - git clone https://github.com/y-256/libdivsufsort.git (or wget https://github.com/y-256/libdivsufsort/archive/master.zip)
 - cd libdivsufsort
 - mkdir build
-- cd build
 - cmake -DBUILD\_DIVSUFSORT64:BOOL=ON -DCMAKE\_BUILD\_TYPE="Release" -DCMAKE\_INSTALL\_PREFIX="/usr/local" ..
 - make install
 
