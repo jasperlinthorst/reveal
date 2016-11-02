@@ -173,10 +173,12 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     PyObject *mumpicker;
     PyObject *graphalign;
 
-    static char *kwlist[] = {"mumpicker","align","threads",NULL};
-    int numThreads = 0; /* Number of alignment threads */
-
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|i", kwlist, &mumpicker, &graphalign, &numThreads))
+    static char *kwlist[] = {"mumpicker","align","threads","wpen","wscore",NULL};
+    int numThreads=0; /* Number of alignment threads */
+    int wpen=0;
+    int wscore=0;
+    
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore))
         return NULL;
     
     int i;
@@ -215,6 +217,8 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
             rw->threadid=i;
             rw->mumpicker=mumpicker;
             rw->graphalign=graphalign;
+            rw->wpen=wpen;
+            rw->wscore=wscore;
             int rv;
             rv=pthread_create(&tids[i],&attr,aligner,rw);
             if (rv!=0){
@@ -256,6 +260,8 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
         rw->threadid=-1;
         rw->mumpicker=mumpicker;
         rw->graphalign=graphalign;
+        rw->wpen=wpen;
+        rw->wscore=wscore;
         aligner(rw);
     }
     
@@ -310,6 +316,7 @@ static PyMethodDef reveal_methods[] = {
     { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
     { "getmultimems", (PyCFunction) getmultimums, METH_VARARGS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS },
+    { "getscoredmums", (PyCFunction) getscoredmums, METH_VARARGS },
     { NULL, NULL }
 };
 

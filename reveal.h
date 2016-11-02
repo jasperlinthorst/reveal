@@ -32,6 +32,8 @@ typedef struct
     int threadid;
     PyObject * mumpicker; //callback function that return the best exact match from a list of exact matches
     PyObject * graphalign; //callback that updates the interval tree and graph for the alignment
+    int wpen;
+    int wscore;
 } RevealWorker;
 
 typedef struct
@@ -44,9 +46,10 @@ typedef struct
     int penalty;
 } RevealMultiMUM;
 
-int getbestmum(RevealIndex *index, RevealMultiMUM *mum);
+int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_score);
 int getbestmultimum(RevealIndex *index, RevealMultiMUM *mmum, int min_n);
 PyObject * getmultimums(RevealIndex *index);
 PyObject * getmums(RevealIndex *index);
+PyObject * getscoredmums(RevealIndex *index);
 
 #endif

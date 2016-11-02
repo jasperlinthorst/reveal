@@ -92,6 +92,108 @@ PyObject * getmums(RevealIndex *index){
     return mums;
 }
 
+PyObject * getscoredmums(RevealIndex *index){
+    int i=0,aStart,bStart;
+    int lb,la, score;
+    int w_score=2;
+    int w_penalty=1;
+    int penalize;
+    int start1=-1,end1=-1,start2=-1,end2=-1;
+
+    if (PyList_Size(index->nodes)==2){
+        penalize=1;
+
+        PyObject *node1=PyList_GetItem(index->nodes,0);
+        start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
+        end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
+
+        PyObject *node2=PyList_GetItem(index->nodes,1);
+        start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
+        end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
+
+    } else {
+        penalize=0;
+    }
+    
+    PyObject *mums=PyList_New(0);
+    for (i=1;i<index->n;i++){
+	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+	    continue;
+	}
+	if (index->SA[i]<index->SA[i-1]) {
+	    aStart=index->SA[i];
+	    bStart=index->SA[i-1];
+	} else {
+	    aStart=index->SA[i-1];
+	    bStart=index->SA[i];
+	}
+	if (aStart>0 && bStart>0){ //if not it has to be maximal!
+	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+		continue; //not maximal
+	    }
+	}
+	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+	    lb=index->LCP[i-1];
+	    la=0;
+	} else {
+	    lb=index->LCP[i-1];
+	    la=index->LCP[i+1];
+	}
+	if (lb>=index->LCP[i] || la>=index->LCP[i]){
+	    continue;//not unique
+	}
+
+	//match is not a repeat and is maximally unique
+	//append to list
+        //PyObject *mum=Py_BuildValue("i,i,O",i_lcp,n,sp);
+        
+        int penalty=0;
+        int lpenalty=0;
+        int tpenalty=0;
+
+        if (index->depth>0 && penalize==1){
+            
+            if (start1<=aStart && end1>=aStart){
+                lpenalty=abs((aStart-start1)-(bStart-start2)); //leading penalty
+                tpenalty=abs((end1-(aStart+index->LCP[i]))-(end2-(bStart+index->LCP[i]))); //trailing penalty
+                assert(lpenalty>=0);
+                assert(tpenalty>=0);
+                if (lpenalty>tpenalty){
+                    penalty=tpenalty;
+                } else {
+                    penalty=lpenalty;
+                }
+                //penalty=tpenalty+lpenalty;
+                assert(penalty>=0);
+            } else {
+                lpenalty=abs((bStart-start1)-(aStart-start2)); //leading penalty
+                tpenalty=abs((end1-(bStart+index->LCP[i]))-(end2-(aStart+index->LCP[i]))); //trailing penalty
+                assert(lpenalty>=0);
+                assert(tpenalty>=0);
+                if (lpenalty>tpenalty){
+                    penalty=tpenalty;
+                } else {
+                    penalty=lpenalty;
+                }
+                //penalty=tpenalty+lpenalty;
+                assert(penalty>=0);
+            }
+        }
+        
+        score=(w_score*index->LCP[i])-(w_penalty*penalty);
+        
+	PyObject *mum=Py_BuildValue("i,i,(i,i),i,i,i",index->LCP[i],2,aStart,bStart,score,lpenalty,tpenalty);
+	
+        if (PyList_Append(mums,mum)==0){
+	    Py_DECREF(mum);
+	} else {
+            Py_DECREF(mum); //append increments reference count!
+	    return NULL;
+	}
+    }
+    return mums;
+}
+
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     int i=0,aStart,bStart;
     int lb,la;
@@ -137,13 +239,21 @@ int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     return 0;
 }
 
-int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
+int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_score){
     //fprintf(stderr,"Index->n %d\n",index->n);
     int i=0,aStart,bStart;
-    int lb,la;
-    int penalize;
+    int lb,la, score, penalize;
+    int start1=-1,end1=-1,start2=-1,end2=-1;
+    
     if (PyList_Size(index->nodes)==2){
         penalize=1;
+        PyObject *node1=PyList_GetItem(index->nodes,0);
+        start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
+        end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
+        PyObject *node2=PyList_GetItem(index->nodes,1);
+        start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
+        end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
+
     } else {
         penalize=0;
     }
@@ -153,7 +263,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
     mum->penalty=0;
     mum->n=2;
     for (i=1;i<index->n;i++){
-        if (index->LCP[i]*2 > mum->score){
+        if (index->LCP[i]*w_score > mum->score){
             if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
                continue;
             }
@@ -185,16 +295,8 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
             int penalty=0;
             int lpenalty=0;
             int tpenalty=0;
-            int start1=-1,end1=-1,start2=-1,end2=-1;
 
             if (index->depth>0 && penalize==1){
-                PyObject *node1=PyList_GetItem(index->nodes,0);
-                start1=PyInt_AS_LONG(PyTuple_GetItem(node1,0));
-                end1=PyInt_AS_LONG(PyTuple_GetItem(node1,1));
-    
-                PyObject *node2=PyList_GetItem(index->nodes,1);
-                start2=PyInt_AS_LONG(PyTuple_GetItem(node2,0));
-                end2=PyInt_AS_LONG(PyTuple_GetItem(node2,1));
                 
                 if (start1<=aStart && end1>=aStart){
                     lpenalty=abs((aStart-start1)-(bStart-start2)); //leading penalty
@@ -223,11 +325,8 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum){
                 }
             }
 	    
-            int w_score=2;
-            int w_penalty=1;
-            int score=(w_score*index->LCP[i])-(w_penalty*penalty);
-            
-	    //fprintf(stderr,"l=%d p=%d score=%d start1=%d aStart=%d start2=%d bStart=%d lpenalty=%d, tpenalty=%d\n",index->LCP[i],penalty,mum->score, start1, aStart, start2, bStart, lpenalty, tpenalty);
+            score=(w_score*index->LCP[i])-(w_penalty*penalty);
+             
             if (score > mum->score){
                 mum->score=score;
                 mum->penalty=w_penalty*penalty;
@@ -712,7 +811,7 @@ void *aligner(void *arg) {
                 PyObject *sp=NULL;
                 PyObject *tmp=NULL;
                
-                PyArg_ParseTuple(mum,"iOiiOi", &mmum.l, &tmp, &mmum.n, &mmum.score, &sp, &mmum.penalty);
+                PyArg_ParseTuple(mum,"iOilOi", &mmum.l, &tmp, &mmum.n, &mmum.score, &sp, &mmum.penalty);
                 
                 for (i=0; i<mmum.n; i++){
                     PyObject * pos=PyList_GetItem(sp,i);
@@ -737,7 +836,7 @@ void *aligner(void *arg) {
                     getbestmultimum(idx, &mmum, idx->nsamples);
                 } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
                     //getlongestmum(idx, &mmum);
-                    getbestmum(idx, &mmum);
+                    getbestmum(idx, &mmum, rw->wpen, rw->wscore);
                 }
                 
                 //fprintf(stderr,"mum: n=%d l=%d\n",mmum.n,mmum.l);

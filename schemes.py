@@ -19,32 +19,42 @@ def multimumpicker(multimums,idx):
     try:
         bestmum=None
         trace=False
- 
+        
+        #if idx.left!=None and idx.right!=None:
+        #    if idx.left==Interval(16783420, 16784477) and idx.right==Interval(12380365, 12381788):
+        #        trace=True
+            
+            #print idx.left, idx.right
+            #if idx.left[1]-idx.left[0] == 324 and idx.right[1]-idx.right[0] == 295:
+            #    trace=True
+            #    print idx.left,idx.right
+
+            #print idx.left,idx.right
+            #pass
+        
         for multimum in multimums:
             l,n,sp=multimum
             if l<minlength:
                 continue
             if n<minn:
                 continue
-            
             if bestmum!=None:
                 if n<bestmum[2]:
                     continue
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
-
+            
             if idx.nsamples==len(idx.nodes):
                 ds=[start-ts[start].pop()[0] for start in sp]
                 ads=sum(ds)/n
-                spenalty=max([abs(p-ads) for p in ds])
+                spenalty=sum([abs(p-ads) for p in ds])
                 
                 de=[ts[start].pop()[1]-(start+l) for start in sp]
                 ade=sum(de)/n
-                epenalty=max([abs(p-ade) for p in de])
+                epenalty=sum([abs(p-ade) for p in de])
                 
                 penalty=min([spenalty,epenalty])
-                
-                score=(l*n)-penalty
+                score=(l*(n**2)) - penalty
             else:
                 score=minscore #in case of multi aligning graph (havent tried yet) we cant penalize gaps this easily..
             
@@ -56,13 +66,23 @@ def multimumpicker(multimums,idx):
             if isinstance(sp,tuple):
                 sp=list(sp)
             
-            bestmum=(l,idx,n,score,sp,penalty)
-
+            if bestmum!=None:
+                if score>bestmum[3]:
+                    bestmum=(l,idx,n,score,sp,penalty)
+            else:
+                bestmum=(l,idx,n,score,sp,penalty)
+            
             if trace:
                 print bestmum
-        
+            
         if trace:
             print bestmum
+        
+        #if bestmum!=None:
+        #    if bestmum[5]!=0:
+        #        print bestmum
+        #        print idx.left,idx.right
+        #        print G.node[idx.left]['offsets'], G.node[idx.right]['offsets']
         
         return bestmum
     except:

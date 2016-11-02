@@ -257,10 +257,12 @@ def segmentgraph(node,nodes):
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
+from matplotlib import pyplot as plt
+
 def graphalign(l,index,n,score,sp,penalty):
     try:
         nodes=index.nodes
-        global o
+        #global o
         
         #print "PICKED MUM",l,n,score,penalty,sp#, index.T[sp[0]:sp[0]+l]
         
@@ -269,14 +271,31 @@ def graphalign(l,index,n,score,sp,penalty):
         
         if l==0:
             return
-         
+        
+        #print sp[0],sp[1]-index.nsep[0]
+        
+        #assert(score>0)
+        
         if score<schemes.minscore:
             #print "reject, minscore",l,n,score,penalty,sp,schemes.minscore
+            #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'g-')
+            #mums=index.getscoredmums()
+            #print "number of mums",len(mums)
+            #scoredist=[]
+            #for mum in mums:
+            #    scoredist.append(mum[3])
+                #print mum[0],mum[1],mum[2][0],mum[2][1]-index.nsep[0]
+            #from matplotlib import pyplot as plt
+            #plt.hist(scoredist)
+            #plt.show()
             return
         
         if l<schemes.minlength:
             #print "reject, minlength",l,n,score,penalty,sp,index.n,schemes.minlength
+            #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'b-')
             return
+        
+        #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'r-')
         
         mns=[]
         topop=[]
@@ -348,14 +367,21 @@ def graphalign(l,index,n,score,sp,penalty):
         #nodecolors=[valmap[node] for node in G.nodes()]
         #nx.draw(G,pos=pos,node_size=nodesizes, cmap=plt.get_cmap('jet'), node_color=nodecolors )#,labels=labels,arrows=True)
         #plt.savefig(str(o)+".png", format="PNG")
-        #write_gml(G,index.T,outputfile=str(o))
+        
+        #Gtmp=G.copy()
+        #seq2node(Gtmp,index.T)
+        
+        #if o>1:
+        #    Gtmp_=nx.read_gml("tmp.gml")
+        #    Gtmp=nx.disjoint_union(Gtmp,Gtmp_)
+        
+        #write_gml(Gtmp,None,outputfile="tmp.gml",partition=False)
         
         return leading,trailing,rest,merged,newleft,newright
 
     except Exception as e:
         print "Exception in graphalign",type(e),str(e)
         return None
-
 
 def prune(node,T,reverse=False):
     seqs={}
@@ -599,11 +625,14 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
 
         i+=1
         data=G.node[node]
+        seq=""
         if 'seq' in data:
             f.write('S\t'+str(i)+'\t'+data['seq'].upper())
+            seq=data['seq']
         else:
             if isinstance(node,Interval):
                 f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
+                seq=T[node.begin:node.end].upper()
             else:
                 f.write('S\t'+str(i)+'\t')
         
@@ -621,10 +650,11 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
         if nometa:
             f.write("\n")
         else:
-            f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\n" % 
+            f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\tRC:i:%s\n" % 
                     (
                     sep.join([str(sample2id[s]) for s in data['sample']]),
-                    sep.join([str(data['offsets'][s]) for s in data['sample']])
+                    sep.join([str(data['offsets'][s]) for s in data['sample']]),
+                    len(data['sample'])*len(seq)
                     )
                 )
         
@@ -649,7 +679,7 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
-                
+         
         if 'sample' in d:
             G.node[n]['n']=len(d['sample'])
         
@@ -693,9 +723,10 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
                 i+=1
                 outputfiles.append(fn)
     else:
-        fn=outputfile+'.gml'
-        nx.write_gml(G,fn)
-        outputfiles.append(fn)
+        if not outputfile.endswith(".gml"):
+            outputfile=outputfile+'.gml'
+        nx.write_gml(G,outputfile)
+        outputfiles.append(outputfile)
     
     return outputfiles
 
@@ -729,6 +760,9 @@ def main():
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
+    parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
+    parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
+    parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Generate an interactive mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     
     parser_aln.add_argument("-g", dest="minsamples", type=int, default=1, help="Only index nodes that occur in this many samples or more (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
@@ -1094,13 +1128,27 @@ def align_cmd(args):
                 alignednodes+=1
     else: #assume seq to graph
         totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
+        
+        if args.mumplot:
+            from matplotlib import pyplot as plt
+            if len(G.graph['samples'])>2:
+                logging.info("Can't make a mumplot for more than 2 genomes.")
+                args.mumplot=False
+            else:
+                s1=G.graph['samples'][0]
+                plt.xlabel(s1)
+                s2=G.graph['samples'][1]
+                plt.ylabel(s2)
+        
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)
+                l=node.end-node.begin
+                alignedbases+=l
                 alignednodes+=1
-    
-    logging.info("Done (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%((alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
+                if args.mumplot:
+                    plt.plot([data['offsets'][s1], data['offsets'][s1]+l], [data['offsets'][s2], data['offsets'][s2]+l], 'r-')
 
+    logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
     logging.info("Writing graph...")
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
@@ -1109,6 +1157,9 @@ def align_cmd(args):
         graph=args.output+'.gfa'
     logging.info("Done.")
     logging.info("Alignment graph written to: %s"%graph)
+    
+    if args.mumplot:
+        plt.show()
 
 def align_genomes(args):
     #global variables to simplify callbacks from c extension
@@ -1169,7 +1220,8 @@ def align_genomes(args):
         if graph:
             idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
         else:
-            idx.align(None,graphalign,threads=args.threads)
+            #pairwise align based on best scoring MUM
+            idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
     
     return G,idx
 
@@ -1277,6 +1329,7 @@ def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=F
     t=IntervalTree()
     idx=reveallib.index()
     G=nx.DiGraph()
+    H=G
     G.graph['samples']=[]
     o=0
     schemes.minlength=minlength
@@ -1745,10 +1798,13 @@ def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100):
     
     return G
 
-def seq2node(G,T):
+def seq2node(G,T,toupper=True):
     for node in G:
         if isinstance(node,Interval):
-            G.node[node]['seq']=T[node.begin:node.end]
+            if toupper:
+                G.node[node]['seq']=T[node.begin:node.end].upper()
+            else:
+                G.node[node]['seq']=T[node.begin:node.end]
 
 def comp(G):
     for node in G.node:
