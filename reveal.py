@@ -1052,7 +1052,7 @@ def subgraph(args):
     read_gfa(args.inputfiles[0],None,"",G)
     nodes=set()
     for node in args.inputfiles[1:]:
-        nodes.add(node)
+        nodes.add(int(node))
     sg=G.subgraph(nodes)
     if args.gml:
         write_gml(sg,"",outputfile=args.outfile)
