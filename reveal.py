@@ -762,7 +762,8 @@ def main():
     parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
-    parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Generate an interactive mumplot for the actual aligned chain of anchors (depends on matplotlib).")
+    parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
+    parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     
     parser_aln.add_argument("-g", dest="minsamples", type=int, default=1, help="Only index nodes that occur in this many samples or more (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
@@ -1139,6 +1140,7 @@ def align_cmd(args):
                 plt.xlabel(s1)
                 s2=G.graph['samples'][1]
                 plt.ylabel(s2)
+                plt.title("REVEAL "+" ".join(sys.argv[1:]))
         
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
@@ -1158,8 +1160,16 @@ def align_cmd(args):
     logging.info("Done.")
     logging.info("Alignment graph written to: %s"%graph)
     
-    if args.mumplot:
-        plt.show()
+    if args.mumplot and idx.nsamples==2:
+        plt.plot(0,0,'bx')
+        plt.plot(idx.nsep[0],idx.n-idx.nsep[0],'bx')
+        logging.info("Storing mumplot as %s.png..."%args.output)
+        plt.savefig(args.output+".png")
+        logging.info("Done.")
+        if args.interactive:
+            logging.info("Showing interactive mumplot...")
+            plt.show()
+            logging.info("Done.")
 
 def align_genomes(args):
     #global variables to simplify callbacks from c extension
