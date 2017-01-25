@@ -12,6 +12,11 @@ import schemes
 import sys
 import time
 
+try:
+    from matplotlib import pyplot as plt
+except:
+    pass
+
 
 def fasta_reader(fn,truncN=False):
     seq=""
@@ -256,8 +261,6 @@ def segmentgraph(node,nodes):
     #    print "Not leading or trailing!",rest
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
-
-from matplotlib import pyplot as plt
 
 def graphalign(l,index,n,score,sp,penalty):
     try:
@@ -783,6 +786,7 @@ def main():
     parser_plot.add_argument('fastas', nargs=2, help='Two fasta files for which a mumplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
+    parser_plot.add_argument("-u", dest="uniq", action="store_true", default=False, help="Plot only maximal unique matches.")
     parser_plot.add_argument("-p", dest="pos", default=None, type=int, help="Position on the reference genome to vizualize.")
     parser_plot.add_argument("-e", dest="env", default=1000, type=int, help="Size of the region aroung the targeted position to vizualize.")
     parser_plot.set_defaults(func=plot)
@@ -1224,10 +1228,14 @@ def align_genomes(args):
 
     if len(args.inputfiles)>2:
         logging.info("Constructing multi-alignment...")
+        schemes.wscore=args.wscore
+        schemes.wpen=args.wpen
         idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
     else:
         logging.info("Constructing pairwise-alignment...")
         if graph:
+            schemes.wscore=args.wscore
+            schemes.wpen=args.wpen
             idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
         else:
             #pairwise align based on best scoring MUM
@@ -1481,7 +1489,7 @@ def orient(args):
             logging.info("Unsure about %s (rctot=%s, tot=%s, rmax=%d, rcmax=%d)"%(query,rctot,tot,rmax,rcmax))
 
 def plot(args):
-    from matplotlib import pyplot as plt
+    #from matplotlib import pyplot as plt
     
     if len(args.fastas)==2:
         #get mmems for forward orientation
@@ -1491,8 +1499,18 @@ def plot(args):
             for name,seq in fasta_reader(sample,truncN=False):
                 intv=idx.addsequence(seq.upper())
                 break #expect only one sequence per fasta for now
+        print "Constructing index..."
         idx.construct()
-        mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
+        print "done."
+
+        if args.uniq:
+            print "Extracting mums..."
+            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+        else:
+            print "Extracting mems..."
+            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+        print "done."
+        
         sep=idx.nsep[0]
         
         #get mmems for reverse orientation
@@ -1513,8 +1531,15 @@ def plot(args):
             intv=idx.addsequence(rc(seq.upper()))
             break #expect only one sequence per fasta for now
         idx.construct()
-        mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums() if mem[0]>args.minlength]
-        
+
+        if args.uniq:
+            print "Extracting RC mums..."            
+            mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+        else:
+            print "Extracting RC mems..."            
+            mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+        print "done."
+    
     elif len(args.fastas)==1:
 
         idx=reveallib.index()
@@ -1534,12 +1559,17 @@ def plot(args):
             intv=idx.addsequence(rc(seq.upper()))
             break #expect only one sequence per fasta for now
         idx.construct()
-        mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums() if mem[0]>args.minlength]
+
+        if args.uniq:
+            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+        else:
+            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
     
-    print len(mmems),"max exact matches."
+    print "Drawing",len(mmems),"matches."
     
     pos=args.pos
     dist=args.env
@@ -1572,10 +1602,22 @@ def plot(args):
                 continue
         
         if mem[3]==0:
-            plt.plot([sp1,ep1],[sp2,ep2],'r-')
+            if args.uniq:
+                plt.plot([sp1,ep1],[sp2,ep2],'r-')
+            else:
+                if mem[4]==0: #non-uniq
+                    plt.plot([sp1,ep1],[sp2,ep2],'y-')
+                else:
+                    plt.plot([sp1,ep1],[sp2,ep2],'r-')
         else:
-            plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
-    
+            if args.uniq: #only uniq matches in the list
+                plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+            else:
+                if mem[4]==0: #non-uniq
+                    plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'y-')
+                else:
+                    plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+                    
     lgap=0
     g=0
     for gap in horzgaps:

@@ -314,9 +314,10 @@ static PyMethodDef reveal_methods[] = {
     { "addsequence", (PyCFunction) addsequence, METH_VARARGS },
     { "construct", (PyCFunction) construct, METH_VARARGS },
     { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
-    { "getmultimems", (PyCFunction) getmultimums, METH_VARARGS },
-    { "getmums", (PyCFunction) getmums, METH_VARARGS },
-    { "getscoredmums", (PyCFunction) getscoredmums, METH_VARARGS },
+    { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
+    { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
+    { "getmems", (PyCFunction) getmems, METH_VARARGS|METH_KEYWORDS },
+    { "getscoredmums", (PyCFunction) getscoredmums, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
 
@@ -525,10 +526,20 @@ reveal_right(RevealIndex *self, void *closure)
     return self->right;
 }
 
+static PyObject *
+reveal_getdepth(RevealIndex *self, void *closure)
+{
+    return Py_BuildValue("i",self->depth);
+}
+
 static PyGetSetDef reveal_getseters[] = {
     {"n",
         (getter)reveal_getn, NULL,
         "Number of characters in the index.",
+        NULL},
+    {"depth",
+        (getter)reveal_getdepth, NULL,
+        "Get depth of index within recursion tree.",
         NULL},
     {"nsamples",
         (getter)reveal_getnsamples, NULL,

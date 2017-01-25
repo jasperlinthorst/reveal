@@ -14,24 +14,15 @@ minlength=20
 minscore=0
 ts=IntervalTree()
 G=nx.DiGraph()
+wscore=1
+wpen=1
 
 def multimumpicker(multimums,idx):
+
     try:
         bestmum=None
-        trace=False
-        
-        #if idx.left!=None and idx.right!=None:
-        #    if idx.left==Interval(16783420, 16784477) and idx.right==Interval(12380365, 12381788):
-        #        trace=True
-            
-            #print idx.left, idx.right
-            #if idx.left[1]-idx.left[0] == 324 and idx.right[1]-idx.right[0] == 295:
-            #    trace=True
-            #    print idx.left,idx.right
+        trace=False 
 
-            #print idx.left,idx.right
-            #pass
-        
         for multimum in multimums:
             l,n,sp=multimum
             if l<minlength:
@@ -43,8 +34,9 @@ def multimumpicker(multimums,idx):
                     continue
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
-            
-            if idx.nsamples==len(idx.nodes):
+                
+            if idx.nsamples==len(idx.nodes): #what about alignment within large indel?
+                
                 ds=[start-ts[start].pop()[0] for start in sp]
                 ads=sum(ds)/n
                 spenalty=sum([abs(p-ads) for p in ds])
@@ -54,13 +46,18 @@ def multimumpicker(multimums,idx):
                 epenalty=sum([abs(p-ade) for p in de])
                 
                 penalty=min([spenalty,epenalty])
-                score=(l*(n**2)) - penalty
+                
+                if idx.depth==0: #no other anchors yet, dont penalize first anchor
+                    score= (wscore*(l*(n**2)))
+                else:
+                    score= (wscore*(l*(n**2))) - (wpen*penalty)
+                
             else:
-                score=minscore #in case of multi aligning graph (havent tried yet) we cant penalize gaps this easily..
+                score=minscore
             
             if score<minscore:
                 if trace:
-                    print "score too low",l,score,n
+                    print "score too low",l,score,n,penalty,epenalty,spenalty
                 continue
             
             if isinstance(sp,tuple):
@@ -77,12 +74,6 @@ def multimumpicker(multimums,idx):
             
         if trace:
             print bestmum
-        
-        #if bestmum!=None:
-        #    if bestmum[5]!=0:
-        #        print bestmum
-        #        print idx.left,idx.right
-        #        print G.node[idx.left]['offsets'], G.node[idx.right]['offsets']
         
         return bestmum
     except:
@@ -101,8 +92,6 @@ def graphmumpicker(mums,idx,penalize=True):
         if idx.left!=None:
             nlefttup=idx.left
             nleft=G.node[Interval(nlefttup[0],nlefttup[1])]
-            #if nlefttup[1]-nlefttup[0]==1354:
-            #    trace=True
 
         if idx.right!=None:
             nrighttup=idx.right
@@ -112,13 +101,8 @@ def graphmumpicker(mums,idx,penalize=True):
         if idx.left!=None and idx.right!=None:
             leftoffsets=G.node[idx.left]['offsets']
             rightoffsets=G.node[idx.right]['offsets']
-            if '000068F' in leftoffsets and '000068F' in rightoffsets:
-                if leftoffsets['000068F']==201987 and rightoffsets['000068F']==202021:
-                    trace=True
         
         for mum in mums:
-            #if trace:
-            #    print mum
 
             l,n,sp=mum
             
@@ -153,10 +137,6 @@ def graphmumpicker(mums,idx,penalize=True):
                     for sample in n2samples:
                         n2distfromlmapoints[sample]=(n2data['offsets'][sample]+(sp[1]-n2[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
                     
-                    #if trace:
-                    #    print n1,n1data['offsets'],n1distfromlmapoints.values()
-                    #    print n2,n2data['offsets'],n2distfromlmapoints.values()
-                    
                     spenalty=mindist(n1distfromlmapoints.values(),n2distfromlmapoints.values())
                     
                 if nright!=None:
@@ -178,7 +158,7 @@ def graphmumpicker(mums,idx,penalize=True):
             else:
                 penalty=0
             
-            score=(l*n)-penalty
+            score=(wscore*(l*n))-(wpen*penalty)
             
             if trace:
                 print l, penalty, score

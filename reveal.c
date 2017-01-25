@@ -45,11 +45,24 @@ int push_index(RevealIndex *idx) {
     return 0;
 }
 
-PyObject * getmums(RevealIndex *index){
+PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
+
+    //static char *kwlist[] = {NULL};
+    int minl=0;
+    
+    if (args!=NULL) {
+        //if (!PyArg_ParseTupleAndKeywords(args, keywds, "i|", kwlist, &minl))
+        if (!PyArg_ParseTuple(args, "i", &minl))        
+            return NULL;
+    }
+    
     int i=0,aStart,bStart;
     int lb,la;
     PyObject *mums=PyList_New(0);
     for (i=1;i<index->n;i++){
+        if (index->LCP[i]<minl){
+            continue;
+        }
 	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
 	    continue;
 	}
@@ -77,8 +90,6 @@ PyObject * getmums(RevealIndex *index){
 	}
 
 	//match is not a repeat and is maximally unique
-	//append to list
-        //PyObject *mum=Py_BuildValue("i,i,O",i_lcp,n,sp);
         
 	PyObject *mum=Py_BuildValue("i,i,(i,i)",index->LCP[i],2,aStart,bStart);
 	
@@ -92,13 +103,73 @@ PyObject * getmums(RevealIndex *index){
     return mums;
 }
 
-PyObject * getscoredmums(RevealIndex *index){
+PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
+    
+    //static char *kwlist[] = {NULL};
+    int minl=0;
+    
+    if (args!=NULL) {
+        //if (!PyArg_ParseTupleAndKeywords(args, keywds, "i|", kwlist, &minl))
+        if (!PyArg_ParseTuple(args, "i", &minl))
+            return NULL;
+    }
+    
+    int i=0,aStart,bStart;
+    int lb,la,uniq;
+    PyObject *mems=PyList_New(0);
+    for (i=1;i<index->n;i++){
+        if (index->LCP[i]<minl){
+            continue;
+        }
+	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat within same genome
+	    continue;
+	}
+	if (index->SA[i]<index->SA[i-1]) {
+	    aStart=index->SA[i];
+	    bStart=index->SA[i-1];
+	} else {
+	    aStart=index->SA[i-1];
+	    bStart=index->SA[i];
+	}
+	if (aStart>0 && bStart>0){ //if not it has to be maximal!
+	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+		continue; //not maximal
+	    }
+	}
+	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+	    lb=index->LCP[i-1];
+	    la=0;
+	} else {
+	    lb=index->LCP[i-1];
+	    la=index->LCP[i+1];
+	}
+	if (lb>=index->LCP[i] || la>=index->LCP[i]){
+            uniq=0;
+	} else {
+            uniq=1;
+        }
+        
+	//match is not a repeat and is maximal
+        
+	PyObject *mem=Py_BuildValue("i,i,(i,i),i",index->LCP[i],2,aStart,bStart,uniq);
+	
+        if (PyList_Append(mems,mem)==0){
+	    Py_DECREF(mem);
+	} else {
+            Py_DECREF(mem); //append increments reference count!
+	    return NULL;
+	}
+    }
+    return mems;
+}
+
+PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     int i=0,aStart,bStart;
     int lb,la, score;
     int w_score=2;
     int w_penalty=1;
     int penalize;
-    int start1=-1,end1=-1,start2=-1,end2=-1;
+    int start1=-1,end1=-1,start2=-1,end2=-1; //TODO: add to keywds
 
     if (PyList_Size(index->nodes)==2){
         penalize=1;
@@ -325,7 +396,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                 }
             }
 	    
-            score=(w_score*index->LCP[i])-(w_penalty*penalty);
+            score=(w_score*index->LCP[i])-sqrt(w_penalty*penalty);
              
             if (score > mum->score){
                 mum->score=score;
@@ -462,7 +533,17 @@ int ismultimum(RevealIndex * idx, int l, int lb, int ub, int * flag_so) {
     return 0;
 }
 
-PyObject * getmultimums(RevealIndex *index) {
+PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
+
+    //static char *kwlist[] = {NULL};
+    int minl=0;
+    
+    if (args!=NULL) {
+        //if (!PyArg_ParseTupleAndKeywords(args, keywds, "i|", kwlist, &minl))
+        if (!PyArg_ParseTuple(args, "i", &minl))        
+            return NULL;
+    }
+    
     PyObject * multimums;
     multimums=PyList_New(0);
     if (index==NULL){
@@ -494,7 +575,7 @@ PyObject * getmultimums(RevealIndex *index) {
             depth--;
             int n=(i_ub-i_lb)+1;
             
-            //if (i_lcp>minl){
+            if (i_lcp>minl){
                 if (n<=main->nsamples){
                     if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                         int x;
@@ -508,7 +589,7 @@ PyObject * getmultimums(RevealIndex *index) {
                         Py_DECREF(multimum);
                     }
                 }
-            //}
+            }
 
             assert(depth>=0);
             lb = i_lb;
@@ -769,9 +850,9 @@ void *aligner(void *arg) {
                 PyObject *multimums;
                 //fprintf(stderr,"Extracting multi mums... %d\n",idx->n);
                 if (((RevealIndex *) idx->main)->nsamples>2){
-                    multimums = getmultimums(idx);
+                    multimums = getmultimums(idx,NULL,NULL);
                 } else {
-                    multimums = getmums(idx);
+                    multimums = getmums(idx,NULL,NULL);
                 }
                 //fprintf(stderr,"Done.\n");
                  

@@ -48,8 +48,10 @@ typedef struct
 
 int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_score);
 int getbestmultimum(RevealIndex *index, RevealMultiMUM *mmum, int min_n);
-PyObject * getmultimums(RevealIndex *index);
-PyObject * getmums(RevealIndex *index);
-PyObject * getscoredmums(RevealIndex *index);
+
+PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds);
+PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds);
+PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds);
+PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds);
 
 #endif
