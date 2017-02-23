@@ -262,12 +262,9 @@ def segmentgraph(node,nodes):
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
-def graphalign(l,index,n,score,sp,penalty):
+def graphalign(l,index,n,score,sp,penalty):#,ni):
     try:
         nodes=index.nodes
-        #global o
-        
-        #print "PICKED MUM",l,n,score,penalty,sp#, index.T[sp[0]:sp[0]+l]
         
         if len(nodes)==0:
             return
@@ -275,30 +272,12 @@ def graphalign(l,index,n,score,sp,penalty):
         if l==0:
             return
         
-        #print sp[0],sp[1]-index.nsep[0]
-        
-        #assert(score>0)
         
         if score<schemes.minscore:
-            #print "reject, minscore",l,n,score,penalty,sp,schemes.minscore
-            #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'g-')
-            #mums=index.getscoredmums()
-            #print "number of mums",len(mums)
-            #scoredist=[]
-            #for mum in mums:
-            #    scoredist.append(mum[3])
-                #print mum[0],mum[1],mum[2][0],mum[2][1]-index.nsep[0]
-            #from matplotlib import pyplot as plt
-            #plt.hist(scoredist)
-            #plt.show()
             return
         
         if l<schemes.minlength:
-            #print "reject, minlength",l,n,score,penalty,sp,index.n,schemes.minlength
-            #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'b-')
             return
-        
-        #plt.plot([sp[0],sp[0]+l],[sp[1],sp[1]+l],'r-')
         
         mns=[]
         topop=[]
@@ -317,29 +296,9 @@ def graphalign(l,index,n,score,sp,penalty):
         
         msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
         
-        #if 'GCA_001545055.1_ASM154505v1_genomic.fna' not in msamples:
-        #    print "INCORRECT",l,n,score,penalty,index.left,index.right
-        
         intervals=segmentgraph(mn,nodes)
         
         leading,trailing,rest,merged=intervals
-
-        #ideally do some graph pruning while aligning to reduce memory
-        #T=index.T
-        #prunedr=prune(Interval(mn[0],mn[1]),T)
-        #prunedl=prune(Interval(mn[0],mn[1]),T,reverse=True)
-        #print "pruned",prunedr, prunedl, nodes
-        #if prunedr!=None:
-        #    for node in prunedr:
-        #        assert((node[0],node[1]) in nodes)
-        #        rest.remove((node[0],node[1]))
-        #        t.remove(node)
-        #if prunedl!=None:
-        #    for node in prunedl:
-        #        assert((node[0],node[1]) in nodes)
-        #        rest.remove((node[0],node[1]))
-        #        t.remove(node)
-        
         newleft=mn
         newright=mn
         
@@ -352,33 +311,6 @@ def graphalign(l,index,n,score,sp,penalty):
             if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the right
                 newleft=index.left
                 break
-        
-        #from matplotlib import pyplot as plt
-        #import numpy as np
-        #plt.clf()
-        #nx.write_dot(G,'tmp.dot')
-        #pos=nx.graphviz_layout(G,prog='dot')
-        #nodesizes=[np.log2(node.end-node.begin)*20 for node in G.nodes()]
-        #valmap={}
-        #for node in G.nodes():
-        #    if G.node[node]['aligned']!=0:
-        #        valmap[node]=0.5
-        #    elif node.begin<index.nsep[0]:
-        #        valmap[node]=0
-        #    else:
-        #        valmap[node]=1
-        #nodecolors=[valmap[node] for node in G.nodes()]
-        #nx.draw(G,pos=pos,node_size=nodesizes, cmap=plt.get_cmap('jet'), node_color=nodecolors )#,labels=labels,arrows=True)
-        #plt.savefig(str(o)+".png", format="PNG")
-        
-        #Gtmp=G.copy()
-        #seq2node(Gtmp,index.T)
-        
-        #if o>1:
-        #    Gtmp_=nx.read_gml("tmp.gml")
-        #    Gtmp=nx.disjoint_union(Gtmp,Gtmp_)
-        
-        #write_gml(Gtmp,None,outputfile="tmp.gml",partition=False)
         
         return leading,trailing,rest,merged,newleft,newright
 
@@ -1225,6 +1157,7 @@ def align_genomes(args):
     logging.info("Constructing index...")
     idx.construct()
     logging.info("Done.")
+    
 
     if len(args.inputfiles)>2:
         logging.info("Constructing multi-alignment...")
@@ -1335,7 +1268,7 @@ def align_contigs(args):
     return G,idx
 
 
-def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False):
+def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -1372,7 +1305,7 @@ def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=F
                 return
             idx.addsample(os.path.basename(aobj))
             if aobj.endswith(".gfa"):
-                read_gfa(aobj,idx,t,G)
+                read_gfa(aobj,idx,t,G,targetsample=targetsample,maxsamples=maxsamples)
                 graph=True
             else: #assume a file in fastaformat
                 for name,seq in fasta_reader(sample):
