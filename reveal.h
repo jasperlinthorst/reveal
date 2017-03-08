@@ -40,6 +40,7 @@ typedef struct
 {
     int l; //length of the exact match
     int *sp; //array of starting positions
+    //int *ni; //array of sample index to which sp corresponds
     int n;   //number of samples in which the exact match occurs
     int u;   //whether the match is unique (1) or not (0)
     int score;

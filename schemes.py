@@ -8,6 +8,7 @@ Created on Tue Oct 13 17:59:26 2015
 from intervaltree import IntervalTree, Interval
 import networkx as nx
 import sys
+import math
 
 global minlength, minscore, pcutoff
 minlength=20
@@ -24,7 +25,9 @@ def multimumpicker(multimums,idx):
         trace=False 
 
         for multimum in multimums:
+            #l,n,sp,ni=multimum
             l,n,sp=multimum
+            #sp=sorted(sp)
             if l<minlength:
                 continue
             if n<minn:
@@ -48,9 +51,14 @@ def multimumpicker(multimums,idx):
                 penalty=min([spenalty,epenalty])
                 
                 if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                    score= (wscore*(l*(n**2)))
+                    score=int(math.log(l)*n)
+                    #score= (wscore*(l*(n**2)))
                 else:
-                    score= (wscore*(l*(n**2))) - (wpen*penalty)
+                    #score= (wscore*(l*(n**2))) - (wpen*penalty)
+                    if l-(wpen*penalty)<=0:
+                        score=minscore
+                    else:
+                        score=int(math.log(l-(wpen*penalty))*n)
                 
             else:
                 score=minscore
@@ -65,8 +73,10 @@ def multimumpicker(multimums,idx):
             
             if bestmum!=None:
                 if score>bestmum[3]:
+                    #bestmum=(l,idx,n,score,sp,penalty,ni)
                     bestmum=(l,idx,n,score,sp,penalty)
             else:
+                #bestmum=(l,idx,n,score,sp,penalty,ni)
                 bestmum=(l,idx,n,score,sp,penalty)
             
             if trace:
@@ -77,7 +87,7 @@ def multimumpicker(multimums,idx):
         
         return bestmum
     except:
-        print "MULITMUMPICKER ERROR", sys.exc_info()[0]
+        print "MULTIMUMPICKER ERROR", sys.exc_info()[0]
         return None
 
 def graphmumpicker(mums,idx,penalize=True):

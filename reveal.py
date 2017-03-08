@@ -195,10 +195,7 @@ def segmentgraph(node,nodes):
     reverse_trailing=set()
     reverse_leading=set()
     nodes=set(nodes)
-    
     trace=False
-    #if node.begin==2220993 and node.end==2221062:
-    #    trace=True
     
     #forward search
     endpoints=set()
@@ -208,10 +205,6 @@ def segmentgraph(node,nodes):
         else:
             endpoints.add(c)
     
-    if trace:
-        print "fwd endpoints",endpoints
-        print "fwd trailing",trailing
-
     #reverse search for each endpoint
     if len(endpoints)>1:
         for endpoint in endpoints:
@@ -219,9 +212,6 @@ def segmentgraph(node,nodes):
                 if t==0:
                     reverse_trailing.add(c)
         trailing=trailing.intersection(reverse_trailing)
-    
-    if trace:
-        print "fwd trailing after intersect",trailing
     
     #backward search
     endpoints=set()
@@ -231,10 +221,6 @@ def segmentgraph(node,nodes):
         else:
             endpoints.add(c)
     
-    if trace:
-        print "bwd endpoints",endpoints
-        print "bwd leading",leading
-    
     #reverse search for each endpoint
     if len(endpoints)>1:
         for endpoint in endpoints:
@@ -243,22 +229,10 @@ def segmentgraph(node,nodes):
                     reverse_leading.add(c)
         leading=leading.intersection(reverse_leading)
     
-    if trace:
-        print "bwd leading after intersect",leading
-        print "nodes", nodes
-    
     leading = set([(i.begin,i.end) for i in leading if isinstance(i,Interval)]).intersection(nodes) #TODO: remove "if isinstance(i,Interval)]"
     trailing = set([(i.begin,i.end) for i in trailing if isinstance(i,Interval)]).intersection(nodes)
     
     rest = nodes - (leading | trailing)
-    
-    if trace:
-        print "final leading",leading
-        print "final trailing",trailing
-        print "final rest",rest
-
-    #if len(rest)>0:
-    #    print "Not leading or trailing!",rest
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
@@ -271,7 +245,6 @@ def graphalign(l,index,n,score,sp,penalty):#,ni):
         
         if l==0:
             return
-        
         
         if score<schemes.minscore:
             return
@@ -376,7 +349,6 @@ def prune_nodes(G,T):
                             print "predecessors",neis
                     seqs={}
                     for nei in neis:
-                        #if G.node[nei]['aligned']==0:
                         if 'seq' not in G.node[nei]:
                             if not isinstance(nei,Interval):
                                 continue
@@ -429,9 +401,16 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         graph.graph['samples'].append(sample)
                     else:
                         graph.graph['samples']=[sample]
+        
         if line.startswith('S'):
             s=line.strip().split('\t')
             nodeid=int(s[1])
+            gnodeid=graph.number_of_nodes()+1
+            
+            if graph.has_node(gnodeid):
+                logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
+                return
+            
             ann={}
             
             if len(s)>3:
@@ -458,8 +437,9 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 else:
                     if len(s)<3:
                         s.append("")
-                    graph.add_node(nodeid,sample={gfafile},offsets={gfafile:0},seq=s[2].upper(),aligned=0)
-                    mapping[nodeid]=nodeid
+                    graph.add_node(gnodeid,sample={gfafile},offsets={gfafile:0},seq=s[2].upper(),aligned=0)
+                    mapping[nodeid]=gnodeid
+
             else: #there are annotations on the nodes, so use them
                 if not(isinstance(ann['ORI'], list)):
                     ann['ORI']=[ann['ORI']]
@@ -475,16 +455,16 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 ann['ORI']=tmp
                 
                 assert(isinstance(ann['ORI'],set))
-
+                
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
-                    mapping[nodeid]=nodeid
+                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    mapping[nodeid]=gnodeid
                 elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
-                    mapping[nodeid]=nodeid
+                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    mapping[nodeid]=gnodeid
                 elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
-                    graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
-                    mapping[nodeid]=nodeid
+                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    mapping[nodeid]=gnodeid
                 else:
                     if index!=None:
                         if revcomp:
@@ -496,8 +476,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         graph.add_node(intv,sample=ann['ORI'],aligned=0,offsets=offsets)
                         mapping[nodeid]=intv
                     else:
-                        graph.add_node(nodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
-                        mapping[nodeid]=nodeid
+                        graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                        mapping[nodeid]=gnodeid
         
         #L      206     +       155     +       0M
         if line.startswith('L'):
@@ -686,7 +666,7 @@ def main():
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
-    parser_compare = subparsers.add_parser('compare', prog="reveal compare", description="Estimation whether two graphs are the same.")
+    parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -709,7 +689,7 @@ def main():
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
     #parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align_cmd)
-
+    
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
     parser_extract.add_argument('samples', nargs='*', help='Name of the sample to be extracted from the graph.')
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
@@ -725,11 +705,11 @@ def main():
     
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp_cmd)
-
+    
     parser_orient.add_argument('reference', help='Graph or sequence to which query should be oriented.')
     parser_orient.add_argument('contigs', nargs="*", help='Graphs or contigs that are to be reverse complemented if necessary.')
     parser_orient.set_defaults(func=orient)
-
+    
     parser_convert.add_argument('graphs', nargs='*', help='The gfa graph to convert to gml.')
     parser_convert.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
     parser_convert.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
@@ -738,12 +718,12 @@ def main():
     parser_convert.add_argument("--gfa",  action="store_true", dest="gfa", default=False, help="Rewrite gfa file.")
     parser_convert.add_argument("--partition",  action="store_true", dest="partition", default=False, help="Output graph as multiple subgraphs if possible.")
     parser_convert.set_defaults(func=convert)
-
+    
     parser_subgraph.add_argument('inputfiles', nargs='*', help='The gfa graph followed by node ids that make up the subgraph.')
     parser_subgraph.add_argument("-o", dest="outfile", type=str, default="~tmp", help="Prefix of the file to which subgraph will be written.")
     parser_subgraph.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead of gfa.")
     parser_subgraph.set_defaults(func=subgraph)
-
+    
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_bubbles.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
     parser_bubbles.set_defaults(func=bubbles_cmd)
@@ -760,13 +740,28 @@ def main():
     parser_realign.add_argument("--maxsize", dest="maxsize", type=int, default=500, help="Maximum allowed number of nodes that are contained in a complex bubble.")
     parser_realign.set_defaults(func=realign_bubble_cmd)
     
-    parser_compare.add_argument("graphs", nargs=2, help='Two graphs in gfa format which should be compared.')
-    parser_compare.set_defaults(func=compare_cmd)
+    parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
+    parser_merge.add_argument("-o", dest="outprefix", type=str, default=None, help="Prefix of the file to which merged graph is written.")
+    parser_merge.set_defaults(func=merge_cmd)
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     args.func(args)
 
+def merge_cmd(args):
+    if len(args.graphs)<2:
+        logging.fatal("Specify multiple gfa files to merge them.")
+        return
+    
+    G=nx.DiGraph()
+    for graph in args.graphs:
+        logging.info("Adding %s ..." %graph)
+        read_gfa(graph,None,"",G)
+    
+    if args.outprefix!=None:
+        write_gfa(G,"",outputfile=args.outprefix+".gfa")
+    else:
+        write_gfa(G,"",outputfile="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.graphs])+".gfa")
 
 def bubbles_cmd(args):
     if len(args.graph)<1:
@@ -951,13 +946,13 @@ def bubbles(G):
             return -1
         if op==start:
             return startVertex
+        if op==None:
+            return -1
         elif entrance(G, ordD_[op]):
             return ordD_[op]
         elif previousEntrance[ordD_[op]]==None: #
             return -1
         else:
-            #print ordD_[op]
-            #print previousEntrance[ordD_[op]]
             return ordD_[previousEntrance[ordD_[op]]]
         return startVertex
     
@@ -1144,7 +1139,6 @@ def align_genomes(args):
                 intv=idx.addsequence(seq.upper())
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                #schemes.interval2sampleid[Intv]=i
                 G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
@@ -1267,8 +1261,7 @@ def align_contigs(args):
     logging.info("Done (%.2f%% identity, %d bases out of %d aligned)."%(((alignedbases*2)/float(totbases))*100,alignedbases,totbases))
     return G,idx
 
-
-def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None):
+def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None,wpen=1,wscore=3):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -1341,9 +1334,9 @@ def align(aobjs,ref=None,minlength=20,minscore=0,minn=2,threads=0,global_align=F
         idx.align(schemes.multimumpicker,graphalign,threads=threads)
     else:
         if graph:
-            idx.align(schemes.graphmumpicker,graphalign,threads=threads)
+            idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
         else:
-            idx.align(None,graphalign,threads=threads)
+            idx.align(None,graphalign,threads=threads,wpen=wpen,wscore=wscore)
     
     prune_nodes(G,idx.T)
 
@@ -1879,41 +1872,3 @@ def extract(G,sample):
         for node in nx.topological_sort(G.subgraph(contig)):
             seq+=G.node[node]['seq']
         yield seq
-
-def compare_cmd(args): #NOTE, for now only look at sequence content. It is not a proper comparison, should look into graph isomorphism approximations...
-    
-    if not len(args.graphs)==2:
-        logging.fatal("Specify two graphs.")
-        return
-
-    if not args.graphs[0].endswith(".gfa"):
-        logging.fatal(args.graphs[0],"is not a gfa graph.")
-        return
-
-    if not args.graphs[1].endswith(".gfa"):
-        logging.fatal(args.graphs[1],"is not a gfa graph.")
-        return
-
-    G1=nx.DiGraph()
-    G2=nx.DiGraph()
-
-    read_gfa(args.graphs[0], None, None, G1)
-    read_gfa(args.graphs[1], None, None, G2)
-
-    G1seq=set()
-    G2seq=set()
-    
-    for node in G1.nodes():
-        G1seq.add(G1.node[node]['seq'])
-    
-    for node in G2.nodes():
-        G2seq.add(G2.node[node]['seq'])
-    
-    for seq in G1seq:
-        if seq not in G2seq:
-            print "Not in G2",seq
-
-    for seq in G2seq:
-        if seq not in G1seq:
-            print "Not in G1",seq
-

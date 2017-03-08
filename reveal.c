@@ -520,9 +520,11 @@ int ismultimum(RevealIndex * idx, int l, int lb, int ub, int * flag_so) {
         
         for (j=lb; j<ub; j++){ //check maximal
             if (idx->SA[j]==0){
+
                 return 1; //success
             }
             if (idx->SA[j+1]==0){
+
                 return 1; //success
             }
             if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
@@ -584,6 +586,18 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                             PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
                             PyList_SET_ITEM(sp, x, v);
                         }
+                        
+                        /*PyObject *ni=PyList_New(n);
+                        int vi=0;
+                        for (x=0;x<main->nsamples;x++) {
+                            if (flag_so[x]==1){
+                                PyObject *v = Py_BuildValue("i", x);
+                                PyList_SetItem(ni, vi, v);
+                                vi++;
+                            }
+                        }*/
+
+                        //PyObject *multimum=Py_BuildValue("i,i,O,O",i_lcp,n,sp,ni);
                         PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
                         PyList_Append(multimums,multimum);
                         Py_DECREF(multimum);
@@ -636,6 +650,18 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                     PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
                     PyList_SET_ITEM(sp, x, v);
                 }
+
+                /*PyObject *ni=PyList_New(n);
+                int vi=0;
+                for (x=0;x<main->nsamples;x++) {
+                    if (flag_so[x]==1){
+                        PyObject *v = Py_BuildValue("i", x);
+                        PyList_SetItem(ni, vi, v);
+                        vi++;
+                    }
+                }*/
+            
+                //PyObject *multimum=Py_BuildValue("i,i,O,O",i_lcp,n,sp,ni);
                 PyObject *multimum=Py_BuildValue("i,i,O",i_lcp,n,sp);
                 PyList_Append(multimums,multimum);
                 Py_DECREF(multimum);
@@ -733,63 +759,127 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
     }
 }
 
-void bubble_sort(RevealIndex* idx, int* sp, int n, int l){
-    //RevealIndex *main=(RevealIndex *) idx->main;
+
+// TODO sp has to be sorted!
+void bubble_sort_ni(RevealIndex* idx, int* sp, int* ni, int n, int l){
     
-    int i=0,j=0,x,tmpSA,tmpLCP;
-    for (i=0; i<n; i++){
-        for (j=sp[i];j<sp[i]+l;j++){
-	    //assert(isupper(idx->T[j]));
-            idx->T[j]=tolower(idx->T[j]);
-        }
-    }
+    int i=0,j=0,x,sep,tmpSA,tmpLCP;
     
     for (j=0; j<n; j++) {
-	//fprintf(stderr,"sort %d %d %d %d %d %d\n",j,sp[j],n,l,idx->n,main->n);
+        
+        if (ni[j]==0) {
+            sep=0;
+        } else {
+            sep=idx->nsep[ni[j]-1];
+        }
+
         for (i=0; i<idx->n; i++){
-            if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i]>sp[j]){ //
+            if (idx->SA[i]<sp[j] && idx->SA[i]>sep && idx->SA[i]+idx->LCP[i]>sp[j]){ // if match overlaps the start position of sp[j]
+
                 x=i;
                 tmpSA=idx->SA[i];
                 tmpLCP=idx->LCP[i];
-                while ( (idx->LCP[x] > sp[j]-tmpSA) && (x>0) ){
-		    //assert(x<=idx->n);
-		    //assert(idx->SA[x-1]<main->n);
+                
+                while ((idx->LCP[x] > sp[j]-tmpSA) && (x>0)){
                     idx->SAi[idx->SA[x-1]]=x;
                     idx->SA[x]=idx->SA[x-1];
                     idx->LCP[x]=idx->LCP[x-1]; //!
                     x--;
                 }
-		//assert(x>=0);
-		//assert(tmpSA>=0);
-		//assert(x<idx->n);
-		//assert(x<idx->n-1);
-		//assert(tmpSA<main->n);
 		
 		idx->SAi[tmpSA]=x;
 		idx->SA[x]=tmpSA;
 		idx->LCP[x+1]=sp[j]-tmpSA;
-		
-		//assert(i+1<idx->n);
-		
+                
 		if (i<idx->n-1){
 		    if (tmpLCP < idx->LCP[i+1]){
 			idx->LCP[i+1]=tmpLCP; //!
 		    }
 		}
-                continue;
-            }
-	    
-            if (i<idx->n-1){ 
-                if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i+1]>sp[j]){
-                    if (idx->LCP[i+1] > idx->LCP[i]){
-                        idx->LCP[i+1]= sp[j]-idx->SA[i];
-                        continue;
+            } else {
+                if (i<idx->n-1){
+                    if (idx->SA[i]<sp[j] && idx->SA[i]>sep && idx->SA[i]+idx->LCP[i+1]>sp[j]){
+                        if (idx->LCP[i+1] > idx->LCP[i]){
+                            idx->LCP[i+1]= sp[j]-idx->SA[i];
+                        }
                     }
                 }
             }
         }
     }
+    
+    for (i=0; i<n; i++){
+        for (j=sp[i];j<sp[i]+l;j++){
+            idx->T[j]=tolower(idx->T[j]); //mark corresponding intervals in T
+        }
+    }
 }
+
+
+void bubble_sort(RevealIndex* idx, int* sp, int n, int l){
+    
+    int i=0,j=0,x,tmpSA,tmpLCP;
+    
+    for (j=0; j<n; j++) {
+        
+        for (i=0; i<idx->n; i++){
+            if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i]>sp[j]){ // if match overlaps the start position of sp[j]
+
+                x=i;
+                tmpSA=idx->SA[i];
+                tmpLCP=idx->LCP[i];
+                
+                while ((idx->LCP[x] > sp[j]-tmpSA) && (x>0)){
+                    idx->SAi[idx->SA[x-1]]=x;
+                    idx->SA[x]=idx->SA[x-1];
+                    idx->LCP[x]=idx->LCP[x-1]; //!
+                    x--;
+                }
+		
+		idx->SAi[tmpSA]=x;
+		idx->SA[x]=tmpSA;
+		idx->LCP[x+1]=sp[j]-tmpSA;
+                
+		if (i<idx->n-1){
+		    if (tmpLCP < idx->LCP[i+1]){
+			idx->LCP[i+1]=tmpLCP; //!
+		    }
+		}
+            } else {
+                if (i<idx->n-1){
+                    if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i+1]>sp[j]){
+                        if (idx->LCP[i+1] > idx->LCP[i]){
+                            idx->LCP[i+1]= sp[j]-idx->SA[i];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    for (i=0; i<n; i++){
+        for (j=sp[i];j<sp[i]+l;j++){
+            idx->T[j]=tolower(idx->T[j]); //mark corresponding intervals in T
+        }
+    }
+}
+
+/*
+void wiggle(RevealIndex* idx, RevealMultiMUM* mmum, int* lwiggle, int* rwiggle){
+    int i=0,j=0;
+    for (j=0; j<mmum->n; j++) {
+        for (i=0; i<idx->n; i++){
+
+            if (idx->SA[i]<mmum->sp[j] && idx->SA[i-1]<mmum->sp[j] && idx->SA[i]+idx->LCP[i]>mmum->sp[j]){
+                if (idx->SA[i]+idx->LCP[i]-mmum->sp[j] > *lwiggle){
+                    *lwiggle=idx->SA[i]+idx->LCP[i]-mmum->sp[j];
+                }
+            }
+
+        }
+    }
+}*/
+
 
 
 /* Alignment Thread */
@@ -825,6 +915,7 @@ void *aligner(void *arg) {
             
             RevealMultiMUM mmum;
             mmum.sp=(int *) malloc(idx->nsamples*sizeof(int));
+            //mmum.ni=(int *) malloc(idx->nsamples*sizeof(int));
             mmum.l=0;
             mmum.score=0;
             mmum.penalty=0;
@@ -888,10 +979,12 @@ void *aligner(void *arg) {
                     free(mmum.sp);
                     break;
                 }
-                                
+                
                 PyObject *sp=NULL;
+                //PyObject *ni=NULL;
                 PyObject *tmp=NULL;
                
+                //PyArg_ParseTuple(mum,"iOilOiO", &mmum.l, &tmp, &mmum.n, &mmum.score, &sp, &mmum.penalty, &ni);
                 PyArg_ParseTuple(mum,"iOilOi", &mmum.l, &tmp, &mmum.n, &mmum.score, &sp, &mmum.penalty);
                 
                 for (i=0; i<mmum.n; i++){
@@ -902,7 +995,22 @@ void *aligner(void *arg) {
                         continue;
                     }
                     mmum.sp[i]=PyInt_AS_LONG(pos);
+                    
+                    /*PyObject * s=PyList_GetItem(ni,i);
+                    if (s==NULL){
+                        fprintf(stderr,"**** invalid results from mumpicker\n");
+                        mmum.ni[i]=-1;
+                        continue;
+                    }
+                    mmum.ni[i]=PyInt_AS_LONG(s);*/
                 }
+                
+                //determine left/right wiggle, and adjust mum accordingly!
+                //int lwiggle=0,rwiggle=0;
+                //wiggle(idx,&mmum,&lwiggle,&rwiggle);
+                //fprintf(stderr,"left wiggle: %d of %d\n",lwiggle,mmum.l);
+                //fprintf(stderr,"right wiggle: %d of %d\n",rwiggle,mmum.l);
+                //adjust sp and l
                 
                 //fprintf(stderr,"Aligning...\n");
                 result = PyEval_CallObject(rw->graphalign, mum);
@@ -1207,9 +1315,10 @@ void *aligner(void *arg) {
 	    //fprintf(stderr,"done.\n");
 
 	    //fprintf(stderr,"bubble sorting...\n");
+            //bubble_sort(i_leading, mmum.sp, mmum.ni, mmum.n, mmum.l);
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
             //fprintf(stderr,"done.\n");
-
+	    
             free(D);
             free(mmum.sp);
             if (idx->depth==0){
