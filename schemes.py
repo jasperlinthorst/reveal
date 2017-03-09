@@ -61,6 +61,7 @@ def multimumpicker(multimums,idx):
                         score=int(math.log(l-(wpen*penalty))*n)
                 
             else:
+                penalty,epenalty,spenalty=0,0,0
                 score=minscore
             
             if score<minscore:
