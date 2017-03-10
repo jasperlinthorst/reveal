@@ -22,8 +22,8 @@ def multimumpicker(multimums,idx):
 
     try:
         bestmum=None
-        trace=False 
-
+        trace=False
+        
         for multimum in multimums:
             #l,n,sp,ni=multimum
             l,n,sp=multimum
@@ -37,32 +37,29 @@ def multimumpicker(multimums,idx):
                     continue
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
-                
-            if idx.nsamples==len(idx.nodes): #what about alignment within large indel?
-                
-                ds=[start-ts[start].pop()[0] for start in sp]
-                ads=sum(ds)/n
-                spenalty=sum([abs(p-ads) for p in ds])
-                
-                de=[ts[start].pop()[1]-(start+l) for start in sp]
-                ade=sum(de)/n
-                epenalty=sum([abs(p-ade) for p in de])
-                
-                penalty=min([spenalty,epenalty])
-                
-                if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                    score=int(math.log(l)*n)
-                    #score= (wscore*(l*(n**2)))
-                else:
-                    #score= (wscore*(l*(n**2))) - (wpen*penalty)
-                    if l-(wpen*penalty)<=0:
-                        score=minscore
-                    else:
-                        score=int(math.log(l-(wpen*penalty))*n)
-                
+            
+            #if idx.nsamples==len(idx.nodes): #what about alignment within large indel?
+            ds=[start-ts[start].pop()[0] for start in sp]
+            ads=sum(ds)/n
+            de=[ts[start].pop()[1]-(start+l) for start in sp]
+            ade=sum(de)/n
+            
+            spenalty=sum([abs(p-ads) for p in ds])
+            epenalty=sum([abs(p-ade) for p in de])
+            
+            penalty=min([spenalty,epenalty])
+            #else:
+            #    penalty,epenalty,spenalty=0,0,0
+            
+            if idx.depth==0: #no other anchors yet, dont penalize first anchor
+                score=int(math.log(l)*n)
+                #score= (wscore*(l*(n**2)))
             else:
-                penalty,epenalty,spenalty=0,0,0
-                score=minscore
+                #score= (wscore*(l*(n**2))) - (wpen*penalty)
+                if l-(wpen*penalty)<=0:
+                    score=minscore
+                else:
+                    score=int(math.log(l-(wpen*penalty))*n)
             
             if score<minscore:
                 if trace:
