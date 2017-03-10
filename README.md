@@ -92,6 +92,10 @@ To extract a subgraph of the graph, to for instance inspect a complex bubble str
 
 **reveal subgraph \<graph\> \<node1\> ...  \<nodeN\>**
 
+To merge multiple gfa graphs into a single gfa graph, while maintaining node-id space:
+
+**reveal merge \<graph1\> \<graph2\> ...  \<graphN\>**
+
 For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
 
 Under notebooks you can find some IPython notebooks that show some experiments for some typical usecases.
