@@ -113,7 +113,7 @@ int build_SO(RevealIndex *index){
 }
 
 static PyObject *construct(RevealIndex *self, PyObject *args)
-{
+{    
     if (self->n==0){
         PyErr_SetString(RevealError, "No text to index.");
         return NULL;
@@ -124,18 +124,30 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SA.");
         return NULL;
     }
-    
-    if (divsufsort((const sauchar_t *) self->T, self->SA, self->n)!=0){
-        PyErr_SetString(RevealError, "divsufsort failed");
-        return NULL;
+
+    if (self->safile[0]==0){
+        fprintf(stderr,"Computing suffix array...\n");
+        if (divsufsort((const sauchar_t *) self->T, self->SA, self->n)!=0){
+            PyErr_SetString(RevealError, "divsufsort failed");
+            return NULL;
+        }
+        fprintf(stderr,"Done.\n");
+    } else {
+        //read SA from file
+        fprintf(stderr,"Reading suffix array from file: %s\n",self->safile);
+        FILE* fsa;
+        fsa=fopen(".reveal.sa","r");
+        fread(self->SA, sizeof(int), self->n, fsa);
+        fclose(fsa);
     }
     
+    //construct inverse of Suffix Array, necessary for splitting SA and calculating LCP
     self->SAi = malloc(sizeof(int)*(self->n)); //inverse of SA
     if (self->SAi==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SAi.");
         return NULL;
     }
-    
+    //fill the inverse array
     int i;
     for (i=0; i<self->n; i++) {
         self->SAi[self->SA[i]]=i;
@@ -147,7 +159,16 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         return NULL;
     }
     
-    compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
+    if (self->lcpfile[0]==0){
+        compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
+    } else {
+        //read LCP from file
+        fprintf(stderr,"Reading lcp array from file: %s\n",self->lcpfile);
+        FILE* flcp;
+        flcp=fopen(".reveal.lcp","r");
+        fread(self->LCP, sizeof(int), self->n, flcp);
+        fclose(flcp);
+    }
     
     if (self->nsamples>2){
          self->SO = malloc(self->n*sizeof(uint16_t));
@@ -156,7 +177,22 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
             return NULL;
          };
     }
-
+    
+    //TODO: sanity check!
+    
+    //if caching is specified write sa and lcp to disk
+    if (self->cache==1){
+        fprintf(stderr,"Writing LCP and SA to disk...\n");
+        FILE* fsa;
+        fsa=fopen(".reveal.sa","w");
+        fwrite(self->SA, sizeof(int), self->n, fsa);
+        fclose(fsa);
+        FILE* flcp;
+        flcp=fopen(".reveal.lcp","w");
+        fwrite(self->LCP, sizeof(int), self->n, flcp);
+        fclose(flcp);
+    }
+    
     self->main=(PyObject *) self;
     
     Py_INCREF(Py_None);
@@ -177,7 +213,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     int numThreads=0; /* Number of alignment threads */
     int wpen=0;
     int wscore=0;
-    
+
     if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore))
         return NULL;
     
@@ -324,9 +360,6 @@ static PyMethodDef reveal_methods[] = {
 static int
 reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
 {
-    if (args==NULL) {
-        return 0;
-    }
     self->T=NULL;
     self->SA=NULL;
     self->LCP=NULL;
@@ -342,6 +375,14 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->left=Py_None;
     Py_INCREF(Py_None);
     self->right=Py_None;
+    self->safile="";
+    self->lcpfile="";
+    
+    static char *kwlist[] = {"sa","lcp","cache",NULL};
+    
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ssi", kwlist, &self->safile, &self->lcpfile, &self->cache))
+        return -1;
+
     return 0;
 }
 

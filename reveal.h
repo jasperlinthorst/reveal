@@ -16,13 +16,14 @@ typedef struct
     int depth; //depth within the hierarchical alignment tree
     int *nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int nsamples; //number of samples in T
+    char* safile;
+    char* lcpfile;
+    int cache; //whether to store the suffix array and lcp array after construction, so they can be reused
     PyObject * main; //main index
     PyObject * samples; //list of sample names that are contained in the index
     PyObject * nodes; //list of intervals in T that are associated with this index
     PyObject * left;
-    //PyObject * leftoffsets;
     PyObject * right;
-    //PyObject * rightoffsets;
 } RevealIndex;
 
 RevealIndex* newIndex();

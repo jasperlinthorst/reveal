@@ -236,7 +236,7 @@ def segmentgraph(node,nodes):
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
-def graphalign(l,index,n,score,sp,penalty):#,ni):
+def graphalign(l,index,n,score,sp,penalty):
     try:
         nodes=index.nodes
         
@@ -680,6 +680,10 @@ def main():
     parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     
+    parser_aln.add_argument("--sa", dest="sa", default="", help="Specify a preconstructed suffix array to decouple suffix array construction.")
+    parser_aln.add_argument("--lcp", dest="lcp", default="", help="Specify a preconstructed lcp array to decouple lcp array construction.")
+    parser_aln.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the suffix and lcp array to disk after construction.")
+    
     parser_aln.add_argument("-g", dest="minsamples", type=int, default=1, help="Only index nodes that occur in this many samples or more (default 1).")
     parser_aln.add_argument("-x", dest="maxsamples", type=int, default=None, help="Only align nodes that have maximally this many samples (default None).")
     parser_aln.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that should be used as a coordinate system or reference.")
@@ -1109,7 +1113,8 @@ def align_genomes(args):
     reference=args.reference
     
     t=IntervalTree()
-    idx=reveallib.index()
+    
+    idx=reveallib.index(sa=args.sa, lcp=args.lcp, cache=args.cache)
     G=nx.DiGraph()
     G.graph['samples']=[]
     o=0
@@ -1152,20 +1157,19 @@ def align_genomes(args):
     idx.construct()
     logging.info("Done.")
     
-
     if len(args.inputfiles)>2:
         logging.info("Constructing multi-alignment...")
         schemes.wscore=args.wscore
         schemes.wpen=args.wpen
         idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
     else:
-        logging.info("Constructing pairwise-alignment...")
         if graph:
+            logging.info("Constructing graph-alignment...")
             schemes.wscore=args.wscore
             schemes.wpen=args.wpen
             idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
         else:
-            #pairwise align based on best scoring MUM
+            logging.info("Constructing pairwise-alignment...")
             idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
     
     return G,idx
