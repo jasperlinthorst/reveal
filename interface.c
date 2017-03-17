@@ -48,10 +48,10 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     //call add sequence only if self->sep[self->nsamples]
     char * seq;
     int l;
-    int s;
+    unsigned int s;
     if (!PyArg_ParseTuple(args, "s#", &seq, &l))
         return NULL;
-   
+    
     //realloc space for T
     char *tmp=realloc(self->T,(self->n+(l+1)+1)*sizeof(char));
     
@@ -69,10 +69,10 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     self->T[self->n+l+1]='\0'; //add sentinel
     
     self->n=self->n+l+1;
-    PyObject *intv=Py_BuildValue("(i,i)",s,self->n-1);
+    PyObject *intv=Py_BuildValue("(I,I)",s,self->n-1);
     
     PyList_Append(self->nodes,intv);
-
+    
     return intv;
 };
 
@@ -119,6 +119,14 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         return NULL;
     }
     
+    if (self->cache==1){
+        fprintf(stderr,"Writing T to disk...\n");
+        FILE* ft;
+        ft=fopen(".reveal.t","w");
+        fwrite(self->T, sizeof(char), self->n, ft);
+        fclose(ft);
+    }
+
     self->SA=malloc(sizeof(int)*self->n);
     if (self->SA==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SA.");
@@ -126,12 +134,12 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
 
     if (self->safile[0]==0){
-        fprintf(stderr,"Computing suffix array...\n");
+        //fprintf(stderr,"Computing suffix array...\n");
         if (divsufsort((const sauchar_t *) self->T, self->SA, self->n)!=0){
             PyErr_SetString(RevealError, "divsufsort failed");
             return NULL;
         }
-        fprintf(stderr,"Done.\n");
+        //fprintf(stderr,"Done.\n");
     } else {
         //read SA from file
         fprintf(stderr,"Reading suffix array from file: %s\n",self->safile);
