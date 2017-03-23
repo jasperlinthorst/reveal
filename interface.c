@@ -1,7 +1,12 @@
 #include "Python.h"
 #include "reveal.h"
-#include <divsufsort.h>
 #include <pthread.h>
+
+#ifdef SA64
+#include <divsufsort64.h>
+#else
+#include <divsufsort.h>
+#endif
 
 static PyObject *RevealError;
 
@@ -29,7 +34,7 @@ static PyObject *addsample(RevealIndex *self, PyObject *args)
     }
 
     if (self->nsamples>0){
-        self->nsep= (int*) realloc(self->nsep,(self->nsamples)*sizeof(int));
+        self->nsep= (saidx_t *) realloc(self->nsep,(self->nsamples)*sizeof(saidx_t));
         if (self->nsep==NULL){
             PyErr_SetString(RevealError, "Failed to add sample.");
             return NULL;
@@ -69,15 +74,19 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     self->T[self->n+l+1]='\0'; //add sentinel
     
     self->n=self->n+l+1;
-    PyObject *intv=Py_BuildValue("(I,I)",s,self->n-1);
-    
+
+#ifdef SA64
+    PyObject *intv=Py_BuildValue("(L,L)",s,self->n-1);
+#else
+    PyObject *intv=Py_BuildValue("(i,i)",s,self->n-1);
+#endif
     PyList_Append(self->nodes,intv);
     
     return intv;
 };
 
-int compute_lcp(char *T, int *SA, int *SAi, int *LCP, int n) {
-    int h=0, i, j, k;
+int compute_lcp(char *T, saidx_t *SA, saidx_t *SAi, uint32_t *LCP, saidx_t n) {
+    uint32_t h=0, i, j, k;
     for (i = 0; i < n; i++) {
         k = SAi[i];
         if (k == 0) {
@@ -93,7 +102,7 @@ int compute_lcp(char *T, int *SA, int *SAi, int *LCP, int n) {
 }
 
 int build_SO(RevealIndex *index){
-    int i=0,j=0;
+    saidx_t i=0,j=0;
     for (i=0;i<index->nsamples;i++){
         if (i==0){
             for (j=0; j<=index->nsep[i]; j++){
@@ -113,7 +122,9 @@ int build_SO(RevealIndex *index){
 }
 
 static PyObject *construct(RevealIndex *self, PyObject *args)
-{    
+{
+//#define INT_MAX 1
+
     if (self->n==0){
         PyErr_SetString(RevealError, "No text to index.");
         return NULL;
@@ -126,42 +137,44 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         fwrite(self->T, sizeof(char), self->n, ft);
         fclose(ft);
     }
-
-    self->SA=malloc(sizeof(int)*self->n);
+    
+    self->SA=malloc(sizeof(saidx_t)*self->n);
     if (self->SA==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SA.");
         return NULL;
     }
 
-    if (self->safile[0]==0){
-        //fprintf(stderr,"Computing suffix array...\n");
-        if (divsufsort((const sauchar_t *) self->T, self->SA, self->n)!=0){
-            PyErr_SetString(RevealError, "divsufsort failed");
-            return NULL;
-        }
-        //fprintf(stderr,"Done.\n");
-    } else {
-        //read SA from file
-        fprintf(stderr,"Reading suffix array from file: %s\n",self->safile);
-        FILE* fsa;
-        fsa=fopen(".reveal.sa","r");
-        fread(self->SA, sizeof(int), self->n, fsa);
-        fclose(fsa);
-    }
-    
-    //construct inverse of Suffix Array, necessary for splitting SA and calculating LCP
-    self->SAi = malloc(sizeof(int)*(self->n)); //inverse of SA
+    self->SAi = malloc(sizeof(saidx_t)*(self->n)); //inverse of SA
     if (self->SAi==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SAi.");
         return NULL;
     }
+       
+    if (self->safile[0]==0){
+#ifdef SA64
+        if (divsufsort64((const sauchar_t *) self->T, self->SA, self->n)!=0){
+#else
+        if (divsufsort((const sauchar_t *) self->T, self->SA, self->n)!=0){
+#endif
+            PyErr_SetString(RevealError, "divsufsort failed");
+            return NULL;
+        }
+    } else {
+        //read SA from file
+        fprintf(stderr,"Reading suffix array from file: %s\n",self->safile);
+        FILE* fsa;
+        fsa=fopen(self->safile,"r");
+        fread(self->SA, sizeof(saidx_t), self->n, fsa);
+        fclose(fsa);
+    }
+    
     //fill the inverse array
-    int i;
+    saidx_t i;
     for (i=0; i<self->n; i++) {
         self->SAi[self->SA[i]]=i;
     }
     
-    self->LCP=malloc(sizeof(int)*self->n);
+    self->LCP=malloc(sizeof(uint32_t)*self->n);
     if (self->LCP==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for LCP.");
         return NULL;
@@ -173,8 +186,8 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         //read LCP from file
         fprintf(stderr,"Reading lcp array from file: %s\n",self->lcpfile);
         FILE* flcp;
-        flcp=fopen(".reveal.lcp","r");
-        fread(self->LCP, sizeof(int), self->n, flcp);
+        flcp=fopen(self->lcpfile,"r");
+        fread(self->LCP, sizeof(uint32_t), self->n, flcp);
         fclose(flcp);
     }
     
@@ -193,11 +206,11 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         fprintf(stderr,"Writing LCP and SA to disk...\n");
         FILE* fsa;
         fsa=fopen(".reveal.sa","w");
-        fwrite(self->SA, sizeof(int), self->n, fsa);
+        fwrite(self->SA, sizeof(saidx_t), self->n, fsa);
         fclose(fsa);
         FILE* flcp;
         flcp=fopen(".reveal.lcp","w");
-        fwrite(self->LCP, sizeof(int), self->n, flcp);
+        fwrite(self->LCP, sizeof(uint32_t), self->n, flcp);
         fclose(flcp);
     }
     
@@ -328,21 +341,23 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
 static PyObject *
 reveal_getbestmultimum(RevealIndex *self, PyObject *args, PyObject *keywds)
 {
-    fprintf(stderr,"in reveal_getbestmultimum\n");
     RevealMultiMUM mmum;
-    mmum.sp=(int *) malloc(self->nsamples*sizeof(int));
+    mmum.sp=(saidx_t *) malloc(self->nsamples*sizeof(saidx_t));
     mmum.l=0;
     int min_n=2,i=0;
     
     //getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n)
     if (getbestmultimum(self, &mmum, min_n)==0) {
-        fprintf(stderr,"Found best multimum\n");
         PyObject *sps;
         PyObject *arglist;
         sps=PyList_New(mmum.n);
         PyObject *pos;
         for (i=0;i<mmum.n;i++){
+#ifdef SA64
+            pos=Py_BuildValue("L",mmum.sp[i]);
+#else
             pos=Py_BuildValue("i",mmum.sp[i]);
+#endif
             PyList_SetItem(sps,i,pos);
         }
         arglist = Py_BuildValue("(i,i,O)", mmum.l, mmum.n, sps);
@@ -732,16 +747,19 @@ RevealIndex* newIndex()
 #ifndef PyMODINIT_FUNC  /* declarations for DLL import/export */
 #define PyMODINIT_FUNC void
 #endif
+
+#ifdef SA64
+
 PyMODINIT_FUNC
-initreveallib(void)
+initreveallib64(void)
 {
     PyObject* m;
     
     if (PyType_Ready(&RevealIndexType) < 0)
         return;
     
-    m = Py_InitModule3("reveallib", NULL, "REcursiVe Exact matching ALigner");
-    
+    m = Py_InitModule3("reveallib64", NULL, "REcursiVe Exact matching ALigner (64bit suffix array)");
+
     Py_Initialize();
     PyEval_InitThreads();
 
@@ -753,8 +771,27 @@ initreveallib(void)
     PyModule_AddObject(m, "error", RevealError);
 }
 
-/*PyMODINIT_FUNC
-initreveal64(void)
+#else
+
+PyMODINIT_FUNC
+initreveallib(void)
 {
-    initreveal();
-}*/
+    PyObject* m;
+    
+    if (PyType_Ready(&RevealIndexType) < 0)
+        return;
+    
+    m = Py_InitModule3("reveallib", NULL, "REcursiVe Exact matching ALigner");
+
+    Py_Initialize();
+    PyEval_InitThreads();
+
+    Py_INCREF(&RevealIndexType);
+    PyModule_AddObject(m, "index", (PyObject *)&RevealIndexType);
+    
+    RevealError = PyErr_NewException("Reveal.error", NULL, NULL);
+    Py_INCREF(RevealError);
+    PyModule_AddObject(m, "error", RevealError);
+}
+
+#endif
