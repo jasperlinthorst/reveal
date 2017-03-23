@@ -5,6 +5,7 @@ import networkx as nx
 from collections import defaultdict, deque
 import threading
 import reveallib
+import reveallib64
 import argparse
 import logging
 import os
@@ -16,7 +17,6 @@ try:
     from matplotlib import pyplot as plt
 except:
     pass
-
 
 def fasta_reader(fn,truncN=False):
     seq=""
@@ -237,59 +237,56 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(l,index,n,score,sp,penalty):
-    try:
-        nodes=index.nodes
-        
-        if len(nodes)==0:
-            return
-        
-        if l==0:
-            return
-        
-        if score<schemes.minscore:
-            return
-        
-        if l<schemes.minlength:
-            return
-        
-        mns=[]
-        topop=[]
-        
-        for i,pos in enumerate(sp):
-            old=t[pos].pop()
-            mn,other=breaknode(old,pos,l)
-            mns.append(mn)
-            if isinstance(old,Interval):
-                nodes.remove((old.begin,old.end))
-            for node in other:
-                if isinstance(node,Interval):
-                    nodes.append((node.begin,node.end))
-        
-        mn=mergenodes(mns)
-        
-        msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
-        
-        intervals=segmentgraph(mn,nodes)
-        
-        leading,trailing,rest,merged=intervals
-        newleft=mn
-        newright=mn
-        
-        for intv in leading:
-            if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the left
-                newright=index.right
-                break
-        
-        for intv in trailing:
-            if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the right
-                newleft=index.left
-                break
-        
-        return leading,trailing,rest,merged,newleft,newright
+    #print l,index,n,score,sp,penalty
 
-    except Exception as e:
-        print "Exception in graphalign",type(e),str(e)
-        return None
+    nodes=index.nodes
+    
+    if len(nodes)==0:
+        return
+    
+    if l==0:
+        return
+    
+    if score<schemes.minscore:
+        return
+    
+    if l<schemes.minlength:
+        return
+    
+    mns=[]
+    topop=[]
+    
+    for i,pos in enumerate(sp):
+        old=t[pos].pop()
+        assert(old.end-old.begin>=l)
+        mn,other=breaknode(old,pos,l)
+        mns.append(mn)
+        if isinstance(old,Interval):
+            nodes.remove((old.begin,old.end))
+        for node in other:
+            if isinstance(node,Interval):
+                nodes.append((node.begin,node.end))
+    mn=mergenodes(mns)
+    
+    msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
+    
+    intervals=segmentgraph(mn,nodes)
+    
+    leading,trailing,rest,merged=intervals
+    newleft=mn
+    newright=mn
+    
+    for intv in leading:
+        if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the left
+            newright=index.right
+            break
+    
+    for intv in trailing:
+        if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the right
+            newleft=index.left
+            break
+    
+    return leading,trailing,rest,merged,newleft,newright
 
 def prune(node,T,reverse=False):
     seqs={}
@@ -655,6 +652,7 @@ def main():
     
     parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc)
     parser.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
+    parser.add_argument("--64", dest="sa64", default=False, action="store_true", help="Use 64bit suffix array in the index.")
     
     subparsers = parser.add_subparsers()
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
@@ -662,7 +660,7 @@ def main():
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
-    parser_orient = subparsers.add_parser('orient', prog="reveal orient", description="Orient query graph or sequence with respect to reference sequence.")
+    parser_orient = subparsers.add_parser('orient', prog="reveal orient", description="Orient query graph or sequence with respect to reference graph or sequence.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
@@ -711,8 +709,16 @@ def main():
     parser_comp.set_defaults(func=comp_cmd)
     
     parser_orient.add_argument('reference', help='Graph or sequence to which query should be oriented.')
-    parser_orient.add_argument('contigs', nargs="*", help='Graphs or contigs that are to be reverse complemented if necessary.')
+    parser_orient.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
+    parser_orient.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (default 20).")
+    parser_orient.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
+    parser_orient.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
+    parser_orient.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
+    parser_orient.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_orient.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
     parser_orient.set_defaults(func=orient)
+    
+    #TOOD: reveal TEXT; write T for any input of graphs and fastas to enable external SA and LCP construction
     
     parser_convert.add_argument('graphs', nargs='*', help='The gfa graph to convert to gml.')
     parser_convert.add_argument("-n", dest="minsamples", type=int, default=1, help="Only align nodes that occcur in this many samples (default 1).")
@@ -750,6 +756,10 @@ def main():
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
+    
+    global sa64
+    sa64=args.sa64
+    
     args.func(args)
 
 def merge_cmd(args):
@@ -999,7 +1009,12 @@ def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     global t,G,reference,o
 
     t=IntervalTree()
-    idx=reveallib.index()
+    
+    if sa64:
+        idx=reveallib64.index()
+    else:
+        idx=reveallib.index()
+    
     G=nx.DiGraph()
     G.graph['samples']=[]
     reference=None
@@ -1113,8 +1128,12 @@ def align_genomes(args):
     reference=args.reference
     
     t=IntervalTree()
+
+    if sa64:
+        idx=reveallib64.index(sa=args.sa, lcp=args.lcp, cache=args.cache)
+    else:
+        idx=reveallib.index(sa=args.sa, lcp=args.lcp, cache=args.cache)
     
-    idx=reveallib.index(sa=args.sa, lcp=args.lcp, cache=args.cache)
     G=nx.DiGraph()
     G.graph['samples']=[]
     o=0
@@ -1189,7 +1208,10 @@ def align_contigs(args):
     contigs=args.inputfiles[1]
     
     t=IntervalTree()
-    idx=reveallib.index()
+    if sa64:
+        idx=reveallib64.index()
+    else:
+        idx=reveallib.index()
     
     totbases=0
     idx.addsample(os.path.basename(ref))
@@ -1234,7 +1256,12 @@ def align_contigs(args):
     t=IntervalTree()
     T=idx.T
     del(idx)
-    idx=reveallib.index()
+
+    if sa64:
+        idx=reveallib64.index()
+    else:
+        idx=reveallib.index()
+
     idx.addsample(os.path.basename(ref))
     #add sequence of all nodes in G that are not spanned by the alignment
     mapping={}
@@ -1275,7 +1302,12 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
     global t,G,reference,o
     reference=ref
     t=IntervalTree()
-    idx=reveallib.index()
+
+    if sa64:
+        idx=reveallib64.index()
+    else:
+        idx=reveallib.index()
+    
     G=nx.DiGraph()
     H=G
     G.graph['samples']=[]
@@ -1348,82 +1380,192 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
 
 def orient(args):
     #orient graph or contig with respect to a reference (for now only genome)
-    for query in args.contigs: #at this moment very costly, index everything for each contig. Better to do this once for all
-        logging.info("Processing %s"%query)
-        
-        idx=reveallib.index()
-        idx.addsample(args.reference)
+    
+    ### index reference and contigs
+    
+    ctg2ref=dict()
+    
+    if sa64:
+        idx=reveallib64.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
+    else:
+        idx=reveallib.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
+    
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    t=IntervalTree()
+    
+    idx.addsample(args.reference)
+    if args.reference.endswith(".gfa"):
+        read_gfa(args.reference,idx,t,G)
+    else:
+        G.graph['samples'].append(os.path.basename(args.reference))
         for name,seq in fasta_reader(args.reference):
-            idx.addsequence(seq)
-        
-        G=nx.DiGraph()
-        t=IntervalTree()
-        
-        idx.addsample(query)
-        if query.endswith(".gfa"):
-            read_gfa(query,idx,t,G)
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            G.add_node(intv,sample={os.path.basename(args.reference)},offsets={os.path.basename(args.reference):0})
+    
+    idx.addsample(args.contigs)
+    if args.contigs.endswith(".gfa"):
+        read_gfa(args.contigs,idx,t,G)
+    else:
+        G.graph['samples'].append(os.path.basename(args.contigs))
+        for name,seq in fasta_reader(args.contigs):
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            G.add_node(intv,sample={os.path.basename(args.contigs)},offsets={os.path.basename(args.contigs):0})
+    
+    #map nodes to connected components in the graph
+    refnode2component=dict()
+    ctgnode2component=dict()
+    refcomponents=[]
+    ctgcomponents=[]
+    ctg2ref=dict()
+    ri=0
+    ci=0
+    for nodes in nx.connected_components(G.to_undirected()):
+        nodes=list(nodes)
+        if args.reference in G.node[nodes[0]]['sample']:
+            for node in nodes:
+                assert(args.reference in G.node[node]['sample']) #check the graph is valid
+                refnode2component[node]=ri
+            ri+=1
+            refcomponents.append(nodes)
         else:
-            for name,seq in fasta_reader(query):
-                intv=idx.addsequence(seq)
-                intv=Interval(intv[0],intv[1],name)
-                t.add(intv)
+            for node in nodes:
+                assert(args.contigs in G.node[node]['sample']) #check the graph is valid
+                ctgnode2component[node]=ci
+            ci+=1
+            ctgcomponents.append(nodes)
+    
+    for ci,comp in enumerate(ctgcomponents):
+        #dict describing the exact matches between every contig component and every reference component
+        ctg2ref[ci]=[[0,0,0,0,0,0,0,0,[]]] * ri #totmatch,nmatch,totrcmatch,nrcmatch,totmum,totmem,nmum,nmem,[positions] --> max hit
+    
+    idx.construct()
+    
+    for mem in idx.getmems(args.minlength):
+        assert(mem[2][0]<mem[2][1])
+        rnode=t[mem[2][0]].pop() #start position on match to node in graph
+        cnode=t[mem[2][1]].pop()
         
-        idx.construct()
-        tot=0
-        i=0
-        rmax=0
-        for mum in idx.getmums():
-            if mum[0]>20:
-                tot+=mum[0]
-            i+=1
-            if mum[0]>rmax:
-                rmax=mum[0]
-        
-        G=nx.DiGraph()
-        t=IntervalTree()
-        idx=reveallib.index()
-        idx.addsample(args.reference)
+        ci=ctgnode2component[cnode] #map node in graph to component
+        ri=refnode2component[rnode]
+
+        tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
+        tmp[0]+=mem[0]
+        tmp[1]+=1
+        if mem[3]==1: #unique
+            tmp[4]+=mem[0]
+            tmp[6]+=1
+        else:
+            tmp[5]+=mem[0]
+            tmp[7]+=1
+    
+    T1=idx.T
+
+    ### index reverse complement
+    if sa64:
+        idx=reveallib64.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
+    else:
+        idx=reveallib.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
+    
+    
+    rcG=nx.DiGraph()
+    t=IntervalTree()
+    
+    idx.addsample(args.reference)
+    if args.reference.endswith(".gfa"):
+        read_gfa(args.reference,idx,t,rcG)
+    else:
+        rcG.graph['samples']=set([os.path.basename(args.reference)])
         for name,seq in fasta_reader(args.reference):
-            idx.addsequence(seq)
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            rcG.add_node(intv,sample={os.path.basename(args.reference)},offsets={os.path.basename(args.reference):0},aligned=0)
+    
+    idx.addsample(args.contigs)
+    if args.contigs.endswith(".gfa"):
+        read_gfa(args.contigs,idx,t,rcG,revcomp=True)
+    else:
+        rcG.graph['samples']=set([os.path.basename(args.contigs)])
+        for name,seq in fasta_reader(args.contigs):
+            intv=idx.addsequence(rc(seq))
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            rcG.add_node(intv,sample={os.path.basename(args.contigs)},offsets={os.path.basename(args.contigs):0},aligned=0)
+    
+    idx.construct()
+    
+    for mem in idx.getmems(args.minlength):
+        assert(mem[2][0]<mem[2][1])
+        rnode=t[mem[2][0]].pop() #start position on match to node in graph
+        cnode=t[mem[2][1]].pop()
         
-        idx.addsample(query)
-        if query.endswith(".gfa"):
-            read_gfa(query,idx,t,G,revcomp=True)
+        ci=ctgnode2component[cnode] #map node in graph to component
+        ri=refnode2component[rnode]
+
+        tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
+        tmp[2]+=mem[0]
+        tmp[3]+=1
+        if mem[3]==1: #unique
+            tmp[4]+=mem[0]
+            tmp[6]+=1
         else:
-            for name,seq in fasta_reader(query):
-                idx.addsequence(rc(seq))
+            tmp[5]+=mem[0]
+            tmp[7]+=1
+    
+    T2=idx.T
+    
+    ctg2refdef=dict()
+    #for each contig (component) determine to which reference contig (component) it has most affinity based on the predetermined feature vector
+    for ctg in ctg2ref:
         
-        idx.construct()
-        rctot=0
-        rci=0
-        rcmax=0
-        for mum in idx.getmums():
-            if mum[0]>20:
-                rctot+=mum[0]
-            rci+=1
-            if mum[0]>rcmax:
-                rcmax=mum[0]
+        #TODO:determine best orientation for each contig
         
-        if rctot>tot and rcmax>rmax:
-            logging.info("Reverse complementing %s"%query)
-            if query.endswith(".gfa"):
-                write_gfa(G,idx.T,outputfile=query) #rewrite in place very tricky...
-            else:
-                towrite=[]
-                for name,seq in fasta_reader(query):
-                    towrite.append((name,rc(seq)))
-                fasta_writer(query,towrite)
-        elif tot>rctot and rmax>rcmax:
-            logging.info("Not reverse complementing %s"%query)
-        else:
-            logging.info("Unsure about %s (rctot=%s, tot=%s, rmax=%d, rcmax=%d)"%(query,rctot,tot,rmax,rcmax))
+        #TODO:filter if it has more or less than 1 possible alignment position
+        
+        #select best
+        best=0
+        bestref=None
+        revcomp=None
+        for ri,refcomp in enumerate(ctg2ref[ctg]):
+            if refcomp[0]>best:
+                bestref=ri
+                revcomp=False
+            if refcomp[2]>best:
+                bestref=ri
+                revcomp=True
+        ctg2refdef[ctg]=(bestref,revcomp)
+    
+    #Write each ref and ctg component to gfa
+    for ri,nodes in enumerate(refcomponents):
+        sg=G.subgraph(nodes)
+        write_gfa(sg,T1,outputfile="ref"+str(ri)+".gfa")
+        for ci,ctgnodes in enumerate(ctgcomponents):
+            toref=ctg2refdef[ci][0]
+            if toref==ri:
+                if revcomp:
+                    logging.info("Writing ctg %s"%ci)
+                    sg=rcG.subgraph(ctgnodes)
+                    write_gfa(sg,T2,outputfile="ctg"+str(ci)+"_mapto_ref"+str(ri)+".gfa")
+                else:
+                    logging.info("Writing reverse complement of ctg %s"%ci)
+                    sg=G.subgraph(ctgnodes)
+                    write_gfa(sg,T1,outputfile="ctg"+str(ci)+"_mapto_ref"+str(ri)+".gfa")
 
 def plot(args):
     #from matplotlib import pyplot as plt
     
     if len(args.fastas)==2:
         #get mmems for forward orientation
-        idx=reveallib.index()
+        if sa64:
+            idx=reveallib64.index()
+        else:
+            idx=reveallib.index()
+
         for sample in args.fastas:
             idx.addsample(sample)
             for name,seq in fasta_reader(sample,truncN=False):
@@ -1435,16 +1577,20 @@ def plot(args):
 
         if args.uniq:
             print "Extracting mums..."
-            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength)]
         else:
             print "Extracting mems..."
-            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength)]
         print "done."
         
         sep=idx.nsep[0]
         
         #get mmems for reverse orientation
-        idx=reveallib.index()
+        if sa64:
+            idx=reveallib64.index()
+        else:
+            idx=reveallib.index()
+
         sample=args.fastas[0]
         idx.addsample(sample)
         for name,seq in fasta_reader(sample,truncN=False):
@@ -1464,15 +1610,19 @@ def plot(args):
 
         if args.uniq:
             print "Extracting RC mums..."            
-            mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+            mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength)]
         else:
             print "Extracting RC mems..."            
-            mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+            mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength)]
         print "done."
     
     elif len(args.fastas)==1:
 
-        idx=reveallib.index()
+        if sa64:
+            idx=reveallib64.index()
+        else:
+            idx=reveallib.index()
+    
         sample=args.fastas[0]
         idx.addsample(sample)
         for name,seq in fasta_reader(sample, truncN=False):

@@ -4,17 +4,25 @@
 
 void *aligner(void *arg);
 
+#ifdef SA64
+#define saidx_t int64_t
+#else
+#define saidx_t int32_t
+#endif
+
+#define diff(a,b) (a > b) ? a - b : b - a;
+
 typedef struct
 {
     PyObject_HEAD
-    char         * T;   //initial input Text
-    int32_t          * SA;  //Suffix array
-    int32_t          * SAi; //Suffix array
-    int32_t          * LCP; //LCP array
-    uint16_t          * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
-    int n;   //lenght of SA and LCP
+    char             * T;   //initial input Text
+    saidx_t          * SA;  //Suffix array
+    saidx_t          * SAi; //Inverse of suffix array
+    uint32_t          * LCP; //LCP array, lcp[0]==-1
+    uint16_t         * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
+    saidx_t            n;   //length of T
+    saidx_t          * nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int depth; //depth within the hierarchical alignment tree
-    int *nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int nsamples; //number of samples in T
     char* safile;
     char* lcpfile;
@@ -40,12 +48,12 @@ typedef struct
 typedef struct
 {
     int l; //length of the exact match
-    int *sp; //array of starting positions
+    saidx_t *sp; //array of starting positions
     //int *ni; //array of sample index to which sp corresponds
     int n;   //number of samples in which the exact match occurs
     int u;   //whether the match is unique (1) or not (0)
-    int score;
-    int penalty;
+    long long score; //can be negative
+    unsigned long long penalty;
 } RevealMultiMUM;
 
 int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_score);
