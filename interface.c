@@ -56,7 +56,14 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     unsigned int s;
     if (!PyArg_ParseTuple(args, "s#", &seq, &l))
         return NULL;
-    
+
+#ifndef SA64
+    if ((self->n+(l+1)+1) > INT_MAX){
+        PyErr_SetString(RevealError, "Total amount of sequence too large, use \"reveal --64\" to use 64 bit suffix arrays instead.");
+        return NULL;
+    }
+#endif
+
     //realloc space for T
     char *tmp=realloc(self->T,(self->n+(l+1)+1)*sizeof(char));
     

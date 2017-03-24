@@ -46,16 +46,15 @@ int push_index(RevealIndex *idx) {
 }
 
 PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
-
-    int minl=0;
+    uint32_t minl=0;
     
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))        
             return NULL;
     }
     
-    int i=0,aStart,bStart;
-    int lb,la;
+    saidx_t i=0,aStart,bStart;
+    uint32_t lb,la;
     PyObject *mums=PyList_New(0);
     for (i=1;i<index->n;i++){
         if (index->LCP[i]<minl){
@@ -107,7 +106,7 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 
 PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
     
-    int minl=0;
+    uint32_t minl=0;
     
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))
@@ -115,7 +114,7 @@ PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
     }
     
     saidx_t i=0,aStart,bStart;
-    int lb,la,uniq;
+    uint32_t lb,la,uniq;
     PyObject *mems=PyList_New(0);
     for (i=1;i<index->n;i++){
         if (index->LCP[i]<minl){
@@ -172,7 +171,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     unsigned long long start1=-1,end1=-1,start2=-1,end2=-1; //TODO: add to keywds
     long long score;
     
-    int lb,la;
+    uint32_t lb,la;
     int w_score=2;
     int w_penalty=1;
     int penalize;
@@ -280,7 +279,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     saidx_t i=0,aStart,bStart;
-    int lb,la;
+    uint32_t lb,la;
     mum->u=1;
     mum->l=0;
     mum->score=0;
@@ -329,7 +328,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
     saidx_t start1=-1,end1=-1,start2=-1,end2=-1;
     long long score;
     
-    int lb,la,penalize;
+    uint32_t lb,la,penalize;
     
     if (PyList_Size(index->nodes)==2){
         penalize=1;
@@ -474,7 +473,7 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     mum->penalty=0;
     mum->n=0;
     unsigned long long i=0;
-    int j=0,la,lb;
+    uint32_t j=0,la,lb;
     int *flag_so=calloc(index->nsamples, sizeof(int));
     int flag_maximal=0;
     int flag_unique=0;
@@ -595,7 +594,7 @@ int ismultimum(RevealIndex * idx, uint32_t l, int lb, int ub, int * flag_so) {
 
 PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
-    int minl=0;
+    uint32_t minl=0;
     
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))        
@@ -611,9 +610,9 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     RevealIndex * main = (RevealIndex *) index->main;
     int maxdepth=1000;
     int *flag_so=calloc(main->nsamples,sizeof *flag_so);
-    int *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
-    int *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    int *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
+    uint32_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
+    uint32_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
+    uint32_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
     uint32_t i_lcp;
