@@ -504,7 +504,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         
         graph.reverse(copy=False)
 
-def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
+def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
     
     if not outputfile.endswith(".gfa"):
         outputfile+=".gfa"
@@ -570,13 +570,17 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, path=False):
                     )
                 )
         
-        if path:
-            f.write("\n")
-            for sample in data['sample']:
-                f.write("P\t"+str(i)+"\t"+sample+"\t+\t"+str(node.end-node.begin)+"M\n")
-        
         for to in G[node]:
             f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
+    
+    if paths:
+        for sample in G.graph['samples']:
+            path=[]
+            for node in nx.topological_sort(G):
+                if sample in G.node[node]['sample']:
+                    i=mapping[node]
+                    path.append(str(i)+"+")
+            f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
     
     f.close()
 
@@ -689,6 +693,7 @@ def main():
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
+    parser_aln.add_argument("--paths", dest="paths", action="store_true", default=False, help="Output paths in GFA.")
     #parser_aln.add_argument("--align-contigs", dest="contigs", action="store_true", default=False, help="Use when pairwise aligning a set of contigs to a single genome or graph. Contigs are aligned one by one (slow).")
     parser_aln.set_defaults(func=align_cmd)
     
@@ -1105,7 +1110,7 @@ def align_cmd(args):
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
     else:
-        write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
+        write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa', paths=args.paths)
         graph=args.output+'.gfa'
     logging.info("Done.")
     logging.info("Alignment graph written to: %s"%graph)
@@ -1571,9 +1576,7 @@ def plot(args):
             for name,seq in fasta_reader(sample,truncN=False):
                 intv=idx.addsequence(seq.upper())
                 break #expect only one sequence per fasta for now
-        print "Constructing index..."
         idx.construct()
-        print "done."
 
         if args.uniq:
             print "Extracting mums..."
