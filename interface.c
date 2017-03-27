@@ -138,11 +138,12 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
     
     if (self->cache==1){
-        fprintf(stderr,"Writing T to disk...\n");
+        fprintf(stderr,"Writing T to disk...");
         FILE* ft;
         ft=fopen(".reveal.t","w");
         fwrite(self->T, sizeof(char), self->n, ft);
         fclose(ft);
+        fprintf(stderr," Done.\n");
     }
     
     self->SA=malloc(sizeof(saidx_t)*self->n);
@@ -158,6 +159,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
        
     if (self->safile[0]==0){
+        fprintf(stderr,"Sorting suffixes...");
 #ifdef SA64
         if (divsufsort64((const sauchar_t *) self->T, self->SA, self->n)!=0){
 #else
@@ -166,13 +168,15 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
             PyErr_SetString(RevealError, "divsufsort failed");
             return NULL;
         }
+        fprintf(stderr," Done.\n");
     } else {
         //read SA from file
-        fprintf(stderr,"Reading suffix array from file: %s\n",self->safile);
+        fprintf(stderr,"Reading suffix array from file: %s",self->safile);
         FILE* fsa;
         fsa=fopen(self->safile,"r");
         fread(self->SA, sizeof(saidx_t), self->n, fsa);
         fclose(fsa);
+        fprintf(stderr," Done.\n");
     }
     
     //fill the inverse array
@@ -191,11 +195,12 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
     } else {
         //read LCP from file
-        fprintf(stderr,"Reading lcp array from file: %s\n",self->lcpfile);
+        fprintf(stderr,"Reading lcp array from file: %s",self->lcpfile);
         FILE* flcp;
         flcp=fopen(self->lcpfile,"r");
         fread(self->LCP, sizeof(uint32_t), self->n, flcp);
         fclose(flcp);
+        fprintf(stderr," Done.\n");
     }
     
     if (self->nsamples>2){
@@ -210,7 +215,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     
     //if caching is specified write sa and lcp to disk
     if (self->cache==1){
-        fprintf(stderr,"Writing LCP and SA to disk...\n");
+        fprintf(stderr,"Writing LCP and SA to disk...");
         FILE* fsa;
         fsa=fopen(".reveal.sa","w");
         fwrite(self->SA, sizeof(saidx_t), self->n, fsa);
@@ -219,6 +224,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         flcp=fopen(".reveal.lcp","w");
         fwrite(self->LCP, sizeof(uint32_t), self->n, flcp);
         fclose(flcp);
+        fprintf(stderr," Done.\n");
     }
     
     self->main=(PyObject *) self;
