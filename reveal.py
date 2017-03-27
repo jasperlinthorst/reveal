@@ -237,8 +237,9 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(l,index,n,score,sp,penalty):
-    #print l,index,n,score,sp,penalty
-
+    
+    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s)",l,n,score,penalty,sp)
+    
     nodes=index.nodes
     
     if len(nodes)==0:
@@ -655,7 +656,7 @@ def main():
     """
     
     parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc)
-    parser.add_argument("-l", "--log-level", dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
+    parser.add_argument("-l", "--log-level", type=int, dest="loglevel", default=20, help="Log level: 10=debug 20=info (default) 30=warn 40=error 50=fatal.")
     parser.add_argument("--64", dest="sa64", default=False, action="store_true", help="Use 64bit suffix array in the index.")
     
     subparsers = parser.add_subparsers()
@@ -1439,7 +1440,7 @@ def orient(args):
             refcomponents.append(nodes)
         else:
             for node in nodes:
-                assert(args.contigs in G.node[node]['sample']) #check the graph is valid
+                #assert(args.contigs in G.node[node]['sample']) #check the graph is valid
                 ctgnode2component[node]=ci
             ci+=1
             ctgcomponents.append(nodes)
