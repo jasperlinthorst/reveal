@@ -58,7 +58,9 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
         return NULL;
 
 #ifndef SA64
-    if ((self->n+(l+1)+1) > INT_MAX){
+    uint64_t t;
+    t=self->n;
+    if ((t+(l+1)+1) > INT_MAX){
         PyErr_SetString(RevealError, "Total amount of sequence too large, use \"reveal --64\" to use 64 bit suffix arrays instead.");
         return NULL;
     }
