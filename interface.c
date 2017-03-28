@@ -53,10 +53,11 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     //call add sequence only if self->sep[self->nsamples]
     char * seq;
     int l;
-    unsigned int s;
+    saidx_t s;
+    
     if (!PyArg_ParseTuple(args, "s#", &seq, &l))
         return NULL;
-
+    
 #ifndef SA64
     uint64_t t;
     t=self->n;
@@ -81,9 +82,8 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     
     self->T[self->n+l]='$'; //add sentinel
     self->T[self->n+l+1]='\0'; //add sentinel
-    
     self->n=self->n+l+1;
-
+    
 #ifdef SA64
     PyObject *intv=Py_BuildValue("(L,L)",s,self->n-1);
 #else
