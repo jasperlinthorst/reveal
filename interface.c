@@ -95,7 +95,8 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
 };
 
 int compute_lcp(char *T, saidx_t *SA, saidx_t *SAi, uint32_t *LCP, saidx_t n) {
-    uint32_t h=0, i, j, k;
+    uint32_t h=0;
+    saidx_t i, j, k;
     for (i = 0; i < n; i++) {
         k = SAi[i];
         if (k == 0) {
@@ -194,7 +195,9 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
     
     if (self->lcpfile[0]==0){
+        fprintf(stderr,"Compute LCP...");
         compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
+        fprintf(stderr," Done.\n");
     } else {
         //read LCP from file
         fprintf(stderr,"Reading lcp array from file: %s",self->lcpfile);
@@ -459,9 +462,13 @@ reveal_getSA(RevealIndex *self, void *closure)
     if (!lst)
         return NULL;
 
-    int i;
+    saidx_t i;
     for (i = 0; i < self->n; i++) {
+#ifdef SA64
+        PyObject *num = Py_BuildValue("L", self->SA[i]);
+#else
         PyObject *num = Py_BuildValue("i", self->SA[i]);
+#endif
         if (!num) {
             Py_DECREF(lst);
             return NULL;
@@ -478,12 +485,12 @@ reveal_getSO(RevealIndex *self, void *closure)
         PyErr_SetString(PyExc_TypeError, "SO not available.");
         return NULL;
     }
-
+    
     PyObject *lst = PyList_New(self->n);
-
+    
     if (!lst)
         return NULL;
-
+    
     int i;
     for (i = 0; i < self->n; i++) {
         PyObject *num = Py_BuildValue("i", self->SO[i]);
@@ -509,9 +516,9 @@ reveal_getLCP(RevealIndex *self, void *closure)
     if (!lst)
         return NULL;
 
-    int i;
+    uint32_t i;
     for (i = 0; i < self->n; i++) {
-        PyObject *num = Py_BuildValue("i", self->LCP[i]);
+        PyObject *num = Py_BuildValue("I", self->LCP[i]);
         if (!num) {
             Py_DECREF(lst);
             return NULL;
@@ -534,9 +541,13 @@ reveal_getSAi(RevealIndex *self, void *closure)
     if (!lst)
         return NULL;
 
-    int i;
+    saidx_t i;
     for (i = 0; i < self->n; i++) {
+#ifdef SA64
+        PyObject *num = Py_BuildValue("L", self->SAi[i]);
+#else
         PyObject *num = Py_BuildValue("i", self->SAi[i]);
+#endif
         if (!num) {
             Py_DECREF(lst);
             return NULL;
@@ -569,7 +580,11 @@ reveal_getnsep(RevealIndex *self, void *closure)
 static PyObject *
 reveal_getn(RevealIndex *self, void *closure)
 {
-    return Py_BuildValue("i",self->n);
+#ifdef SA64
+        return Py_BuildValue("L",self->n);
+#else
+        return Py_BuildValue("i",self->n);
+#endif
 }
 
 static PyObject *
