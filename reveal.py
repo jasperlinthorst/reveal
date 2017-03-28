@@ -62,7 +62,7 @@ def rc(seq):
     return "".join([d[b] for b in reversed(seq)])
 
 def breaknode(node,pos,l):
-    logging.debug("Breaking node: %s"%node)
+    logging.debug("Breaking node: %s"%str(node))
     att=G.node[node]
     in_edges=G.in_edges(node)
     out_edges=G.out_edges(node)
@@ -114,13 +114,13 @@ def breaknode(node,pos,l):
         assert(not G.has_edge(e[1],sn))
         G.add_edge(sn,e[1])
     
-    logging.debug("Leading/Trailing node(s): %s"%other)
-    logging.debug("Matching node: %s"%mn)
+    logging.debug("Leading/Trailing node(s): %s"%str(other))
+    logging.debug("Matching node: %s"%str(mn))
 
     return mn,other #return merge node
 
 def mergenodes(mns,mark=True):
-    logging.debug("Merging nodes %s"%mns)
+    logging.debug("Merging nodes %s"%str(mns))
     global o
     ri=0
     if reference!=None:
