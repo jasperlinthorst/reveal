@@ -62,6 +62,7 @@ def rc(seq):
     return "".join([d[b] for b in reversed(seq)])
 
 def breaknode(node,pos,l):
+    logging.debug("Breaking node: %s"%node)
     att=G.node[node]
     in_edges=G.in_edges(node)
     out_edges=G.out_edges(node)
@@ -113,9 +114,13 @@ def breaknode(node,pos,l):
         assert(not G.has_edge(e[1],sn))
         G.add_edge(sn,e[1])
     
+    logging.debug("Leading/Trailing node(s): %s"%other)
+    logging.debug("Matching node: %s"%mn)
+
     return mn,other #return merge node
 
 def mergenodes(mns,mark=True):
+    logging.debug("Merging nodes %s"%mns)
     global o
     ri=0
     if reference!=None:
@@ -238,21 +243,26 @@ def segmentgraph(node,nodes):
 
 def graphalign(l,index,n,score,sp,penalty):
     
-    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s)",l,n,score,penalty,sp)
-    
     nodes=index.nodes
-    
+    isize=index.n
+
     if len(nodes)==0:
+        logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
         return
     
     if l==0:
+        logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
         return
     
     if score<schemes.minscore:
+        logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
         return
     
     if l<schemes.minlength:
+        logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
         return
+    
+    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
     
     mns=[]
     topop=[]
@@ -274,6 +284,11 @@ def graphalign(l,index,n,score,sp,penalty):
     intervals=segmentgraph(mn,nodes)
     
     leading,trailing,rest,merged=intervals
+    
+    logging.debug("leading intervals: %s"%leading)
+    logging.debug("trailing intervals: %s"%trailing)
+    logging.debug("parallel intervals: %s"%rest)
+
     newleft=mn
     newright=mn
     
@@ -1128,6 +1143,7 @@ def align_cmd(args):
             logging.info("Done.")
 
 def align_genomes(args):
+    logging.info("Loading input...")
     #global variables to simplify callbacks from c extension
     global t,G,reference,o
     
@@ -1164,9 +1180,11 @@ def align_genomes(args):
 
             logging.info("Done.")
         else: #consider it to be a fasta file
+            logging.info("Reading fasta: %s ..." % sample)
             G.graph['samples'].append(os.path.basename(sample))
             for name,seq in fasta_reader(sample):
                 intv=idx.addsequence(seq.upper())
+                logging.debug("Adding interval: %s"%str(intv))
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)

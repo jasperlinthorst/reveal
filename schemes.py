@@ -9,6 +9,7 @@ from intervaltree import IntervalTree, Interval
 import networkx as nx
 import sys
 import math
+import logging
 
 global minlength, minscore, pcutoff
 minlength=20
@@ -19,8 +20,8 @@ wscore=1
 wpen=1
 
 def multimumpicker(multimums,idx):
-
     try:
+        logging.debug("Selecting best out of %d MUMs in multimumpicker."%len(multimums))
         bestmum=None
         trace=False
         
@@ -38,7 +39,6 @@ def multimumpicker(multimums,idx):
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
             
-            #if idx.nsamples==len(idx.nodes): #what about alignment within large indel?
             ds=[start-ts[start].pop()[0] for start in sp]
             ads=sum(ds)/n
             de=[ts[start].pop()[1]-(start+l) for start in sp]
@@ -48,8 +48,6 @@ def multimumpicker(multimums,idx):
             epenalty=sum([abs(p-ade) for p in de])
             
             penalty=min([spenalty,epenalty])
-            #else:
-            #    penalty,epenalty,spenalty=0,0,0
             
             if idx.depth==0: #no other anchors yet, dont penalize first anchor
                 score=int(math.log(l)*n)
@@ -71,10 +69,8 @@ def multimumpicker(multimums,idx):
             
             if bestmum!=None:
                 if score>bestmum[3]:
-                    #bestmum=(l,idx,n,score,sp,penalty,ni)
                     bestmum=(l,idx,n,score,sp,penalty)
             else:
-                #bestmum=(l,idx,n,score,sp,penalty,ni)
                 bestmum=(l,idx,n,score,sp,penalty)
             
             if trace:
@@ -90,6 +86,7 @@ def multimumpicker(multimums,idx):
 
 def graphmumpicker(mums,idx,penalize=True):
     try:
+        logging.debug("Selecting best out of %d MUMs in graphmumpicker."%len(mums))
         bestmum=None
         bestn=2
         bestscore=None
@@ -167,6 +164,7 @@ def graphmumpicker(mums,idx,penalize=True):
                 penalty=0
             
             score=(wscore*(l*n))-(wpen*penalty)
+            #score=int(math.log(l-(wpen*penalty))*n)
             
             if trace:
                 print l, penalty, score

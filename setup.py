@@ -24,6 +24,3 @@ setup(name="reveal", version="0.1",
          }
         )
 
-
-
-

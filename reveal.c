@@ -56,6 +56,7 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     saidx_t i=0,aStart,bStart;
     uint32_t lb,la;
     PyObject *mums=PyList_New(0);
+
     for (i=1;i<index->n;i++){
         if (index->LCP[i]<minl){
             continue;
