@@ -287,8 +287,8 @@ def graphalign(l,index,n,score,sp,penalty):
     
     logging.debug("leading intervals: %s"%leading)
     logging.debug("trailing intervals: %s"%trailing)
-    logging.debug("parallel intervals: %s"%rest)
-
+    #logging.debug("parallel intervals: %s"%rest)
+    
     newleft=mn
     newright=mn
     
