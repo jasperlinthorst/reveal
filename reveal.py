@@ -1481,7 +1481,7 @@ def assign(args):
     ci=0
     for nodes in nx.connected_components(G.to_undirected()):
         nodes=list(nodes)
-        if os.path.basename(args.reference in G.node[nodes[0]]['sample']:
+        if os.path.basename(args.reference) in G.node[nodes[0]]['sample']:
             for node in nodes:
                 assert(os.path.basename(args.reference) in G.node[node]['sample']) #check the graph is valid
                 refnode2component[node]=ri
