@@ -810,6 +810,7 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, uint32_t l){
     for (j=0; j<n; j++) {
         
         for (i=0; i<idx->n; i++){
+
             if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i]>sp[j]){ // if match overlaps the start position of sp[j]
 
                 x=i;
@@ -847,9 +848,9 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, uint32_t l){
         }
     }
     
-    for (i=0; i<n; i++){
-        for (j=sp[i];j<sp[i]+l;j++){
-            idx->T[j]=tolower(idx->T[j]); //mark corresponding intervals in T
+    for (j=0; j<n; j++){
+        for (i=sp[j];i<sp[j]+l;i++){
+            idx->T[i]=tolower(idx->T[i]); //mark corresponding intervals in T
         }
     }
 }
