@@ -100,7 +100,8 @@ int compute_lcp(char *T, saidx_t *SA, saidx_t *SAi, uint32_t *LCP, saidx_t n) {
     for (i = 0; i < n; i++) {
         k = SAi[i];
         if (k == 0) {
-            LCP[k] = -1;
+            //LCP[k] = -1;
+            LCP[k] = 0;
         } else {
             j = SA[k-1];
             while ((i - h < n) && (j + h < n) && (T[i+h] == T[j+h]) && T[i+h]!='$' && T[i+h]!='N' ) { ++h; } //stop comparing when a sentinel or N is encountered, so we dont find matches that span them
@@ -184,9 +185,11 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     
     //fill the inverse array
     saidx_t i;
+    fprintf(stderr,"Filling inverse suffix array...");
     for (i=0; i<self->n; i++) {
         self->SAi[self->SA[i]]=i;
     }
+    fprintf(stderr," Done.\n");
     
     self->LCP=malloc(sizeof(uint32_t)*self->n);
     if (self->LCP==NULL){
