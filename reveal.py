@@ -520,6 +520,32 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         
         graph.reverse(copy=False)
 
+#simply write sequence without the graph topology
+def write_fasta(G,T,outputfile="reference.fasta"):
+    f=open(outputfile,'wb')
+    for i,node in enumerate(nx.topological_sort(G)):
+        if isinstance(node,str):
+            if node=='start' or node=='end':
+                continue
+        i+=1
+        data=G.node[node]
+        seq=""
+        if len(node)==3:
+            nodename=node[2]
+        else:
+            nodename=str(node)
+        if 'seq' in data:
+            f.write(">%s\n"%nodename)
+            f.write(data['seq'].upper()+"\n")
+        else:
+            if isinstance(node,Interval):
+                f.write(">%s\n"%nodename)
+                f.write(T[node.begin:node.end].upper()+"\n")
+            else:
+                f.write(">%s\n"%nodename)
+                logging.warn("No sequence for node: %s"%nodename)
+    f.close()
+
 def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
     
     if not outputfile.endswith(".gfa"):
@@ -680,7 +706,7 @@ def main():
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
-    parser_orient = subparsers.add_parser('orient', prog="reveal orient", description="Orient query graph or sequence with respect to reference graph or sequence.")
+    parser_assign = subparsers.add_parser('assign', prog="reveal assign", description="Assign and determine orientation of components in query graph (or contigs in a multi-fasta sequence) with respect to a reference graph or genome.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
@@ -729,15 +755,15 @@ def main():
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp_cmd)
     
-    parser_orient.add_argument('reference', help='Graph or sequence to which query should be oriented.')
-    parser_orient.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
-    parser_orient.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (default 20).")
-    parser_orient.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
-    parser_orient.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
-    parser_orient.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
-    parser_orient.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
-    parser_orient.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
-    parser_orient.set_defaults(func=orient)
+    parser_assign.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
+    parser_assign.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
+    parser_assign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (default 20).")
+    parser_assign.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
+    parser_assign.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
+    parser_assign.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
+    parser_assign.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_assign.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_assign.set_defaults(func=assign)
     
     #TOOD: reveal TEXT; write T for any input of graphs and fastas to enable external SA and LCP construction
     
@@ -1402,8 +1428,11 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
 
     return G,idx
 
-def orient(args):
-    #orient graph or contig with respect to a reference (for now only genome)
+def assign(args):
+
+    import numpy as np
+    
+    #assign and orient graph or contig with respect to a reference (for now only genome)
     
     ### index reference and contigs
     
@@ -1443,6 +1472,8 @@ def orient(args):
     #map nodes to connected components in the graph
     refnode2component=dict()
     ctgnode2component=dict()
+    component2refnode=dict()
+    component2ctgnode=dict()
     refcomponents=[]
     ctgcomponents=[]
     ctg2ref=dict()
@@ -1450,16 +1481,18 @@ def orient(args):
     ci=0
     for nodes in nx.connected_components(G.to_undirected()):
         nodes=list(nodes)
-        if args.reference in G.node[nodes[0]]['sample']:
+        if os.path.basename(args.reference in G.node[nodes[0]]['sample']:
             for node in nodes:
-                assert(args.reference in G.node[node]['sample']) #check the graph is valid
+                assert(os.path.basename(args.reference) in G.node[node]['sample']) #check the graph is valid
                 refnode2component[node]=ri
+                component2refnode[ri]=node
             ri+=1
             refcomponents.append(nodes)
         else:
             for node in nodes:
-                #assert(args.contigs in G.node[node]['sample']) #check the graph is valid
+                assert(os.path.basename(args.contigs) in G.node[node]['sample']) #check the graph is valid
                 ctgnode2component[node]=ci
+                component2ctgnode[ci]=node
             ci+=1
             ctgcomponents.append(nodes)
     
@@ -1471,12 +1504,12 @@ def orient(args):
     
     for mem in idx.getmems(args.minlength):
         assert(mem[2][0]<mem[2][1])
-        rnode=t[mem[2][0]].pop() #start position on match to node in graph
-        cnode=t[mem[2][1]].pop()
-        
+        refstart=mem[2][0]
+        ctgstart=mem[2][1]
+        rnode=t[refstart].pop() #start position on match to node in graph
+        cnode=t[ctgstart].pop()
         ci=ctgnode2component[cnode] #map node in graph to component
         ri=refnode2component[rnode]
-
         tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
         tmp[0]+=mem[0]
         tmp[1]+=1
@@ -1486,6 +1519,7 @@ def orient(args):
         else:
             tmp[5]+=mem[0]
             tmp[7]+=1
+        tmp[8].append(refstart)
     
     T1=idx.T
 
@@ -1494,7 +1528,6 @@ def orient(args):
         idx=reveallib64.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
     else:
         idx=reveallib.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
-    
     
     rcG=nx.DiGraph()
     t=IntervalTree()
@@ -1524,13 +1557,12 @@ def orient(args):
     idx.construct()
     
     for mem in idx.getmems(args.minlength):
-        assert(mem[2][0]<mem[2][1])
-        rnode=t[mem[2][0]].pop() #start position on match to node in graph
-        cnode=t[mem[2][1]].pop()
-        
+        refstart=mem[2][0]
+        ctgstart=mem[2][1]        
+        rnode=t[refstart].pop() #start position on match to node in graph
+        cnode=t[ctgstart].pop()
         ci=ctgnode2component[cnode] #map node in graph to component
         ri=refnode2component[rnode]
-
         tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
         tmp[2]+=mem[0]
         tmp[3]+=1
@@ -1540,17 +1572,18 @@ def orient(args):
         else:
             tmp[5]+=mem[0]
             tmp[7]+=1
+        tmp[8].append(refstart)
     
     T2=idx.T
+    
+    #if args.pickle:
+    #    import pickle
+    #    pickle.dump(ctg2ref,open("ctg2ref.pickle",'w'))
     
     ctg2refdef=dict()
     #for each contig (component) determine to which reference contig (component) it has most affinity based on the predetermined feature vector
     for ctg in ctg2ref:
-        
-        #TODO:determine best orientation for each contig
-        
         #TODO:filter if it has more or less than 1 possible alignment position
-        
         #select best
         best=0
         bestref=None
@@ -1559,26 +1592,58 @@ def orient(args):
             if refcomp[0]>best:
                 bestref=ri
                 revcomp=False
+                best=refcomp[0]
             if refcomp[2]>best:
                 bestref=ri
                 revcomp=True
+                best=refcomp[2]
+        if bestref==None:
+            logging.warn("No assignment for contig %d: \"%s\""% (ctg,component2ctgnode[ctg][2]))
+        
         ctg2refdef[ctg]=(bestref,revcomp)
     
-    #Write each ref and ctg component to gfa
+    ctgextp=args.contigs.rfind('.')
+    if ctgextp==-1:
+        ctgextp=len(args.contigs)
+    contigsbase=args.contigs[:ctgextp]
+    
+    refextp=args.reference.rfind('.')
+    if refextp==-1:
+        refextp=len(args.reference)
+    refbase=args.reference[:refextp]
+    
+    #write each ref and ctg components to separate files
     for ri,nodes in enumerate(refcomponents):
         sg=G.subgraph(nodes)
-        write_gfa(sg,T1,outputfile="ref"+str(ri)+".gfa")
+        if args.contigs.endswith(".gfa"):
+            write_gfa(sg,T1,outputfile=refbase+"_"+str(ri)+".gfa")
+        else:
+            write_fasta(sg,T1,outputfile=refbase+"_"+str(ri)+".fasta")
+        
         for ci,ctgnodes in enumerate(ctgcomponents):
-            toref=ctg2refdef[ci][0]
+            toref,comp=ctg2refdef[ci]
             if toref==ri:
-                if revcomp:
-                    logging.info("Writing ctg %s"%ci)
-                    sg=rcG.subgraph(ctgnodes)
-                    write_gfa(sg,T2,outputfile="ctg"+str(ci)+"_mapto_ref"+str(ri)+".gfa")
-                else:
+                
+                #if len(ctg2ref[ctg][ri][8])>0:
+                #    median=np.median(ctg2ref[ctg][ri][8])
+                #else:
+                #    logging.info("Skipping %d, no mums."%ri)
+                #    continue
+                
+                if comp:
                     logging.info("Writing reverse complement of ctg %s"%ci)
+                    sg=rcG.subgraph(ctgnodes)
+                    if args.contigs.endswith(".gfa"):
+                        write_gfa(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
+                    else:
+                        write_fasta(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+                else:
+                    logging.info("Writing ctg %s"%ci)
                     sg=G.subgraph(ctgnodes)
-                    write_gfa(sg,T1,outputfile="ctg"+str(ci)+"_mapto_ref"+str(ri)+".gfa")
+                    if args.contigs.endswith(".gfa"):
+                        write_gfa(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
+                    else:
+                        write_fasta(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
 
 def plot(args):
     #from matplotlib import pyplot as plt
