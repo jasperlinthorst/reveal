@@ -1447,27 +1447,30 @@ def assign(args):
     G.graph['samples']=[]
     t=IntervalTree()
     
-    idx.addsample(args.reference)
+    reffile=os.path.basename(args.reference)
+    ctgfile=os.path.basename(args.contigs)
+    
+    idx.addsample(reffile)
     if args.reference.endswith(".gfa"):
         read_gfa(args.reference,idx,t,G)
     else:
-        G.graph['samples'].append(os.path.basename(args.reference))
+        G.graph['samples'].append(reffile)
         for name,seq in fasta_reader(args.reference):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={os.path.basename(args.reference)},offsets={os.path.basename(args.reference):0})
+            G.add_node(intv,sample={reffile},offsets={reffile:0})
     
-    idx.addsample(args.contigs)
+    idx.addsample(ctgfile)
     if args.contigs.endswith(".gfa"):
         read_gfa(args.contigs,idx,t,G)
     else:
-        G.graph['samples'].append(os.path.basename(args.contigs))
+        G.graph['samples'].append(ctgfile)
         for name,seq in fasta_reader(args.contigs):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={os.path.basename(args.contigs)},offsets={os.path.basename(args.contigs):0})
+            G.add_node(intv,sample={ctgfile},offsets={ctgfile:0})
     
     #map nodes to connected components in the graph
     refnode2component=dict()
@@ -1481,16 +1484,16 @@ def assign(args):
     ci=0
     for nodes in nx.connected_components(G.to_undirected()):
         nodes=list(nodes)
-        if os.path.basename(args.reference) in G.node[nodes[0]]['sample']:
+        if reffile in G.node[nodes[0]]['sample']:
             for node in nodes:
-                assert(os.path.basename(args.reference) in G.node[node]['sample']) #check the graph is valid
+                assert(reffile in G.node[node]['sample']) #check the graph is valid
                 refnode2component[node]=ri
                 component2refnode[ri]=node
             ri+=1
             refcomponents.append(nodes)
         else:
             for node in nodes:
-                assert(os.path.basename(args.contigs) in G.node[node]['sample']) #check the graph is valid
+                assert(ctgfile in G.node[node]['sample']) #check the graph is valid
                 ctgnode2component[node]=ci
                 component2ctgnode[ci]=node
             ci+=1
@@ -1532,27 +1535,27 @@ def assign(args):
     rcG=nx.DiGraph()
     t=IntervalTree()
     
-    idx.addsample(args.reference)
+    idx.addsample(reffile)
     if args.reference.endswith(".gfa"):
         read_gfa(args.reference,idx,t,rcG)
     else:
-        rcG.graph['samples']=set([os.path.basename(args.reference)])
+        rcG.graph['samples']=set([reffile])
         for name,seq in fasta_reader(args.reference):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={os.path.basename(args.reference)},offsets={os.path.basename(args.reference):0},aligned=0)
+            rcG.add_node(intv,sample={reffile},offsets={reffile:0},aligned=0)
     
-    idx.addsample(args.contigs)
+    idx.addsample(ctgfile)
     if args.contigs.endswith(".gfa"):
         read_gfa(args.contigs,idx,t,rcG,revcomp=True)
     else:
-        rcG.graph['samples']=set([os.path.basename(args.contigs)])
+        rcG.graph['samples']=set([ctgfile])
         for name,seq in fasta_reader(args.contigs):
             intv=idx.addsequence(rc(seq))
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={os.path.basename(args.contigs)},offsets={os.path.basename(args.contigs):0},aligned=0)
+            rcG.add_node(intv,sample={ctgfile},offsets={ctgfile:0},aligned=0)
     
     idx.construct()
     
@@ -1602,15 +1605,15 @@ def assign(args):
         
         ctg2refdef[ctg]=(bestref,revcomp)
     
-    ctgextp=args.contigs.rfind('.')
+    ctgextp=ctgfile.rfind('.')
     if ctgextp==-1:
-        ctgextp=len(args.contigs)
-    contigsbase=args.contigs[:ctgextp]
+        ctgextp=len(ctgfile)
+    contigsbase=ctgfile[:ctgextp]
     
-    refextp=args.reference.rfind('.')
+    refextp=reffile.rfind('.')
     if refextp==-1:
-        refextp=len(args.reference)
-    refbase=args.reference[:refextp]
+        refextp=len(reffile)
+    refbase=reffile[:refextp]
     
     #write each ref and ctg components to separate files
     for ri,nodes in enumerate(refcomponents):
