@@ -6,8 +6,10 @@ void *aligner(void *arg);
 
 #ifdef SA64
 #define saidx_t int64_t
+#define lcp_t uint32_t
 #else
 #define saidx_t int32_t
+#define lcp_t int32_t
 #endif
 
 #define diff(a,b) (a > b) ? a - b : b - a;
@@ -18,7 +20,7 @@ typedef struct
     char             * T;   //initial input Text
     saidx_t          * SA;  //Suffix array
     saidx_t          * SAi; //Inverse of suffix array
-    uint32_t          * LCP; //LCP array, lcp[0]==-1
+    lcp_t            * LCP; //LCP array, lcp[0]==-1
     uint16_t         * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
     saidx_t            n;   //length of T
     saidx_t          * nsep;    //array of integers pointing to sentinels that seperate samples within the input T
@@ -47,7 +49,7 @@ typedef struct
 
 typedef struct
 {
-    int l; //length of the exact match
+    lcp_t l; //length of the exact match
     saidx_t *sp; //array of starting positions
     //int *ni; //array of sample index to which sp corresponds
     int n;   //number of samples in which the exact match occurs

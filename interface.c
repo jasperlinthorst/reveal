@@ -94,17 +94,18 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     return intv;
 };
 
-int compute_lcp(char *T, saidx_t *SA, saidx_t *SAi, uint32_t *LCP, saidx_t n) {
-    uint32_t h=0;
+int compute_lcp(char *T, saidx_t *SA, saidx_t *SAi, lcp_t *LCP, saidx_t n) {
+    lcp_t h=0;
     saidx_t i, j, k;
     for (i = 0; i < n; i++) {
         k = SAi[i];
         if (k == 0) {
-            //LCP[k] = -1;
             LCP[k] = 0;
         } else {
             j = SA[k-1];
+
             while ((i - h < n) && (j + h < n) && (T[i+h] == T[j+h]) && T[i+h]!='$' && T[i+h]!='N' ) { ++h; } //stop comparing when a sentinel or N is encountered, so we dont find matches that span them
+            
             LCP[k] = h;
         }
         if (h > 0) --h;
@@ -134,7 +135,6 @@ int build_SO(RevealIndex *index){
 
 static PyObject *construct(RevealIndex *self, PyObject *args)
 {
-//#define INT_MAX 1
 
     if (self->n==0){
         PyErr_SetString(RevealError, "No text to index.");
@@ -190,8 +190,9 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         self->SAi[self->SA[i]]=i;
     }
     fprintf(stderr," Done.\n");
+
+    self->LCP=malloc(sizeof(lcp_t)*self->n);
     
-    self->LCP=malloc(sizeof(uint32_t)*self->n);
     if (self->LCP==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for LCP.");
         return NULL;
@@ -206,7 +207,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         fprintf(stderr,"Reading lcp array from file: %s",self->lcpfile);
         FILE* flcp;
         flcp=fopen(self->lcpfile,"r");
-        fread(self->LCP, sizeof(uint32_t), self->n, flcp);
+        fread(self->LCP, sizeof(lcp_t), self->n, flcp);
         fclose(flcp);
         fprintf(stderr," Done.\n");
     }
@@ -230,7 +231,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         fclose(fsa);
         FILE* flcp;
         flcp=fopen(".reveal.lcp","w");
-        fwrite(self->LCP, sizeof(uint32_t), self->n, flcp);
+        fwrite(self->LCP, sizeof(lcp_t), self->n, flcp);
         fclose(flcp);
         fprintf(stderr," Done.\n");
     }
@@ -519,9 +520,13 @@ reveal_getLCP(RevealIndex *self, void *closure)
     if (!lst)
         return NULL;
 
-    uint32_t i;
+    saidx_t i;
     for (i = 0; i < self->n; i++) {
+#ifdef SA64
         PyObject *num = Py_BuildValue("I", self->LCP[i]);
+#else
+        PyObject *num = Py_BuildValue("i", self->LCP[i]);
+#endif
         if (!num) {
             Py_DECREF(lst);
             return NULL;

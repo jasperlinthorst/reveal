@@ -46,15 +46,15 @@ int push_index(RevealIndex *idx) {
 }
 
 PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
-    uint32_t minl=0;
-    
+    lcp_t minl=0;
+    lcp_t lb,la;
+
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))        
             return NULL;
     }
     
     saidx_t i=0,aStart,bStart;
-    uint32_t lb,la;
     PyObject *mums=PyList_New(0);
 
     for (i=1;i<index->n;i++){
@@ -107,7 +107,7 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 
 PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
     
-    uint32_t minl=0;
+    lcp_t minl=0;
     
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))
@@ -115,7 +115,7 @@ PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
     }
     
     saidx_t i=0,aStart,bStart;
-    uint32_t lb,la,uniq;
+    lcp_t lb,la,uniq;
     PyObject *mems=PyList_New(0);
     for (i=1;i<index->n;i++){
         if (index->LCP[i]<minl){
@@ -172,7 +172,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     unsigned long long start1=-1,end1=-1,start2=-1,end2=-1; //TODO: add to keywds
     long long score;
     
-    uint32_t lb,la;
+    lcp_t lb,la;
     int w_score=2;
     int w_penalty=1;
     int penalize;
@@ -280,7 +280,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     saidx_t i=0,aStart,bStart;
-    uint32_t lb,la;
+    lcp_t lb,la;
     mum->u=1;
     mum->l=0;
     mum->score=0;
@@ -329,7 +329,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
     saidx_t start1=-1,end1=-1,start2=-1,end2=-1;
     long long score;
     
-    uint32_t lb,la,penalize;
+    lcp_t lb,la,penalize;
     
     if (PyList_Size(index->nodes)==2){
         penalize=1;
@@ -464,6 +464,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
             }
         }
     }
+    
     return 0;
 }
 
@@ -474,7 +475,7 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     mum->penalty=0;
     mum->n=0;
     unsigned long long i=0;
-    uint32_t j=0,la,lb;
+    lcp_t j=0,la,lb;
     int *flag_so=calloc(index->nsamples, sizeof(int));
     int flag_maximal=0;
     int flag_unique=0;
@@ -557,7 +558,7 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     return 0;
 }
 
-int ismultimum(RevealIndex * idx, uint32_t l, int lb, int ub, int * flag_so) {
+int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
     if (l>0){
         int j;
         memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
@@ -595,8 +596,8 @@ int ismultimum(RevealIndex * idx, uint32_t l, int lb, int ub, int * flag_so) {
 
 PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
-    uint32_t minl=0;
-    
+    lcp_t minl=0;
+
     if (args!=NULL) {
         if (!PyArg_ParseTuple(args, "i", &minl))        
             return NULL;
@@ -611,12 +612,12 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     RevealIndex * main = (RevealIndex *) index->main;
     int maxdepth=1000;
     int *flag_so=calloc(main->nsamples,sizeof *flag_so);
-    uint32_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
-    uint32_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    uint32_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
+    lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
+    lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
+    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
+    lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
-    uint32_t i_lcp;
     
     //int minl=10;
 
@@ -721,7 +722,8 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
 void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_trailing, RevealIndex *i_par){
     saidx_t i=0,ip=0,il=0,it=0,lastp=0,lastl=0,lastt=0;
-    uint32_t minlcpp=0,minlcpl=0,minlcpt=0;
+    
+    lcp_t minlcpp=0,minlcpl=0,minlcpt=0;
 
     for (i=0; i<idx->n; i++){
         if (D[i]==1){ //write to leading
@@ -802,10 +804,10 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
     }
 }
 
-void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, uint32_t l){
+void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
+    lcp_t tmpLCP;
     int j=0;
     saidx_t i=0,x,tmpSA;
-    uint32_t tmpLCP;
     
     for (j=0; j<n; j++) {
         
@@ -1220,7 +1222,7 @@ void *aligner(void *arg) {
             RevealIndex *i_leading=newIndex();
             
             i_leading->SA=malloc(leadingn*sizeof(saidx_t));
-            i_leading->LCP=malloc(leadingn*sizeof(uint32_t));
+            i_leading->LCP=malloc(leadingn*sizeof(lcp_t));
             i_leading->nodes=leading_intervals;
             i_leading->depth=newdepth;
             i_leading->n=leadingn;
@@ -1243,7 +1245,7 @@ void *aligner(void *arg) {
             RevealIndex *i_trailing=newIndex();
 
             i_trailing->SA=malloc(trailingn*sizeof(saidx_t));
-            i_trailing->LCP=malloc(trailingn*sizeof(uint32_t));
+            i_trailing->LCP=malloc(trailingn*sizeof(lcp_t));
             i_trailing->nodes=trailing_intervals;
             i_trailing->depth=newdepth;
             i_trailing->n=trailingn;
@@ -1266,7 +1268,7 @@ void *aligner(void *arg) {
             RevealIndex *i_parallel=newIndex();
             
             i_parallel->SA=malloc(parn*sizeof(saidx_t));
-            i_parallel->LCP=malloc(parn*sizeof(uint32_t));
+            i_parallel->LCP=malloc(parn*sizeof(lcp_t));
             i_parallel->nodes=rest;
             i_parallel->depth=newdepth;
             i_parallel->n=parn;

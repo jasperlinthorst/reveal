@@ -1224,6 +1224,7 @@ def align_genomes(args):
     
     logging.info("Constructing index...")
     idx.construct()
+    
     logging.info("Done.")
     
     if len(args.inputfiles)>2:
@@ -1525,7 +1526,7 @@ def assign(args):
         tmp[8].append(refstart)
     
     T1=idx.T
-
+    
     ### index reverse complement
     if sa64:
         idx=reveallib64.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
@@ -1625,6 +1626,7 @@ def assign(args):
         
         for ci,ctgnodes in enumerate(ctgcomponents):
             toref,comp=ctg2refdef[ci]
+
             if toref==ri:
                 
                 #if len(ctg2ref[ctg][ri][8])>0:
