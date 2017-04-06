@@ -707,6 +707,7 @@ def main():
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
     parser_assign = subparsers.add_parser('assign', prog="reveal assign", description="Assign and determine orientation of components in query graph (or contigs in a multi-fasta sequence) with respect to a reference graph or genome.")
+    parser_matches = subparsers.add_parser('matches', prog="reveal matches", description="Outputs all (multi) m(u/e)ms.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
@@ -757,13 +758,23 @@ def main():
     
     parser_assign.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
     parser_assign.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
-    parser_assign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (default 20).")
+    parser_assign.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
     parser_assign.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_assign.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
     parser_assign.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
     parser_assign.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
     parser_assign.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
     parser_assign.set_defaults(func=assign)
+
+    parser_matches.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
+    parser_matches.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')    
+    parser_matches.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
+    parser_matches.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
+    parser_matches.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
+    parser_matches.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
+    parser_matches.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_matches.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")    
+    parser_matches.set_defaults(func=matches)
     
     #TOOD: reveal TEXT; write T for any input of graphs and fastas to enable external SA and LCP construction
     
@@ -1429,15 +1440,136 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
 
     return G,idx
 
+
+
+
+
+
+
+def matches(args): 
+    
+    if sa64:
+        idx=reveallib64.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
+    else:
+        idx=reveallib.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
+    
+    G=nx.DiGraph()
+    G.graph['samples']=[]
+    t=IntervalTree()
+    
+    reffile=os.path.basename(args.reference)
+    ctgfile=os.path.basename(args.contigs)
+    
+    idx.addsample(reffile)
+    if args.reference.endswith(".gfa"):
+        read_gfa(args.reference,idx,t,G)
+    else:
+        G.graph['samples'].append(reffile)
+        for name,seq in fasta_reader(args.reference):
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            G.add_node(intv,sample={reffile},offsets={reffile:0})
+    
+    idx.addsample(ctgfile)
+    if args.contigs.endswith(".gfa"):
+        read_gfa(args.contigs,idx,t,G)
+    else:
+        G.graph['samples'].append(ctgfile)
+        for name,seq in fasta_reader(args.contigs):
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            G.add_node(intv,sample={ctgfile},offsets={ctgfile:0})
+    
+    #map nodes to connected components in the graph
+    refnode2component=dict()
+    ctgnode2component=dict()
+    component2refnode=dict()
+    component2ctgnode=dict()
+    refcomponents=[]
+    ctgcomponents=[]
+    ctg2ref=dict()
+    ri=0
+    ci=0
+    for nodes in nx.connected_components(G.to_undirected()):
+        nodes=list(nodes)
+        if reffile in G.node[nodes[0]]['sample']:
+            for node in nodes:
+                assert(reffile in G.node[node]['sample']) #check the graph is valid
+                refnode2component[node]=ri
+                component2refnode[ri]=node
+            ri+=1
+            refcomponents.append(nodes)
+        else:
+            for node in nodes:
+                assert(ctgfile in G.node[node]['sample']) #check the graph is valid
+                ctgnode2component[node]=ci
+                component2ctgnode[ci]=node
+            ci+=1
+            ctgcomponents.append(nodes)
+    
+    idx.construct()
+    
+    print "#refname\trefstart\tctgname\tctgstart\tlength\tn\tunique\torient"
+    for mem in idx.getmems(args.minlength) :
+        refstart=mem[2][0]
+        ctgstart=mem[2][1]
+        rnode=t[refstart].pop() #start position on match to node in graph
+        cnode=t[ctgstart].pop()
+        print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], mem[3], 0)
+    
+    logging.info("Indexing reverse complement...\n")
+    
+    ### index reverse complement
+    if sa64:
+        idx=reveallib64.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
+    else:
+        idx=reveallib.index(sa=args.sa2, lcp=args.lcp2) #enable preconstruction of second SA and LCP array
+    
+    rcG=nx.DiGraph()
+    t=IntervalTree()
+    
+    idx.addsample(reffile)
+    if args.reference.endswith(".gfa"):
+        read_gfa(args.reference,idx,t,rcG)
+    else:
+        rcG.graph['samples']=set([reffile])
+        for name,seq in fasta_reader(args.reference):
+            intv=idx.addsequence(seq)
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            rcG.add_node(intv,sample={reffile},offsets={reffile:0},aligned=0)
+            refseq=seq
+    
+    idx.addsample(ctgfile)
+    if args.contigs.endswith(".gfa"):
+        read_gfa(args.contigs,idx,t,rcG,revcomp=True)
+    else:
+        rcG.graph['samples']=set([ctgfile])
+        for name,seq in fasta_reader(args.contigs):
+            intv=idx.addsequence(rc(seq))
+            intv=Interval(intv[0],intv[1],name)
+            t.add(intv)
+            rcG.add_node(intv,sample={ctgfile},offsets={ctgfile:0},aligned=0)
+    
+    idx.construct()
+    
+    for mem in idx.getmems(args.minlength):
+        refstart=mem[2][0]
+        ctgstart=mem[2][1]
+        rnode=t[refstart].pop() #start position on match to node in graph
+        cnode=t[ctgstart].pop()
+        l=cnode[1]-cnode[0]
+        print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1)
+
 def assign(args):
 
-    import numpy as np
+    #import numpy as np
     
     #assign and orient graph or contig with respect to a reference (for now only genome)
     
     ### index reference and contigs
-    
-    ctg2ref=dict()
     
     if sa64:
         idx=reveallib64.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
@@ -1502,18 +1634,22 @@ def assign(args):
     
     for ci,comp in enumerate(ctgcomponents):
         #dict describing the exact matches between every contig component and every reference component
-        ctg2ref[ci]=[[0,0,0,0,0,0,0,0,[]]] * ri #totmatch,nmatch,totrcmatch,nrcmatch,totmum,totmem,nmum,nmem,[positions] --> max hit
+        ctg2ref[ci]=[[0,0,0,0,0,0,0,0,[]] for _ in range(ri)] #totmatch,nmatch,totrcmatch,nrcmatch,totmum,totmem,nmum,nmem,[positions] --> max hit
     
     idx.construct()
     
-    for mem in idx.getmems(args.minlength):
+    mems=idx.getmems(args.minlength)
+
+    for mem in mems:
         assert(mem[2][0]<mem[2][1])
         refstart=mem[2][0]
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
+        
         ci=ctgnode2component[cnode] #map node in graph to component
         ri=refnode2component[rnode]
+        
         tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
         tmp[0]+=mem[0]
         tmp[1]+=1
@@ -1523,7 +1659,7 @@ def assign(args):
         else:
             tmp[5]+=mem[0]
             tmp[7]+=1
-        tmp[8].append(refstart)
+        #tmp[8].append(refstart)
     
     T1=idx.T
     
@@ -1562,7 +1698,7 @@ def assign(args):
     
     for mem in idx.getmems(args.minlength):
         refstart=mem[2][0]
-        ctgstart=mem[2][1]        
+        ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
         ci=ctgnode2component[cnode] #map node in graph to component
@@ -1576,7 +1712,7 @@ def assign(args):
         else:
             tmp[5]+=mem[0]
             tmp[7]+=1
-        tmp[8].append(refstart)
+        #tmp[8].append(refstart)
     
     T2=idx.T
     
@@ -1588,6 +1724,7 @@ def assign(args):
     #for each contig (component) determine to which reference contig (component) it has most affinity based on the predetermined feature vector
     for ctg in ctg2ref:
         #TODO:filter if it has more or less than 1 possible alignment position
+        
         #select best
         best=0
         bestref=None
@@ -1601,11 +1738,29 @@ def assign(args):
                 bestref=ri
                 revcomp=True
                 best=refcomp[2]
-        if bestref==None:
-            logging.warn("No assignment for contig %d: \"%s\""% (ctg,component2ctgnode[ctg][2]))
         
-        ctg2refdef[ctg]=(bestref,revcomp)
+        node=component2ctgnode[ctg]
+        
+        if bestref==None:
+            logging.warn("No assignment for contig %d: \"%s\""% (ctg,node[2]))
+            continue
+        
+        cov=best/float(node[1]-node[0])
+        
+        if cov<.8:
+            logging.warn("MUM coverage for contig (%d) \"%s\" too low: %.2f" % (ctg, node[2], cov))
+        elif cov>1.1:
+            logging.warn("MUM coverage for contig (%d) \"%s\" too high: %.2f" % (ctg, node[2], cov))
+        else:
+            #logging.info("MUM coverage for contig (%d) \"%s\": %.2f" % (ctg, node[2], cov))
+            ctg2refdef[ctg]=(bestref,revcomp)
     
+    for ctg in ctg2ref:
+        print ctg,component2ctgnode[ctg][2]
+        print ctg2ref[ctg]
+    
+    print ctg2refdef
+
     ctgextp=ctgfile.rfind('.')
     if ctgextp==-1:
         ctgextp=len(ctgfile)
@@ -1623,32 +1778,30 @@ def assign(args):
             write_gfa(sg,T1,outputfile=refbase+"_"+str(ri)+".gfa")
         else:
             write_fasta(sg,T1,outputfile=refbase+"_"+str(ri)+".fasta")
-        
-        for ci,ctgnodes in enumerate(ctgcomponents):
-            toref,comp=ctg2refdef[ci]
+    
+    for ci,ctgnodes in enumerate(ctgcomponents):
+        node=component2ctgnode[ci]
 
-            if toref==ri:
-                
-                #if len(ctg2ref[ctg][ri][8])>0:
-                #    median=np.median(ctg2ref[ctg][ri][8])
-                #else:
-                #    logging.info("Skipping %d, no mums."%ri)
-                #    continue
-                
-                if comp:
-                    logging.info("Writing reverse complement of ctg %s"%ci)
-                    sg=rcG.subgraph(ctgnodes)
-                    if args.contigs.endswith(".gfa"):
-                        write_gfa(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
-                    else:
-                        write_fasta(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+        if ci in ctg2refdef:
+            toref,comp=ctg2refdef[ci]
+            
+            if comp:
+                logging.info("Writing reverse complement of ctg (%d): %s"%(ci,node[2]))
+                sg=rcG.subgraph(ctgnodes)
+                if args.contigs.endswith(".gfa"):
+                    write_gfa(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
                 else:
-                    logging.info("Writing ctg %s"%ci)
-                    sg=G.subgraph(ctgnodes)
-                    if args.contigs.endswith(".gfa"):
-                        write_gfa(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
-                    else:
-                        write_fasta(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+                    write_fasta(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+            else:
+                logging.info("Writing ctg (%d): %s"%(ci,node[2]))
+                sg=G.subgraph(ctgnodes)
+                if args.contigs.endswith(".gfa"):
+                    write_gfa(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
+                else:
+                    write_fasta(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+        else:
+            logging.warn("No assignment for contig (%d): \"%s\""% (ci,node[2]))
+
 
 def plot(args):
     #from matplotlib import pyplot as plt
@@ -1745,7 +1898,7 @@ def plot(args):
     
     pos=args.pos
     dist=args.env
-
+    
     for mem in mmems:
         #print mem
         sps=sorted(mem[2])
