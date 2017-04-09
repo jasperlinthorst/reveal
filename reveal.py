@@ -2214,23 +2214,31 @@ def comp_cmd(args):
 
 def convert(args):
     for graph in args.graphs:
-        if not graph.endswith(".gfa"):
-            logging.fatal("%s does not have a gfa extension."%graph)
-            return
-        
         g=nx.DiGraph()
         g.graph['samples']=[]
-        read_gfa(graph,None,None,g,minsamples=args.minsamples,
-                             maxsamples=args.maxsamples,
-                             targetsample=args.targetsample)
-        
-        if args.gfa:
-            fn=graph.replace(".gfa",".rewrite.gfa")
-            graph=write_gfa(g,"", outputfile=fn)
-            logging.info("gml graph written to: %s"%fn)
+        if graph.endswith(".gfa"): #gfa to gml/gfa
+            read_gfa(graph,None,None,g,minsamples=args.minsamples,
+                                 maxsamples=args.maxsamples,
+                                 targetsample=args.targetsample)
+            if args.gfa:
+                fn=graph.replace(".gfa",".rewrite.gfa")
+                graph=write_gfa(g,"", outputfile=fn)
+                logging.info("gfa graph written to: %s"%fn)
+            else:
+                fn=write_gml(g,"", hwm=args.hwm, outputfile=graph.replace(".gfa",""), partition=args.partition)
+                logging.info("gml graph written to: %s"%fn)
+        elif graph.endswith(".fa") or graph.endswith(".fasta") or graph.endswith(".fna"): #assume fasta to gfa
+            i=0
+            for name,seq in fasta_reader(graph):
+                g.graph['samples'].append(os.path.basename(graph))
+                g.add_node(i,sample={os.path.basename(graph)},offsets={os.path.basename(graph):0},seq=seq)
+                i+=1
+            filename=graph[:graph.rfind(".")]+".gfa"
+            write_gfa(g,"", outputfile=filename)
+            logging.info("gfa graph written to: %s"%filename)
         else:
-            fn=write_gml(g,"", hwm=args.hwm, outputfile=graph.replace(".gfa",""), partition=args.partition)
-            logging.info("gml graph written to: %s"%fn)
+            logging.fatal("Unknown filetype, need gfa or fasta extension.")
+            return
 
 def extract_cmd(args):
     if not args.graph[0].endswith(".gfa"):
