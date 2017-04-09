@@ -1208,9 +1208,12 @@ def align_genomes(args):
             graph=True
             #TODO: now applies to all graphs! probably want to have this graph specific if at all...
             logging.info("Reading graph: %s ..." % sample)
-            read_gfa(sample,idx,t,G,minsamples=args.minsamples,
-                                    maxsamples=args.maxsamples,
-                                    targetsample=args.targetsample)
+            if i==0:
+                read_gfa(sample,idx,t,G,minsamples=args.minsamples,
+                                        maxsamples=args.maxsamples,
+                                        targetsample=args.targetsample)
+            else:
+                read_gfa(sample,idx,t,G)
             
             if len(G.graph['samples'])==0: #if not from reveal, might not have a header
                 G.graph['samples'].append(os.path.basename(sample))
