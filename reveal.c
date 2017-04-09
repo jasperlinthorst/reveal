@@ -404,9 +404,9 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
             //match is not a repeat and is maximally unique
             
             //penalize for the indel it creates in leading and trailing part
-            long long penalty=0;
-            long long lpenalty=0;
-            long long tpenalty=0;
+            unsigned long long penalty=0;
+            unsigned long long lpenalty=0;
+            unsigned long long tpenalty=0;
 
             if (index->depth>0 && penalize==1){
                 
@@ -432,10 +432,6 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                     //fprintf(stderr,"lcp=%d bStart=%d, start1=%lld, aStart=%d start2=%lld\n",index->LCP[i],bStart,start1,aStart,start2);
                     
                     lpenalty=diff((bStart-start1),(aStart-start2));
-
-                    //fprintf(stderr,"a=%lld b=%lld\n",(bStart-start1),(aStart-start2));
-                    //fprintf(stderr,"lpen=%lld\n",lpenalty);
-
                     tpenalty=diff((end1-(bStart+index->LCP[i])), (end2-(aStart+index->LCP[i])));
                     
                     //lpenalty=abs((bStart-start1)-(aStart-start2)); //leading penalty
@@ -453,7 +449,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                 }
             }
             
-            score=(w_score*index->LCP[i])-sqrt(w_penalty*penalty);
+            score=(w_score*(index->LCP[i]*2))-sqrt(w_penalty*penalty);
              
             if (score > mum->score){
                 mum->score=score;

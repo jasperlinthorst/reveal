@@ -101,7 +101,6 @@ def graphmumpicker(mums,idx,penalize=True):
         if idx.right!=None:
             nrighttup=idx.right
             nright=G.node[Interval(nrighttup[0],nrighttup[1])]
-        
 
         if idx.left!=None and idx.right!=None:
             leftoffsets=G.node[idx.left]['offsets']
@@ -134,6 +133,7 @@ def graphmumpicker(mums,idx,penalize=True):
             if penalize:
                 spenalty=None
                 epenalty=None
+                
                 if nleft!=None:
                     n1distfromlmapoints=dict()
                     for sample in n1samples:
@@ -141,7 +141,6 @@ def graphmumpicker(mums,idx,penalize=True):
                     n2distfromlmapoints=dict()
                     for sample in n2samples:
                         n2distfromlmapoints[sample]=(n2data['offsets'][sample]+(sp[1]-n2[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
-                    
                     spenalty=mindist(n1distfromlmapoints.values(),n2distfromlmapoints.values())
                     
                 if nright!=None:
@@ -152,6 +151,7 @@ def graphmumpicker(mums,idx,penalize=True):
                     for sample in n2samples:
                         n2distfromrmapoints[sample]=nright['offsets'][sample] - ( n2data['offsets'][sample] + (sp[1]-n2[0]) + l )
                     epenalty=mindist(n1distfromrmapoints.values(),n2distfromrmapoints.values())
+
                 if epenalty==None and spenalty==None:
                     penalty=0
                 elif epenalty==None:
@@ -163,7 +163,8 @@ def graphmumpicker(mums,idx,penalize=True):
             else:
                 penalty=0
             
-            score=(wscore*(l*n))-(wpen*penalty)
+            score=(wscore*(l*n))-((wpen*penalty)**(.5))
+            #score=(wscore*(l*n))-(wpen*penalty)
             #score=int(math.log(l-(wpen*penalty))*n)
             
             if trace:
@@ -178,7 +179,8 @@ def graphmumpicker(mums,idx,penalize=True):
             
             if trace:
                 print bestmum
-
+    
+        logging.debug("Selected: %s\n"%str(bestmum))
         return bestmum
     except:
         print "graphmumpicker",n1data['offsets'],len(n1data['offsets']),n2data['offsets'],len(n2data['offsets']),len(nleft['offsets']),len(nright['offsets'])
