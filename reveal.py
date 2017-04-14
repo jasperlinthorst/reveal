@@ -749,8 +749,10 @@ def main():
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
     parser_plot.add_argument("-u", dest="uniq", action="store_true", default=False, help="Plot only maximal unique matches.")
-    parser_plot.add_argument("-p", dest="pos", default=None, type=int, help="Position on the reference genome to vizualize.")
-    parser_plot.add_argument("-e", dest="env", default=1000, type=int, help="Size of the region aroung the targeted position to vizualize.")
+    parser_plot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
+    
+    #parser_plot.add_argument("-p", dest="pos", default=None, type=int, help="Position on the reference genome to vizualize.")
+    #parser_plot.add_argument("-e", dest="env", default=1000, type=int, help="Size of the region aroung the targeted position to vizualize.")
     parser_plot.set_defaults(func=plot)
     
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
@@ -1474,12 +1476,14 @@ def matches(args):
             t.add(intv)
             G.add_node(intv,sample={reffile},offsets={reffile:0})
     
+    contig2length=dict()
     idx.addsample(ctgfile)
     if args.contigs.endswith(".gfa"):
         read_gfa(args.contigs,idx,t,G)
     else:
         G.graph['samples'].append(ctgfile)
         for name,seq in fasta_reader(args.contigs):
+            contig2length[name]=len(seq)
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
@@ -1512,9 +1516,13 @@ def matches(args):
             ci+=1
             ctgcomponents.append(nodes)
     
+    #for each contig, print the length
+    for name in contig2length:
+        print "#%s\t%d"%(name,contig2length[name])
+    
     idx.construct()
     
-    print "#refname\trefstart\tctgname\tctgstart\tlength\tn\tunique\torient"
+    print "##refname\trefstart\tctgname\tctgstart\tlength\tn\tunique\torient"
     for mem in idx.getmems(args.minlength) :
         refstart=mem[2][0]
         ctgstart=mem[2][1]
@@ -1565,6 +1573,27 @@ def matches(args):
         cnode=t[ctgstart].pop()
         l=cnode[1]-cnode[0]
         print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def assign(args):
 
@@ -1899,11 +1928,10 @@ def plot(args):
     
     print "Drawing",len(mmems),"matches."
     
-    pos=args.pos
-    dist=args.env
+    #pos=args.pos
+    #dist=args.env
     
     for mem in mmems:
-        #print mem
         sps=sorted(mem[2])
         l=mem[0]
         sp1=sps[0]
@@ -1911,23 +1939,17 @@ def plot(args):
         ep1=sp1+l
         ep2=sp2+l
         
-        if pos!=None:
-            if abs(sp1-pos)>dist:
-                continue
-            
-            if mem[3]==0 and pos_==None:
-                pos_=sp2
-            
-            if mem[3]==1 and pos_==None:
-                pos_=ls-sp2
-            
-            if mem[3]==0 and abs(sp2-pos_)>dist:
-                #print sp2, pos_, l
-                continue
-            
-            if mem[3]==1 and abs((ls-sp2)-pos_)>dist:
-                #print ls-sp2, pos_, l
-                continue
+        #if pos!=None:
+        #    if abs(sp1-pos)>dist:
+        #        continue
+        #    if mem[3]==0 and pos_==None:
+        #        pos_=sp2
+        #    if mem[3]==1 and pos_==None:
+        #        pos_=ls-sp2
+        #    if mem[3]==0 and abs(sp2-pos_)>dist:
+        #        continue
+        #    if mem[3]==1 and abs((ls-sp2)-pos_)>dist:
+        #        continue
         
         if mem[3]==0:
             if args.uniq:
@@ -1970,6 +1992,12 @@ def plot(args):
     plt.xlabel(args.fastas[0])
     plt.ylabel(args.fastas[1])
     plt.autoscale(enable=False)
+    
+    if args.region!=None:
+        start,end=args.region.split(":")
+        plt.axvline(x=int(start),linewidth=3,color='b',linestyle='dashed')
+        plt.axvline(x=int(end),linewidth=3,color='b',linestyle='dashed')
+    #plt.plot([1040103,1065571],[170000,170000],'g-',linewidth=2.0)
     
     if args.interactive:
         plt.show()
