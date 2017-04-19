@@ -706,7 +706,7 @@ def main():
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
-    parser_assign = subparsers.add_parser('assign', prog="reveal assign", description="Assign and determine orientation of components in query graph (or contigs in a multi-fasta sequence) with respect to a reference graph or genome.")
+    parser_finish = subparsers.add_parser('finish', prog="reveal finish", description="Finish a draft assembly by ordering and orienting contigs with respect to a finished reference assembly.")
     parser_matches = subparsers.add_parser('matches', prog="reveal matches", description="Outputs all (multi) m(u/e)ms.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
@@ -758,15 +758,15 @@ def main():
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp_cmd)
     
-    parser_assign.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
-    parser_assign.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
-    parser_assign.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
-    parser_assign.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
-    parser_assign.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
-    parser_assign.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
-    parser_assign.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
-    parser_assign.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
-    parser_assign.set_defaults(func=assign)
+    parser_finish.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
+    parser_finish.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
+    parser_finish.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
+    parser_finish.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
+    parser_finish.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
+    parser_finish.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
+    parser_finish.add_argument("--sa2", dest="sa2", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_finish.add_argument("--lcp2", dest="lcp2", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in which the sequence of the contigs was reverse complemented.")
+    parser_finish.set_defaults(func=finish)
 
     parser_matches.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
     parser_matches.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')    
@@ -1575,34 +1575,7 @@ def matches(args):
         print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def assign(args):
-
-    #import numpy as np
-    
-    #assign and orient graph or contig with respect to a reference (for now only genome)
-    
-    ### index reference and contigs
-    
+def finish(args):
     if sa64:
         idx=reveallib64.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
     else:
@@ -1626,12 +1599,17 @@ def assign(args):
             t.add(intv)
             G.add_node(intv,sample={reffile},offsets={reffile:0})
     
+    contig2length=dict()
+    contig2seq=dict()
+    
     idx.addsample(ctgfile)
     if args.contigs.endswith(".gfa"):
         read_gfa(args.contigs,idx,t,G)
     else:
         G.graph['samples'].append(ctgfile)
         for name,seq in fasta_reader(args.contigs):
+            contig2length[name]=len(seq)
+            contig2seq[name]=seq
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
@@ -1644,6 +1622,7 @@ def assign(args):
     component2ctgnode=dict()
     refcomponents=[]
     ctgcomponents=[]
+
     ctg2ref=dict()
     ri=0
     ci=0
@@ -1664,36 +1643,17 @@ def assign(args):
             ci+=1
             ctgcomponents.append(nodes)
     
-    for ci,comp in enumerate(ctgcomponents):
-        #dict describing the exact matches between every contig component and every reference component
-        ctg2ref[ci]=[[0,0,0,0,0,0,0,0,[]] for _ in range(ri)] #totmatch,nmatch,totrcmatch,nrcmatch,totmum,totmem,nmum,nmem,[positions] --> max hit
-    
     idx.construct()
-    
-    mems=idx.getmems(args.minlength)
+    mems=[]
 
-    for mem in mems:
-        assert(mem[2][0]<mem[2][1])
+    for mem in idx.getmems(args.minlength) :
         refstart=mem[2][0]
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
-        
-        ci=ctgnode2component[cnode] #map node in graph to component
-        ri=refnode2component[rnode]
-        
-        tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
-        tmp[0]+=mem[0]
-        tmp[1]+=1
-        if mem[3]==1: #unique
-            tmp[4]+=mem[0]
-            tmp[6]+=1
-        else:
-            tmp[5]+=mem[0]
-            tmp[7]+=1
-        #tmp[8].append(refstart)
+        mems.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], mem[3], 0))
     
-    T1=idx.T
+    logging.info("Indexing reverse complement...\n")
     
     ### index reverse complement
     if sa64:
@@ -1714,6 +1674,7 @@ def assign(args):
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
             rcG.add_node(intv,sample={reffile},offsets={reffile:0},aligned=0)
+            refseq=seq
     
     idx.addsample(ctgfile)
     if args.contigs.endswith(".gfa"):
@@ -1733,106 +1694,205 @@ def assign(args):
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
-        ci=ctgnode2component[cnode] #map node in graph to component
-        ri=refnode2component[rnode]
-        tmp=ctg2ref[ci][ri] #update the corresponding fields in the matrix
-        tmp[2]+=mem[0]
-        tmp[3]+=1
-        if mem[3]==1: #unique
-            tmp[4]+=mem[0]
-            tmp[6]+=1
+        l=cnode[1]-cnode[0]
+        mems.append((rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1))
+    
+    #determine best scoring chain per contig
+    ctg2mums=dict()
+    
+    for mem in mems:
+        refchrom, refstart, ctg, ctgstart, l, n, u, o = mem
+        refstart=int(refstart)
+        ctgstart=int(ctgstart)
+        l=int(l)
+        n=int(n)
+        u=int(u)
+        o=int(o)
+        if ctg in ctg2mums:
+            if refchrom in ctg2mums[ctg]:
+                ctg2mums[ctg][refchrom].append((refstart,ctgstart,l,n,u,o))
+            else:
+                ctg2mums[ctg][refchrom]=[(refstart,ctgstart,l,n,u,o)]
         else:
-            tmp[5]+=mem[0]
-            tmp[7]+=1
-        #tmp[8].append(refstart)
+            ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,u,o)]})
+
+    ref2ctg=dict()
     
-    T2=idx.T
-    
-    #if args.pickle:
-    #    import pickle
-    #    pickle.dump(ctg2ref,open("ctg2ref.pickle",'w'))
-    
-    ctg2refdef=dict()
-    #for each contig (component) determine to which reference contig (component) it has most affinity based on the predetermined feature vector
-    for ctg in ctg2ref:
-        #TODO:filter if it has more or less than 1 possible alignment position
-        
-        #select best
-        best=0
+    #for each contig determine the best location on the reference
+    for ctg in ctg2mums:
+        bestp=[]
+        bestscore=0
         bestref=None
-        revcomp=None
-        for ri,refcomp in enumerate(ctg2ref[ctg]):
-            if refcomp[0]>best:
-                bestref=ri
+        for ref in ctg2mums[ctg]:
+            mems=ctg2mums[ctg][ref]
+            
+            #determine optimal chain of mems
+            path,score=bestpath(mems)
+
+            if score>bestscore:
+                bestscore=score
+                bestp=path
+                bestref=ref
                 revcomp=False
-                best=refcomp[0]
-            if refcomp[2]>best:
-                bestref=ri
+                bestmems=mems
+            
+            #determine optimal chain of mems in reverse complement
+            rpath,rscore=bestpath(mems,rc=True)
+            
+            if rscore>bestscore:
+                bestscore=rscore
+                bestp=rpath
+                bestref=ref
                 revcomp=True
-                best=refcomp[2]
-        
-        node=component2ctgnode[ctg]
-        
-        if bestref==None:
-            logging.warn("No assignment for contig %d: \"%s\""% (ctg,node[2]))
+                bestmems=mems
+            
+        if bestp==[]:
             continue
         
-        cov=best/float(node[1]-node[0])
-        
-        if cov<.8:
-            logging.warn("MUM coverage for contig (%d) \"%s\" too low: %.2f" % (ctg, node[2], cov))
-        elif cov>1.1:
-            logging.warn("MUM coverage for contig (%d) \"%s\" too high: %.2f" % (ctg, node[2], cov))
-        else:
-            #logging.info("MUM coverage for contig (%d) \"%s\": %.2f" % (ctg, node[2], cov))
-            ctg2refdef[ctg]=(bestref,revcomp)
-    
-    for ctg in ctg2ref:
-        print ctg,component2ctgnode[ctg][2]
-        print ctg2ref[ctg]
-    
-    print ctg2refdef
+        begin=bestp[-1][0] #bestp[-1][0][0]
+        end=bestp[0][0]+bestp[0][2] #bestp[0][0][0]
+        alength=end-begin
 
-    ctgextp=ctgfile.rfind('.')
-    if ctgextp==-1:
-        ctgextp=len(ctgfile)
-    contigsbase=ctgfile[:ctgextp]
-    
-    refextp=reffile.rfind('.')
-    if refextp==-1:
-        refextp=len(reffile)
-    refbase=reffile[:refextp]
-    
-    #write each ref and ctg components to separate files
-    for ri,nodes in enumerate(refcomponents):
-        sg=G.subgraph(nodes)
-        if args.contigs.endswith(".gfa"):
-            write_gfa(sg,T1,outputfile=refbase+"_"+str(ri)+".gfa")
+        score=bestscore
+        chaincov=sum([m[2] for m in bestp])
+        chainlength=len(bestp)
+         
+        if bestref in ref2ctg:
+            ref2ctg[bestref].append((ctg,revcomp,bestp,begin,end,contig2length[ctg]))
         else:
-            write_fasta(sg,T1,outputfile=refbase+"_"+str(ri)+".fasta")
+            ref2ctg[bestref]=[(ctg,revcomp,bestp,begin,end,contig2length[ctg])]
     
-    for ci,ctgnodes in enumerate(ctgcomponents):
-        node=component2ctgnode[ci]
-
-        if ci in ctg2refdef:
-            toref,comp=ctg2refdef[ci]
+    with open(reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]+".fasta",'w') as finished:
+        #for each reference chromosome, order the assigned contigs
+        for ref in ref2ctg:
+            print "Determining contig order for:",ref
+            ref2ctg[ref].sort(key= lambda c: c[3]) #sort by start position of chains
+            ctgs=ref2ctg[ref]
+            frp=0
+            plt.clf()
+            plt.figure(0,figsize=(20,20))
+            ax = plt.axes()
             
-            if comp:
-                logging.info("Writing reverse complement of ctg (%d): %s"%(ci,node[2]))
-                sg=rcG.subgraph(ctgnodes)
-                if args.contigs.endswith(".gfa"):
-                    write_gfa(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
+            plt.title(ref)
+            offset=0
+            yticks=[]
+            yticklabels=[]
+            
+            finished.write(">%s_%s\n"%(ref,ctg))
+
+            for ctg,revcomp,path,begin,end,ctglength in ctgs:
+
+                if end<frp:
+                    logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
+                    continue
                 else:
-                    write_fasta(sg,T2,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
+                    frp=end
+                
+                for mem in ctg2mums[ctg][ref]:
+                    if revcomp:
+                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-')
+                    else:
+                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-')
+                
+                if revcomp:
+                    for mem in path:
+                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-',linewidth=2)
+                else:
+                    for mem in path:
+                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
+                ax.axhline(offset+ctglength)
+                offset=offset+ctglength
+                yticks.append(offset)
+                yticklabels.append(ctg[0:20])
+                
+                if revcomp:
+                    finished.write(rc(contig2seq[ctg]))
+                else:
+                    finished.write(contig2seq[ctg])
+                finished.write("N")
+            
+            finished.write("\n")
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(yticklabels)
+            plt.savefig(ref.split()[0]+"_scaffold.png")
+
+
+def bestpath(mems,rc=False):
+    mems.sort(key=lambda mem: mem[0]) #sort by reference position
+    init=(None, None, 0, 0, 0, 0)
+    link=dict()
+    score=dict({init:0})
+    active=[init]
+    processed=[]
+    start=init
+    
+    #(889051, 1124491, 1113, 2, 1, 1)
+    
+    maxscore=0
+    for mem in mems:
+        remove=[]
+        for pmem in processed:
+            pendpoint=pmem[0]+pmem[2]
+            if pendpoint<mem[0]:
+                active.append(pmem)
+                remove.append(pmem)
+        
+        for r in remove:
+            processed.remove(r)
+        
+        best=None
+        w=None
+        for amem in active:
+            #calculate score of connecting to active point
+            if rc:
+                if w==None:
+                    w=score[amem]+mem[2]
+                    best=amem
+                elif amem[1] >= mem[1]+mem[2]:
+                    penalty=abs( (amem[1]-(mem[1]+mem[2]) ) - (mem[0]-(amem[0]+amem[2])  ) )
+                    tmpw=score[amem]+mem[2]-penalty
+                    if tmpw>w:
+                        w=tmpw
+                        best=amem
             else:
-                logging.info("Writing ctg (%d): %s"%(ci,node[2]))
-                sg=G.subgraph(ctgnodes)
-                if args.contigs.endswith(".gfa"):
-                    write_gfa(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".gfa")
-                else:
-                    write_fasta(sg,T1,outputfile=contigsbase+"_"+str(ci)+"_mapto_"+refbase+"_"+str(ri)+".fasta")
-        else:
-            logging.warn("No assignment for contig (%d): \"%s\""% (ci,node[2]))
+                if w==None:
+                    w=score[amem]+mem[2]
+                    best=amem
+                elif amem[1] <= mem[1]:
+                    penalty=abs( ((amem[1]+amem[2])-mem[1]) - ((amem[0]+amem[2])-mem[0]) )
+                    tmpw=score[amem]+mem[2]-penalty
+                    if tmpw>w:
+                        w=tmpw
+                        best=amem
+        
+        assert(best!=None)
+        link[mem]=best
+        score[mem]=w
+        
+        if w>maxscore:
+            maxscore=w
+            end=mem
+        
+        processed.append(mem)
+    
+    #backtrack
+    minscore=0
+    path=[]
+    while end!=start:
+        path.append(end)
+        if score[end]<minscore:
+            minscore=score[end]
+            start=end
+        end=link[end]
+    
+    #if start!=path[-1]:
+    #    print "subset of mums scores higher path!",path
+    
+    if score[start]<0:
+        print "Negative score at start",start,score[start]
+        maxscore-=score[start]
+    
+    return path,maxscore
 
 
 def plot(args):
