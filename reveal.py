@@ -1762,7 +1762,8 @@ def finish(args):
         else:
             ref2ctg[bestref]=[(ctg,revcomp,bestp,begin,end,contig2length[ctg])]
     
-    with open(reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]+".fasta",'w') as finished:
+    resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
+    with open(resbase+".fasta",'w') as finished:
         #for each reference chromosome, order the assigned contigs
         for ref in ref2ctg:
             print "Determining contig order for:",ref
@@ -1814,8 +1815,7 @@ def finish(args):
             finished.write("\n")
             ax.set_yticks(yticks)
             ax.set_yticklabels(yticklabels)
-            plt.savefig(ref.split()[0]+"_scaffold.png")
-
+            plt.savefig(resbase+"_"+ref.split()[0]+".png")
 
 def bestpath(mems,rc=False):
     mems.sort(key=lambda mem: mem[0]) #sort by reference position
