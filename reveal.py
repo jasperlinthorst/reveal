@@ -245,7 +245,7 @@ def graphalign(l,index,n,score,sp,penalty):
     
     nodes=index.nodes
     isize=index.n
-
+    
     if len(nodes)==0:
         logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
         return
@@ -1700,6 +1700,7 @@ def finish(args):
     #determine best scoring chain per contig
     ctg2mums=dict()
     
+    logging.info("Relating exact matches to contigs...")
     for mem in mems:
         refchrom, refstart, ctg, ctgstart, l, n, u, o = mem
         refstart=int(refstart)
@@ -1716,8 +1717,11 @@ def finish(args):
         else:
             ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,u,o)]})
 
+    logging.info("Done.")
+    
     ref2ctg=dict()
     
+    logging.info("Mapping contigs to reference.")    
     #for each contig determine the best location on the reference
     for ctg in ctg2mums:
         bestp=[]
@@ -1725,10 +1729,8 @@ def finish(args):
         bestref=None
         for ref in ctg2mums[ctg]:
             mems=ctg2mums[ctg][ref]
-            
             #determine optimal chain of mems
             path,score=bestpath(mems)
-
             if score>bestscore:
                 bestscore=score
                 bestp=path
@@ -1762,11 +1764,12 @@ def finish(args):
         else:
             ref2ctg[bestref]=[(ctg,revcomp,bestp,begin,end,contig2length[ctg])]
     
+    
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
     with open(resbase+".fasta",'w') as finished:
         #for each reference chromosome, order the assigned contigs
         for ref in ref2ctg:
-            print "Determining contig order for:",ref
+            logging.info("Determining contig order for: %s"%ref)
             ref2ctg[ref].sort(key= lambda c: c[3]) #sort by start position of chains
             ctgs=ref2ctg[ref]
             frp=0
@@ -1829,6 +1832,7 @@ def bestpath(mems,rc=False):
     #(889051, 1124491, 1113, 2, 1, 1)
     
     maxscore=0
+    
     for mem in mems:
         remove=[]
         for pmem in processed:
@@ -1842,6 +1846,7 @@ def bestpath(mems,rc=False):
         
         best=None
         w=None
+
         for amem in active:
             #calculate score of connecting to active point
             if rc:
@@ -1897,7 +1902,8 @@ def bestpath(mems,rc=False):
 
 def plot(args):
     #from matplotlib import pyplot as plt
-    
+    vertgaps=[]
+    horzgaps=[]
     if len(args.fastas)==2:
         #get mmems for forward orientation
         if sa64:
@@ -1911,7 +1917,7 @@ def plot(args):
                 intv=idx.addsequence(seq.upper())
                 break #expect only one sequence per fasta for now
         idx.construct()
-
+        
         if args.uniq:
             print "Extracting mums..."
             mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength)]
@@ -1939,7 +1945,14 @@ def plot(args):
         idx.addsample(sample)
         ls=0
         for name,seq in fasta_reader(sample,truncN=False):
-            vertgaps=[i for i,c in enumerate(seq) if c=='N']
+            pc=None
+            for i,c in enumerate(seq):
+                if c=='N' and (pc!='N' and pc!=None):
+                    vertgaps.append(i)
+                elif pc=='N' and c!='N':
+                    vertgaps.append(i)
+                pc=c
+            #vertgaps=[i for i,c in enumerate(seq) if c=='N']
             ls+=len(seq)
             intv=idx.addsequence(rc(seq.upper()))
             break #expect only one sequence per fasta for now
@@ -1991,6 +2004,14 @@ def plot(args):
     #pos=args.pos
     #dist=args.env
     
+    if args.region!=None:
+        start,end=args.region.split(":")
+        start=int(start)
+        end=int(end)
+    else:
+        start=0
+        end=idx.nsep[0]
+    
     for mem in mmems:
         sps=sorted(mem[2])
         l=mem[0]
@@ -1999,35 +2020,24 @@ def plot(args):
         ep1=sp1+l
         ep2=sp2+l
         
-        #if pos!=None:
-        #    if abs(sp1-pos)>dist:
-        #        continue
-        #    if mem[3]==0 and pos_==None:
-        #        pos_=sp2
-        #    if mem[3]==1 and pos_==None:
-        #        pos_=ls-sp2
-        #    if mem[3]==0 and abs(sp2-pos_)>dist:
-        #        continue
-        #    if mem[3]==1 and abs((ls-sp2)-pos_)>dist:
-        #        continue
-        
-        if mem[3]==0:
-            if args.uniq:
-                plt.plot([sp1,ep1],[sp2,ep2],'r-')
-            else:
-                if mem[4]==0: #non-uniq
-                    plt.plot([sp1,ep1],[sp2,ep2],'y-')
-                else:
+        if sp1>start and ep1<end:
+            if mem[3]==0:
+                if args.uniq:
                     plt.plot([sp1,ep1],[sp2,ep2],'r-')
-        else:
-            if args.uniq: #only uniq matches in the list
-                plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
-            else:
-                if mem[4]==0: #non-uniq
-                    plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'y-')
                 else:
+                    if mem[4]==0: #non-uniq
+                        plt.plot([sp1,ep1],[sp2,ep2],'y-')
+                    else:
+                        plt.plot([sp1,ep1],[sp2,ep2],'r-')
+            else:
+                if args.uniq: #only uniq matches in the list
                     plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
-                    
+                else:
+                    if mem[4]==0: #non-uniq
+                        plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'y-')
+                    else:
+                        plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+     
     lgap=0
     g=0
     for gap in horzgaps:
