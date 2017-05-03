@@ -720,6 +720,7 @@ def main():
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
+    parser_aln.add_argument("-e", dest="exp", type=int, default=2, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
     parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
@@ -761,6 +762,7 @@ def main():
     parser_finish.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
     parser_finish.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
     parser_finish.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
+    parser_finish.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
     parser_finish.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_finish.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
     parser_finish.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
@@ -1202,6 +1204,8 @@ def align_genomes(args):
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
     schemes.minn=args.minn
+    schemes.exp=args.exp
+    
     graph=False
     
     for i,sample in enumerate(args.inputfiles):
@@ -1646,7 +1650,7 @@ def finish(args):
     idx.construct()
     mems=[]
 
-    for mem in idx.getmems(args.minlength) :
+    for mem in idx.getmems(args.minlength):
         refstart=mem[2][0]
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
@@ -1721,9 +1725,10 @@ def finish(args):
     
     ref2ctg=dict()
     
-    logging.info("Mapping contigs to reference.")    
+    logging.info("Mapping contigs to reference.") 
     #for each contig determine the best location on the reference
     for ctg in ctg2mums:
+        logging.info("Determining best chain for: %s"%ctg)
         bestp=[]
         bestscore=0
         bestref=None
@@ -1764,7 +1769,6 @@ def finish(args):
         else:
             ref2ctg[bestref]=[(ctg,revcomp,bestp,begin,end,contig2length[ctg])]
     
-    
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
     with open(resbase+".fasta",'w') as finished:
         #for each reference chromosome, order the assigned contigs
@@ -1773,17 +1777,19 @@ def finish(args):
             ref2ctg[ref].sort(key= lambda c: c[3]) #sort by start position of chains
             ctgs=ref2ctg[ref]
             frp=0
-            plt.clf()
-            plt.figure(0,figsize=(20,20))
-            ax = plt.axes()
             
-            plt.title(ref)
+            if args.plot:
+                plt.clf()
+                plt.figure(0,figsize=(20,20))
+                ax = plt.axes()
+                plt.title(ref)
+            
             offset=0
             yticks=[]
             yticklabels=[]
             
             finished.write(">%s_%s\n"%(ref,ctg))
-
+            
             for ctg,revcomp,path,begin,end,ctglength in ctgs:
 
                 if end<frp:
@@ -1792,22 +1798,23 @@ def finish(args):
                 else:
                     frp=end
                 
-                for mem in ctg2mums[ctg][ref]:
+                if args.plot:
+                    for mem in ctg2mums[ctg][ref]:
+                        if revcomp:
+                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-')
+                        else:
+                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-')
+                    
                     if revcomp:
-                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-')
+                        for mem in path:
+                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-',linewidth=2)
                     else:
-                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-')
-                
-                if revcomp:
-                    for mem in path:
-                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-',linewidth=2)
-                else:
-                    for mem in path:
-                        ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
-                ax.axhline(offset+ctglength)
-                offset=offset+ctglength
-                yticks.append(offset)
-                yticklabels.append(ctg[0:20])
+                        for mem in path:
+                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
+                    ax.axhline(offset+ctglength)
+                    offset=offset+ctglength
+                    yticks.append(offset)
+                    yticklabels.append(ctg[0:20])
                 
                 if revcomp:
                     finished.write(rc(contig2seq[ctg]))
@@ -1816,9 +1823,11 @@ def finish(args):
                 finished.write("N")
             
             finished.write("\n")
-            ax.set_yticks(yticks)
-            ax.set_yticklabels(yticklabels)
-            plt.savefig(resbase+"_"+ref.split()[0]+".png")
+
+            if args.plot:
+                ax.set_yticks(yticks)
+                ax.set_yticklabels(yticklabels)
+                plt.savefig(resbase+"_"+ref.split()[0]+".png")
 
 def bestpath(mems,rc=False):
     mems.sort(key=lambda mem: mem[0]) #sort by reference position
@@ -2072,8 +2081,10 @@ def plot(args):
     if args.interactive:
         plt.show()
     else:
-        fn1=args.fastas[0][0:args.fastas[0].rfind('.')] if args.fastas[0].find('.')!=-1 else args.fastas[0]
-        fn2=args.fastas[1][0:args.fastas[1].rfind('.')] if args.fastas[1].find('.')!=-1 else args.fastas[1]
+        b1=os.path.basename(args.fastas[0])
+        b2=os.path.basename(args.fastas[1])
+        fn1=b1[0:args.fastas[0].rfind('.')] if b1.find('.')!=-1 else b1
+        fn2=b2[0:args.fastas[1].rfind('.')] if b2.find('.')!=-1 else b2
         plt.savefig(fn1+"_"+fn2+".png")
 
 
