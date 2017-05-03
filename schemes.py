@@ -18,6 +18,7 @@ ts=IntervalTree()
 G=nx.DiGraph()
 wscore=1
 wpen=1
+exp=2
 
 def multimumpicker(multimums,idx):
     try:
@@ -46,18 +47,17 @@ def multimumpicker(multimums,idx):
             
             spenalty=sum([abs(p-ads) for p in ds])
             epenalty=sum([abs(p-ade) for p in de])
-            
             penalty=min([spenalty,epenalty])
             
             if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                score=int(math.log(l)*n)
-                #score= (wscore*(l*(n**2)))
+                score=(wscore*(l*(n**exp)))
             else:
-                #score= (wscore*(l*(n**2))) - (wpen*penalty)
-                if l-(wpen*penalty)<=0:
+                penalty=((wpen*penalty)**(.5))
+                score=(wscore*(l*(n**exp)))
+                if penalty>score:
                     score=minscore
                 else:
-                    score=int(math.log(l-(wpen*penalty))*n)
+                    score=score-penalty
             
             if score<minscore:
                 if trace:
@@ -107,7 +107,6 @@ def graphmumpicker(mums,idx,penalize=True):
             rightoffsets=G.node[idx.right]['offsets']
         
         for mum in mums:
-
             l,n,sp=mum
             
             if l<minlength:
@@ -163,7 +162,7 @@ def graphmumpicker(mums,idx,penalize=True):
             else:
                 penalty=0
             
-            score=(wscore*(l*n))-((wpen*penalty)**(.5))
+            score=(wscore*(l*(n**exp)))-((wpen*penalty)**(.5))
             #score=(wscore*(l*n))-(wpen*penalty)
             #score=int(math.log(l-(wpen*penalty))*n)
             
