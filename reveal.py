@@ -763,6 +763,7 @@ def main():
     parser_finish.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
     parser_finish.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
     parser_finish.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
+    parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Use fixed gapsizes of 100 N.")
     parser_finish.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_finish.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
     parser_finish.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
@@ -1756,18 +1757,22 @@ def finish(args):
         if bestp==[]:
             continue
         
-        begin=bestp[-1][0] #bestp[-1][0][0]
-        end=bestp[0][0]+bestp[0][2] #bestp[0][0][0]
-        alength=end-begin
+        refbegin=bestp[-1][0] #bestp[-1][0][0]
+        refend=bestp[0][0]+bestp[0][2] #bestp[0][0][0]
+        
+        ctgbegin=bestp[-1][1]
+        ctgend=bestp[0][1]+bestp[0][2]
+        
+        alength=refend-refbegin
 
         score=bestscore
         chaincov=sum([m[2] for m in bestp])
         chainlength=len(bestp)
          
         if bestref in ref2ctg:
-            ref2ctg[bestref].append((ctg,revcomp,bestp,begin,end,contig2length[ctg]))
+            ref2ctg[bestref].append((ctg,revcomp,bestp,refbegin,refend,ctgbegin,ctgend,contig2length[ctg]))
         else:
-            ref2ctg[bestref]=[(ctg,revcomp,bestp,begin,end,contig2length[ctg])]
+            ref2ctg[bestref]=[(ctg,revcomp,bestp,refbegin,refend,ctgbegin,ctgend,contig2length[ctg])]
     
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
     with open(resbase+".fasta",'w') as finished:
@@ -1790,13 +1795,24 @@ def finish(args):
             
             finished.write(">%s_%s\n"%(ref,ctg))
             
-            for ctg,revcomp,path,begin,end,ctglength in ctgs:
-
-                if end<frp:
+            for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
+                 
+                if revcomp:
+                    gapsize=refbegin-(offset+ctgend)
+                else:
+                    gapsize=refbegin-(offset+ctgbegin)
+                
+                if gapsize>0 and not args.fixedsize:
+                    for i in range(gapsize):
+                        finished.write("N")
+                else:
+                    finished.write("N"*1)
+                
+                if refend<frp:
                     logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
                     continue
                 else:
-                    frp=end
+                    frp=refend
                 
                 if args.plot:
                     for mem in ctg2mums[ctg][ref]:
@@ -1812,15 +1828,15 @@ def finish(args):
                         for mem in path:
                             ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
                     ax.axhline(offset+ctglength)
-                    offset=offset+ctglength
-                    yticks.append(offset)
-                    yticklabels.append(ctg[0:20])
+                
+                offset=offset+gapsize+ctglength
+                yticks.append(offset)
+                yticklabels.append(ctg[0:20])
                 
                 if revcomp:
                     finished.write(rc(contig2seq[ctg]))
                 else:
                     finished.write(contig2seq[ctg])
-                finished.write("N")
             
             finished.write("\n")
 
