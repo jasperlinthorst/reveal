@@ -1734,9 +1734,11 @@ def finish(args):
         bestscore=0
         bestref=None
         for ref in ctg2mums[ctg]:
+            logging.debug("Checking %s"%ref)
+            
             mems=ctg2mums[ctg][ref]
             #determine optimal chain of mems
-            path,score=bestpath(mems)
+            path,score=bestpath(mems,contig2length[ctg])
             if score>bestscore:
                 bestscore=score
                 bestp=path
@@ -1745,7 +1747,7 @@ def finish(args):
                 bestmems=mems
             
             #determine optimal chain of mems in reverse complement
-            rpath,rscore=bestpath(mems,rc=True)
+            rpath,rscore=bestpath(mems,contig2length[ctg],rc=True)
             
             if rscore>bestscore:
                 bestscore=rscore
@@ -1795,8 +1797,9 @@ def finish(args):
             
             finished.write(">%s_%s\n"%(ref,ctg))
             
+            i=0
             for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
-                 
+                
                 if revcomp:
                     gapsize=refbegin-(offset+ctgend)
                 else:
@@ -1833,6 +1836,9 @@ def finish(args):
                 yticks.append(offset)
                 yticklabels.append(ctg[0:20])
                 
+                logging.info("%d - Contig (revcomp=%d): %s"%(i,revcomp,ctg))
+                i+=1
+                
                 if revcomp:
                     finished.write(rc(contig2seq[ctg]))
                 else:
@@ -1845,7 +1851,18 @@ def finish(args):
                 ax.set_yticklabels(yticklabels)
                 plt.savefig(resbase+"_"+ref.split()[0]+".png")
 
-def bestpath(mems,rc=False):
+def bestpath(mems,ctglength,n=10000,rc=False):
+    
+    if len(mems)>n: #take only n largest mems
+        mems.sort(key=lambda mem: mem[2]) #sort by size
+        mems=mems[:n]
+    
+    c=sum([m[2] for m in mems])
+    logging.debug("Number of anchors: %d",len(mems))
+    logging.debug("Sum of anchors: %d", c)
+    logging.debug("Length of contig: %d", ctglength)
+    logging.debug("Cov ratio: %s"% (c/float(ctglength)) )
+    
     mems.sort(key=lambda mem: mem[0]) #sort by reference position
     init=(None, None, 0, 0, 0, 0)
     link=dict()
