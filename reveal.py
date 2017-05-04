@@ -1806,7 +1806,7 @@ def finish(args):
                     for i in range(gapsize):
                         finished.write("N")
                 else:
-                    finished.write("N"*1)
+                    finished.write("N"*100)
                 
                 if refend<frp:
                     logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
