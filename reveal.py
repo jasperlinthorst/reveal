@@ -1806,7 +1806,7 @@ def finish(args):
                     gapsize=refbegin-(offset+ctgbegin)
                 
                 if gapsize>0 and not args.fixedsize:
-                    for i in range(gapsize):
+                    for i in xrange(gapsize):
                         finished.write("N")
                 else:
                     finished.write("N"*100)
@@ -1830,7 +1830,8 @@ def finish(args):
                     else:
                         for mem in path:
                             ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
-                    ax.axhline(offset+ctglength)
+                    
+                    ax.axhline(offset+gapsize+ctglength)
                 
                 offset=offset+gapsize+ctglength
                 yticks.append(offset)
