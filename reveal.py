@@ -15,6 +15,7 @@ import time
 
 try:
     from matplotlib import pyplot as plt
+    from matplotlib import patches as patches
 except:
     pass
 
@@ -762,7 +763,10 @@ def main():
     parser_finish.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
     parser_finish.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')
     parser_finish.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
+    parser_finish.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
     parser_finish.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
+    parser_finish.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
+    parser_finish.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
     parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Use fixed gapsizes of 100 N.")
     parser_finish.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_finish.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
@@ -1470,12 +1474,14 @@ def matches(args):
     reffile=os.path.basename(args.reference)
     ctgfile=os.path.basename(args.contigs)
     
+    ref2length=dict()
     idx.addsample(reffile)
     if args.reference.endswith(".gfa"):
         read_gfa(args.reference,idx,t,G)
     else:
         G.graph['samples'].append(reffile)
         for name,seq in fasta_reader(args.reference):
+            ref2length[name]=len(seq)
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
@@ -1593,12 +1599,14 @@ def finish(args):
     reffile=os.path.basename(args.reference)
     ctgfile=os.path.basename(args.contigs)
     
+    ref2length=dict()
     idx.addsample(reffile)
     if args.reference.endswith(".gfa"):
         read_gfa(args.reference,idx,t,G)
     else:
         G.graph['samples'].append(reffile)
         for name,seq in fasta_reader(args.reference):
+            ref2length[name]=len(seq)
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
@@ -1762,8 +1770,12 @@ def finish(args):
         refbegin=bestp[-1][0] #bestp[-1][0][0]
         refend=bestp[0][0]+bestp[0][2] #bestp[0][0][0]
         
-        ctgbegin=bestp[-1][1]
-        ctgend=bestp[0][1]+bestp[0][2]
+        if revcomp:
+            ctgbegin=bestp[-1][1]+bestp[-1][2]
+            ctgend=bestp[0][1]
+        else:
+            ctgbegin=bestp[-1][1]
+            ctgend=bestp[0][1]+bestp[0][2]
         
         alength=refend-refbegin
 
@@ -1777,80 +1789,141 @@ def finish(args):
             ref2ctg[bestref]=[(ctg,revcomp,bestp,refbegin,refend,ctgbegin,ctgend,contig2length[ctg])]
     
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
-    with open(resbase+".fasta",'w') as finished:
-        #for each reference chromosome, order the assigned contigs
-        for ref in ref2ctg:
-            logging.info("Determining contig order for: %s"%ref)
-            ref2ctg[ref].sort(key= lambda c: c[3]) #sort by start position of chains
-            ctgs=ref2ctg[ref]
-            frp=0
+    
+    if not args.split:
+        finished=open(resbase+".fasta",'w')
+    
+    #for each reference chromosome, order the assigned contigs
+    for ref in ref2ctg:
+        if args.split:
+            finished=open(resbase+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
+        
+        logging.info("Determining contig order for: %s"%ref)
+        ref2ctg[ref].sort(key=lambda c: (c[3],c[3]-c[4])) #sort by start position of chains, then by length of the chain
+        ctgs=ref2ctg[ref]
+        frp=0
+        if args.plot:
+            plt.clf()
+            plt.figure(0,figsize=(20,20))
+            ax = plt.axes()
+            plt.title(ref)
+        
+        coffset=0
+        roffset=0
+        yticks=[]
+        yticklabels=[]
+        
+        finished.write(">%s_%s\n"%(ref,ctg))
+        
+        i=0
+        pctg="start"
+        
+        prefend=0
+        pctgend=0
+        pctgbegin=0
+        prevcomp=False
+        for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
+            
+            if refend<=frp:
+                logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
+                continue
+            else:
+                frp=refend
+            
+            a=refbegin-prefend
+            b=0
+            if revcomp:
+                assert(ctgend<ctgbegin)
+                if prevcomp:
+                    assert(pctgend<=pctgbegin)
+                    b=((coffset-pctgbegin)+ctgend)
+                    gapsize=(refbegin-prefend)-b
+                else:
+                    assert(pctgend>=pctgbegin)
+                    b=((coffset-pctgend)+ctgend)
+                    gapsize=(refbegin-prefend)-b
+            else:
+                assert(ctgend>ctgbegin)
+                if prevcomp:
+                    assert(pctgend<=pctgbegin)
+                    b=((coffset-pctgbegin)+ctgbegin)
+                    gapsize=(refbegin-prefend)-b                        
+                else:
+                    assert(pctgend>=pctgbegin)
+                    b=((coffset-pctgend)+ctgbegin)
+                    gapsize=(refbegin-prefend)-b
+            
+            logging.debug("coffset=%d, pctgend=%d, pctgbegin=%d, ctgbegin=%d, ctgend=%d"%(coffset,pctgend,pctgbegin,ctgbegin,ctgend))
+            logging.info("Estimated gap size between %s and %s is %d (%d,%d)."%(pctg,ctg,gapsize,a,b))
+            
+            if gapsize>0 and not args.fixedsize:
+                for x in xrange(gapsize):
+                    finished.write("N")
+            else:
+                gapsize=100
+                finished.write("N"*gapsize)
             
             if args.plot:
-                plt.clf()
-                plt.figure(0,figsize=(20,20))
-                ax = plt.axes()
-                plt.title(ref)
-            
-            offset=0
-            yticks=[]
-            yticklabels=[]
-            
-            finished.write(">%s_%s\n"%(ref,ctg))
-            
-            i=0
-            for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
+                ax.add_patch(
+                    patches.Rectangle(
+                        (0, coffset),
+                        ref2length[ref],
+                        gapsize,
+                        alpha=.25
+                    )
+                )
                 
-                if revcomp:
-                    gapsize=refbegin-(offset+ctgend)
-                else:
-                    gapsize=refbegin-(offset+ctgbegin)
-                
-                if gapsize>0 and not args.fixedsize:
-                    for i in xrange(gapsize):
-                        finished.write("N")
-                else:
-                    finished.write("N"*100)
-                
-                if refend<frp:
-                    logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
-                    continue
-                else:
-                    frp=refend
-                
-                if args.plot:
+                #ax.axhline(offset+gapsize)
+                if args.plotall:
                     for mem in ctg2mums[ctg][ref]:
                         if revcomp:
-                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-')
+                            ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1]+mem[2],coffset+gapsize+mem[1]],'g:')
                         else:
-                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-')
-                    
-                    if revcomp:
-                        for mem in path:
-                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1]+mem[2],offset+mem[1]],'g-',linewidth=2)
-                    else:
-                        for mem in path:
-                            ax.plot([mem[0],mem[0]+mem[2]],[offset+mem[1],offset+mem[1]+mem[2]],'r-',linewidth=2)
-                    
-                    ax.axhline(offset+gapsize+ctglength)
+                            ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1],coffset+gapsize+mem[1]+mem[2]],'r:')
                 
-                offset=offset+gapsize+ctglength
-                yticks.append(offset)
-                yticklabels.append(ctg[0:20])
-                
-                logging.info("%d - Contig (revcomp=%d): %s"%(i,revcomp,ctg))
-                i+=1
+                ax.plot([refbegin,refend],[ctgbegin+gapsize+coffset,ctgend+gapsize+coffset],'bx')
                 
                 if revcomp:
-                    finished.write(rc(contig2seq[ctg]))
+                    for mem in path:
+                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1]+mem[2],coffset+gapsize+mem[1]],'g-',linewidth=2)
                 else:
-                    finished.write(contig2seq[ctg])
+                    for mem in path:
+                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1],coffset+gapsize+mem[1]+mem[2]],'r-',linewidth=2)
+                #ax.axhline(offset+gapsize+ctglength)
             
-            finished.write("\n")
-
-            if args.plot:
-                ax.set_yticks(yticks)
-                ax.set_yticklabels(yticklabels)
+            pctgend=ctgend+coffset+gapsize
+            pctgbegin=ctgbegin+coffset+gapsize
+            prevcomp=revcomp
+            
+            prefend=refend
+            
+            coffset=coffset+gapsize+ctglength
+            
+            yticks.append(coffset)
+            yticklabels.append(ctg[0:15])
+            
+            logging.info("%d - Contig (revcomp=%d): %s"%(i,revcomp,ctg))
+            i+=1
+            
+            if revcomp:
+                finished.write(rc(contig2seq[ctg]))
+            else:
+                finished.write(contig2seq[ctg])
+            pctg=ctg
+        
+        finished.write("\n")
+        
+        if args.plot:
+            ax.set_yticks(yticks)
+            ax.set_yticklabels(yticklabels)
+            plt.xlim(0,ref2length[ref])
+            if args.interactive:
+                plt.show()
+            else:
                 plt.savefig(resbase+"_"+ref.split()[0]+".png")
+        
+        if args.split:
+            finished.close()
 
 def bestpath(mems,ctglength,n=10000,rc=False):
     
