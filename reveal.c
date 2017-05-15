@@ -856,6 +856,10 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
 /* Alignment Thread */
 void *aligner(void *arg) {
 
+#ifdef REVEALDEBUG
+            time_t t0,t1;
+#endif
+
     RevealWorker *rw = arg;
     PyGILState_STATE gstate;
     RevealIndex * idx;
@@ -910,16 +914,39 @@ void *aligner(void *arg) {
                 }
                 
                 PyObject *multimums;
+
+#ifdef REVEALDEBUG
+                time(&t0);
+                fprintf(stderr,"Extracting mums... ");
+#endif
+               
                 if (((RevealIndex *) idx->main)->nsamples>2){
                     multimums = getmultimums(idx,NULL,NULL);
                 } else {
                     multimums = getmums(idx,NULL,NULL);
                 }
+
+#ifdef REVEALDEBUG
+                time(&t1);
+                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
                  
                 PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
 
+
+
+#ifdef REVEALDEBUG
+                time(&t0);
+                fprintf(stderr,"Selecting best mum (python callback)... ");
+#endif
+
                 PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
-                
+
+#ifdef REVEALDEBUG
+                time(&t1);
+                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
+
                 if (mum==Py_None){
                     //TODO 1: NO MORE MUMS, call prune nodes here!
                     Py_DECREF(idx);
@@ -975,13 +1002,24 @@ void *aligner(void *arg) {
                 Py_DECREF(multimums);
             } else {
 
+
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"Extracting best mum... ");
+#endif
+
                 if (idx->nsamples>2){
                     getbestmultimum(idx, &mmum, idx->nsamples);
                 } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
                     //getlongestmum(idx, &mmum);
                     getbestmum(idx, &mmum, rw->wpen, rw->wscore);
                 }
-                
+
+#ifdef REVEALDEBUG
+            time(&t1);
+            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
+
                 if (mmum.l==0){
                     //TODO 2: NO MORE MUMS, call prune nodes here!
 
@@ -1282,19 +1320,26 @@ void *aligner(void *arg) {
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
             
-	    //fprintf(stderr,"splitting...\n");
+#ifdef REVEALDEBUG
+            time_t t0,t1;
+            time(&t0);
+            fprintf(stderr,"Splitting SA... ");
+#endif
             split(idx, D, i_leading, i_trailing, i_parallel);
-	    //fprintf(stderr,"done.\n");
+#ifdef REVEALDEBUG
+            time(&t1);
+            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
 
-            /*for (i=0; i<trailingn; i++){
-                assert(i_trailing->LCP[i]<i_trailing->n);
-            }
-
-            for (i=0; i<leadingn; i++){
-                assert(i_leading->LCP[i]<i_leading->n);
-            }*/            
- 
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"Bubble sorting leading SA... ");
+#endif
             bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
+#ifdef REVEALDEBUG
+            time(&t1);
+            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
 
             free(D);
             free(mmum.sp);
@@ -1314,6 +1359,19 @@ void *aligner(void *arg) {
             pthread_mutex_lock(&mutex);
             nmums++;
             //add resulting indices to the queue 
+            if (i_parallel->n>0){
+    		     //fprintf(stderr,"push parallel\n");
+                if (!(push_index(i_parallel)==0)){
+                    fprintf(stderr,"Failed to add parallel paths index to queue.\n");
+                    Py_DECREF(i_parallel);
+                    err_flag=1;
+                    pthread_mutex_unlock(&mutex);
+                    break;
+                }
+            } else {
+                Py_DECREF(i_parallel);
+            }
+            
             if (i_leading->n>0){
 		     //fprintf(stderr,"push leading\n");
                 if (!(push_index(i_leading)==0)){
@@ -1326,7 +1384,7 @@ void *aligner(void *arg) {
             } else {
                 Py_DECREF(i_leading);
             }
-
+            
             if (i_trailing->n>0){
 		     //fprintf(stderr,"push trailing\n");
                 if (!(push_index(i_trailing)==0)){
@@ -1338,19 +1396,6 @@ void *aligner(void *arg) {
                 }
             } else {
                 Py_DECREF(i_trailing);
-            }
-            
-            if (i_parallel->n>0){
-    		     //fprintf(stderr,"push parallel\n");
-                if (!(push_index(i_parallel)==0)){
-                    fprintf(stderr,"Failed to add parallel paths index to queue.\n");
-                    Py_DECREF(i_parallel);
-                    err_flag=1;
-                    pthread_mutex_unlock(&mutex);
-                    break;
-                }
-            } else {
-                Py_DECREF(i_parallel);
             }
             
             PyGILState_Release(gstate);
