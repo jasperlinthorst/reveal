@@ -24,12 +24,9 @@ def multimumpicker(multimums,idx):
     try:
         logging.debug("Selecting best out of %d MUMs in multimumpicker."%len(multimums))
         bestmum=None
-        trace=False
         
         for multimum in multimums:
-            #l,n,sp,ni=multimum
             l,n,sp=multimum
-            #sp=sorted(sp)
             if l<minlength:
                 continue
             if n<minn:
@@ -50,18 +47,17 @@ def multimumpicker(multimums,idx):
             penalty=min([spenalty,epenalty])
             
             if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                score=(wscore*(l*(n**exp)))
+                score=int(wscore*(l*(n**exp)))
+                penalty=0
             else:
-                penalty=((wpen*penalty)**(.5))
-                score=(wscore*(l*(n**exp)))
+                penalty=int((wpen*penalty)**(.5))
+                score=int(wscore*(l*(n**exp)))
                 if penalty>score:
                     score=minscore
                 else:
                     score=score-penalty
             
             if score<minscore:
-                if trace:
-                    print "score too low",l,score,n,penalty,epenalty,spenalty
                 continue
             
             if isinstance(sp,tuple):
@@ -73,12 +69,11 @@ def multimumpicker(multimums,idx):
             else:
                 bestmum=(l,idx,n,score,sp,penalty)
             
-            if trace:
-                print bestmum
-            
-        if trace:
-            print bestmum
+        if bestmum!=None:
+            if bestmum[3] > sys.maxint:
+                bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
         
+        logging.debug("Selected %s"%str(bestmum))
         return bestmum
     except:
         print "MULTIMUMPICKER ERROR", sys.exc_info()[0]

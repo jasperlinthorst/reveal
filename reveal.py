@@ -3,7 +3,6 @@
 from intervaltree import Interval, IntervalTree
 import networkx as nx
 from collections import defaultdict, deque
-import threading
 import reveallib
 import reveallib64
 import argparse
@@ -243,27 +242,26 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(l,index,n,score,sp,penalty):
-    
     nodes=index.nodes
     isize=index.n
-    
+
     if len(nodes)==0:
-        logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
+        logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
     
     if l==0:
-        logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
+        logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
     
     if score<schemes.minscore:
-        logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
+        logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
     
     if l<schemes.minlength:
-        logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
+        logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
     
-    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)",l,n,score,penalty,sp,isize)
+    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,isize))
     
     mns=[]
     topop=[]
@@ -286,10 +284,13 @@ def graphalign(l,index,n,score,sp,penalty):
     
     leading,trailing,rest,merged=intervals
     
-    logging.debug("leading intervals: %s"%leading)
-    logging.debug("trailing intervals: %s"%trailing)
-    #logging.debug("parallel intervals: %s"%rest)
-    
+    logging.debug("Number of merged intervals: %d"%len(merged))
+    logging.debug("Number of leading intervals: %d"%len(leading))
+    logging.debug("Number of trailing intervals: %d"%len(trailing))
+    logging.debug("Number of parallel intervals: %d"%len(rest))
+    logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
+    logging.debug("Number of edges in the entire graph: %d"%G.number_of_edges())
+        
     newleft=mn
     newright=mn
     
@@ -721,7 +722,7 @@ def main():
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
-    parser_aln.add_argument("-e", dest="exp", type=int, default=2, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes.")
+    parser_aln.add_argument("-e", dest="exp", type=int, default=2, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (default=2).")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
     parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
@@ -823,6 +824,7 @@ def main():
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
+    logging.logThreads = 0
     
     global sa64
     sa64=args.sa64
@@ -1741,52 +1743,88 @@ def finish(args):
         bestp=[]
         bestscore=0
         bestref=None
+
+        paths=[]
+
         for ref in ctg2mums[ctg]:
             logging.debug("Checking %s"%ref)
             
             mems=ctg2mums[ctg][ref]
             #determine optimal chain of mems
-            path,score=bestpath(mems,contig2length[ctg])
-            if score>bestscore:
-                bestscore=score
-                bestp=path
-                bestref=ref
-                revcomp=False
-                bestmems=mems
+            path,score=bestpath(mems,contig2length[ctg],rc=False)
+            
+            if len(path)>0:
+                refstart=path[-1][0]
+                refend=path[0][0]+path[0][2]
+                ctgstart=path[-1][1]
+                ctgend=path[0][1]+path[0][2]
+                logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
+                
+                paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
+                
+                if score>bestscore:
+                    bestscore=score
+                    bestp=path
+                    bestref=ref
+                    revcomp=False
             
             #determine optimal chain of mems in reverse complement
             rpath,rscore=bestpath(mems,contig2length[ctg],rc=True)
+            if len(rpath)>0:
+                refstart=rpath[-1][0]
+                refend=rpath[0][0]+rpath[0][2]
+                ctgstart=(rpath[-1][1]+rpath[-1][2])
+                ctgend=rpath[0][1]
+                logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
+                
+                paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
+                
+                if rscore>bestscore:
+                    bestscore=rscore
+                    bestp=rpath
+                    bestref=ref
+                    revcomp=True
+        
+        if len(paths)==0:
+            continue
+        
+        paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score
+        
+        #take all paths until ctgstart,end start to overlap...
+        
+        it=IntervalTree()
+        for path in paths:
+            score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
+            if revcomp:
+                ctgstart,ctgend=ctgend,ctgstart
             
-            if rscore>bestscore:
-                bestscore=rscore
-                bestp=rpath
-                bestref=ref
-                revcomp=True
-                bestmems=mems
-            
+            if it[ctgstart:ctgend]==set():
+                it[ctgstart:ctgend]=path
+            else:
+                break
+        
+        if len(it)>1:
+            logging.fatal("Contig %s aligns to %d distinct locations on the reference, probably misassembly!"%(ctg,len(it)))
+        
+        bestscore,ctgstart,ctgend,refstart,refend,bestref,revcomp,bestp=paths[0]
+        
         if bestp==[]:
             continue
         
-        refbegin=bestp[-1][0] #bestp[-1][0][0]
-        refend=bestp[0][0]+bestp[0][2] #bestp[0][0][0]
+        #refbegin=bestp[-1][0]
+        #refend=bestp[0][0]+bestp[0][2]
         
-        if revcomp:
-            ctgbegin=bestp[-1][1]+bestp[-1][2]
-            ctgend=bestp[0][1]
-        else:
-            ctgbegin=bestp[-1][1]
-            ctgend=bestp[0][1]+bestp[0][2]
+        #if revcomp:
+        #    ctgbegin=bestp[-1][1]+bestp[-1][2]
+        #    ctgend=bestp[0][1]
+        #else:
+        #    ctgbegin=bestp[-1][1]
+        #    ctgend=bestp[0][1]+bestp[0][2]
         
-        alength=refend-refbegin
-
-        score=bestscore
-        chaincov=sum([m[2] for m in bestp])
-        chainlength=len(bestp)
-         
         if bestref in ref2ctg:
-            ref2ctg[bestref].append((ctg,revcomp,bestp,refbegin,refend,ctgbegin,ctgend,contig2length[ctg]))
+            ref2ctg[bestref].append((ctg,revcomp,bestp,refstart,refend,ctgstart,ctgend,0,contig2length[ctg]))
         else:
-            ref2ctg[bestref]=[(ctg,revcomp,bestp,refbegin,refend,ctgbegin,ctgend,contig2length[ctg])]
+            ref2ctg[bestref]=[(ctg,revcomp,bestp,refstart,refend,ctgstart,ctgend,0,contig2length[ctg])]
     
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
     
@@ -1822,7 +1860,9 @@ def finish(args):
         pctgend=0
         pctgbegin=0
         prevcomp=False
-        for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
+        for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctgseqstart,ctgseqend in ctgs:
+            
+            ctglength=ctgseqend-ctgseqstart
             
             if refend<=frp:
                 logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
@@ -1931,6 +1971,11 @@ def bestpath(mems,ctglength,n=10000,rc=False):
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
+    mems=[m for m in mems if m[5]==rc]
+    
+    if len(mems)==0:
+        return [],0
+
     c=sum([m[2] for m in mems])
     logging.debug("Number of anchors: %d",len(mems))
     logging.debug("Sum of anchors: %d", c)
@@ -1944,7 +1989,7 @@ def bestpath(mems,ctglength,n=10000,rc=False):
     active=[init]
     processed=[]
     start=init
-    
+    end=None
     #(889051, 1124491, 1113, 2, 1, 1)
     
     maxscore=0
@@ -1962,7 +2007,7 @@ def bestpath(mems,ctglength,n=10000,rc=False):
         
         best=None
         w=None
-
+        
         for amem in active:
             #calculate score of connecting to active point
             if rc:
