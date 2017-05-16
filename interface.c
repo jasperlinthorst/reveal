@@ -13,7 +13,7 @@ static PyObject *RevealError;
 pthread_mutex_t mutex, python;
 
 RevealIndex **index_queue;
-int maxqsize=QUEUE_BUF,qsize=0,qstart=0,aw,nmums,err_flag=0,die=0;
+int maxqsize=QUEUE_BUF,qsize=0,qstart=0,aw,nmums,err_flag=0,die=0,totdealloc=0,totalloc=0;
 
 static PyObject *addsample(RevealIndex *self, PyObject *args)
 {
@@ -383,6 +383,7 @@ reveal_getbestmultimum(RevealIndex *self, PyObject *args, PyObject *keywds)
             PyList_SetItem(sps,i,pos);
         }
         arglist = Py_BuildValue("(i,i,O)", mmum.l, mmum.n, sps);
+        Py_DECREF(sps);
         return arglist;
     } else {
         return NULL;
@@ -405,6 +406,7 @@ static PyMethodDef reveal_methods[] = {
 static int
 reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
 {
+    totalloc++;
     self->T=NULL;
     self->SA=NULL;
     self->LCP=NULL;
@@ -693,9 +695,20 @@ static PyGetSetDef reveal_getseters[] = {
 static void
 reveal_dealloc(RevealIndex *self)
 {
+#ifdef REVEALDEBUG
+    fprintf(stderr,"Dealloc index of size %zd\n",self->n);
+    fprintf(stderr,"Nodes refcount %zd\n",self->nodes->ob_refcnt);
+    fprintf(stderr,"Samples refcount %zd\n",self->samples->ob_refcnt);
+    fprintf(stderr,"Left refcount %zd\n",self->left->ob_refcnt);
+    fprintf(stderr,"Right refcount %zd\n",self->right->ob_refcnt);
+#endif
+    totdealloc=totdealloc+1;
     //fprintf(stderr,"dealloc index %d!\n",self->depth);
     if (self->depth==0){ //only there for the main index
-        //fprintf(stderr,"dealloc MAIN index!\n");
+        
+#ifdef REVEALDEBUG
+        fprintf(stderr,"dealloc MAIN index, total allocated %d, total deallocated: %d\n",totalloc,totdealloc);
+#endif
         if (self->T!=NULL){
             free(self->T);
         }

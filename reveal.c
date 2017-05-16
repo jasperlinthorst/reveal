@@ -10,7 +10,6 @@
 
 /* The mutex lock */
 extern pthread_mutex_t mutex, python;
-
 extern RevealIndex **index_queue;
 extern int maxqsize,qsize,qstart,aw,nmums,err_flag,die;
 
@@ -19,6 +18,9 @@ RevealIndex* pop_index() {
     //fprintf(stderr,"qend=%d qstart=%d qsize=%d\n",qsize,qstart,qsize-qstart);
     //if(qsize > qstart) { FIFO
     if(qsize > 0) { //LIFO
+#ifdef REVEALDEBUG
+        fprintf(stderr,"POPPED: Number of indices left on queue: %d\n",qsize-1);
+#endif
         return index_queue[--qsize]; //LIFO
         //return index_queue[qstart++]; //FIFO
     }
@@ -42,6 +44,10 @@ int push_index(RevealIndex *idx) {
     }
     index_queue[qsize] = idx;
     qsize++;
+
+#ifdef REVEALDEBUG
+    fprintf(stderr,"PUSHED: Number of indices on queue: %d\n",qsize);
+#endif
     return 0;
 }
 
@@ -646,6 +652,8 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                         }
 
                         PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                        Py_DECREF(sp);
+
                         PyList_Append(multimums,multimum);
                         Py_DECREF(multimum);
                     }
@@ -704,6 +712,8 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
                 PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
                 PyList_Append(multimums,multimum);
+                Py_DECREF(sp);
+
                 Py_DECREF(multimum);
             }
         }
@@ -857,7 +867,7 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
 void *aligner(void *arg) {
 
 #ifdef REVEALDEBUG
-            time_t t0,t1;
+    time_t t0,t1;
 #endif
 
     RevealWorker *rw = arg;
@@ -930,11 +940,10 @@ void *aligner(void *arg) {
                 time(&t1);
                 fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
-                 
+                
                 PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
-
-
-
+                Py_DECREF(multimums);
+                
 #ifdef REVEALDEBUG
                 time(&t0);
                 fprintf(stderr,"Selecting best mum (python callback)... ");
@@ -979,7 +988,7 @@ void *aligner(void *arg) {
                 
                 PyObject *sp=NULL;
                 PyObject *tidx=NULL;
-
+                
                 PyArg_ParseTuple(mum,"IOiLOK", &mmum.l, &tidx, &mmum.n, &mmum.score, &sp, &mmum.penalty);
                 
                 for (i=0; i<mmum.n; i++){
@@ -1004,8 +1013,8 @@ void *aligner(void *arg) {
 
 
 #ifdef REVEALDEBUG
-            time(&t0);
-            fprintf(stderr,"Extracting best mum... ");
+                time(&t0);
+                fprintf(stderr,"Extracting best mum... ");
 #endif
 
                 if (idx->nsamples>2){
@@ -1016,8 +1025,8 @@ void *aligner(void *arg) {
                 }
 
 #ifdef REVEALDEBUG
-            time(&t1);
-            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+                time(&t1);
+                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
 
                 if (mmum.l==0){
@@ -1051,6 +1060,7 @@ void *aligner(void *arg) {
                 }
                 
                 arglist = Py_BuildValue("(I,O,i,L,O,K)", mmum.l, idx, mmum.n, mmum.score, sps, mmum.penalty);
+                Py_DECREF(sps);
                 
                 if (arglist==NULL){
                     PyErr_SetString(PyExc_TypeError, "***** Building argument list failed");
@@ -1321,7 +1331,6 @@ void *aligner(void *arg) {
             pthread_mutex_unlock(&python);
             
 #ifdef REVEALDEBUG
-            time_t t0,t1;
             time(&t0);
             fprintf(stderr,"Splitting SA... ");
 #endif
