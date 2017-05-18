@@ -942,7 +942,6 @@ void *aligner(void *arg) {
 #endif
                 
                 PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
-                Py_DECREF(multimums);
                 
 #ifdef REVEALDEBUG
                 time(&t0);
@@ -1115,7 +1114,7 @@ void *aligner(void *arg) {
                 pthread_mutex_unlock(&mutex);
 
                 free(mmum.sp);
-                continue;                
+                continue;
             }
             
             if (!PyArg_ParseTuple(result, "OOOOOO", &leading_intervals, &trailing_intervals, &rest, &merged, &newleft, &newright)){
@@ -1259,7 +1258,6 @@ void *aligner(void *arg) {
             assert(newdepth>0);
             
             assert(leadingn>=0);
-            Py_INCREF(leading_intervals);
             
             //fprintf(stderr,"Allocating leading (%zd nodes) %lld\n", PyList_Size(leading_intervals), leadingn);
             
@@ -1267,6 +1265,7 @@ void *aligner(void *arg) {
             
             i_leading->SA=malloc(leadingn*sizeof(saidx_t));
             i_leading->LCP=malloc(leadingn*sizeof(lcp_t));
+            Py_INCREF(leading_intervals);
             i_leading->nodes=leading_intervals;
             i_leading->depth=newdepth;
             i_leading->n=leadingn;
@@ -1278,18 +1277,16 @@ void *aligner(void *arg) {
             i_leading->main=idx->main;
             Py_INCREF(idx->left);
             i_leading->left=idx->left; //interval that is bounding on the left
-            //Py_INCREF(merged);
-            //i_leading->right=merged; //interval that is bounding on the right
             Py_INCREF(newright);
             i_leading->right=newright; //interval that is bounding on the right
             
             assert(trailingn>=0);
-            Py_INCREF(trailing_intervals);
             //fprintf(stderr,"Allocating trailing (%zd nodes) %llu\n", PyList_Size(trailing_intervals), trailingn);
             RevealIndex *i_trailing=newIndex();
 
             i_trailing->SA=malloc(trailingn*sizeof(saidx_t));
             i_trailing->LCP=malloc(trailingn*sizeof(lcp_t));
+            Py_INCREF(trailing_intervals);
             i_trailing->nodes=trailing_intervals;
             i_trailing->depth=newdepth;
             i_trailing->n=trailingn;
@@ -1299,20 +1296,18 @@ void *aligner(void *arg) {
             i_trailing->nsamples=trailingsamples;
             i_trailing->nsep=idx->nsep;
             i_trailing->main=idx->main;
-            //Py_INCREF(merged);
-            //i_trailing->left=merged; //interval that is bounding on the left
             Py_INCREF(newleft);
             i_trailing->left=newleft; //interval that is bounding on the left
             Py_INCREF(idx->right);
             i_trailing->right=idx->right; //interval that is bounding on the right
 
             assert(parn>=0);
-            Py_INCREF(rest);
             //fprintf(stderr,"Allocating parallel (%zd nodes) %llu %d %d %llu\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
             RevealIndex *i_parallel=newIndex();
             
             i_parallel->SA=malloc(parn*sizeof(saidx_t));
             i_parallel->LCP=malloc(parn*sizeof(lcp_t));
+            Py_INCREF(rest);
             i_parallel->nodes=rest;
             i_parallel->depth=newdepth;
             i_parallel->n=parn;
@@ -1359,7 +1354,7 @@ void *aligner(void *arg) {
                 idx->LCP=NULL;
             }
             
-            pthread_mutex_lock(&python); 
+            pthread_mutex_lock(&python);
             gstate=PyGILState_Ensure();
             
             Py_DECREF(result);
