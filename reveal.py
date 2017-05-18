@@ -12,6 +12,8 @@ import schemes
 import sys
 import time
 
+import gc
+
 try:
     from matplotlib import pyplot as plt
     from matplotlib import patches as patches
@@ -81,11 +83,11 @@ def breaknode(node,pos,l):
     for s in att['offsets']:
         soffsets[s]=att['offsets'][s]+((pos+l)-node.begin)
     
-    G.add_node(mn,sample=att['sample'],offsets=moffsets,aligned=0)#create merge node
+    G.add_node(mn,offsets=moffsets,aligned=0)#create merge node
     
     if (node[0]!=pos):
         pn=Interval(node[0],pos)
-        G.add_node(pn,sample=att['sample'],offsets=att['offsets'],aligned=0)#create prefix node
+        G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
         G.add_edge(pn,mn)
@@ -95,7 +97,7 @@ def breaknode(node,pos,l):
         pn=mn
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
-        G.add_node(sn,sample=att['sample'],offsets=soffsets,aligned=0)#create suffix node
+        G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
         G.add_edge(mn,sn)
@@ -125,7 +127,7 @@ def mergenodes(mns,mark=True):
     ri=0
     if reference!=None:
         for i,node in enumerate(mns):
-            if reference in G.node[node]['sample']:
+            if reference in G.node[node]['offsets'].keys():
                 refnode=node
                 ri=i
                 break
@@ -140,19 +142,17 @@ def mergenodes(mns,mark=True):
         d=G.node[node]
         for sample in d['offsets']:
             if sample in newoffsets:
-                print "Error, merging nodes that originate from the same sample."
+                logging.error("Error, merging nodes that originate from the same sample.")
             assert(sample not in newoffsets)
             newoffsets[sample]=d['offsets'][sample]
     
     G.node[refnode]['offsets']=newoffsets
-    G.node[refnode]['sample']=set.union(*[G.node[node]['sample'] for node in mns])
-    assert(len(G.node[refnode]['sample'])==len(newoffsets))
-
+    assert(len(G.node[refnode]['offsets'])==len(newoffsets))
+    
     if mark:
         o+=1 #increment counter, to be able to keep track of when nodes were aligned 
         G.node[refnode]['aligned']=o
-
-    #mns.remove(refnode)
+    
     tmp=mns.pop(ri)
     assert(tmp==refnode)
     
@@ -164,7 +164,7 @@ def mergenodes(mns,mark=True):
             assert(not G.has_edge(e[1],refnode))
             G.add_edge(refnode,e[1])
         G.remove_node(mn)
-
+    
     return refnode
 
 def bfs(G, source, reverse=False, ignore=set()):
@@ -200,7 +200,6 @@ def segmentgraph(node,nodes):
     reverse_trailing=set()
     reverse_leading=set()
     nodes=set(nodes)
-    trace=False
     
     #forward search
     endpoints=set()
@@ -276,31 +275,31 @@ def graphalign(l,index,n,score,sp,penalty):
         for node in other:
             if isinstance(node,Interval):
                 nodes.append((node.begin,node.end))
+
     mn=mergenodes(mns)
     
     msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
     
     intervals=segmentgraph(mn,nodes)
     
-    leading,trailing,rest,merged=intervals
+    leading,trailing,rest, merged=intervals
     
-    logging.debug("Number of merged intervals: %d"%len(merged))
+    logging.debug("Merged interval: %s"%str(merged))
     logging.debug("Number of leading intervals: %d"%len(leading))
     logging.debug("Number of trailing intervals: %d"%len(trailing))
     logging.debug("Number of parallel intervals: %d"%len(rest))
     logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
-    logging.debug("Number of edges in the entire graph: %d"%G.number_of_edges())
-        
+    
     newleft=mn
     newright=mn
     
     for intv in leading:
-        if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the left
+        if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the left
             newright=index.right
             break
     
     for intv in trailing:
-        if not G.node[Interval(intv[0],intv[1])]['sample'].issubset(msamples): #no clean dissection of all paths on the right
+        if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the right
             newleft=index.left
             break
     
@@ -346,7 +345,6 @@ def prune(node,T,reverse=False):
     return pruned
 
 def prune_nodes(G,T):
-    trace=False
     converged=False
     while not(converged):
         converged=True
@@ -360,8 +358,6 @@ def prune_nodes(G,T):
                         neis=G.successors(node)
                     else:
                         neis=G.predecessors(node)
-                        if trace:
-                            print "predecessors",neis
                     seqs={}
                     for nei in neis:
                         if 'seq' not in G.node[nei]:
@@ -374,9 +370,6 @@ def prune_nodes(G,T):
                             seqs[seq].append(nei)
                         else:
                             seqs[seq]=[nei]
-                    
-                    if trace:
-                        print "seqs",seqs
                     
                     for key in seqs.keys():
                         group=seqs[key]
@@ -392,8 +385,6 @@ def prune_nodes(G,T):
                                         merge=False
                                         break
                             if merge:
-                                if trace:
-                                    print "mergenode",group
                                 mergenodes(group,mark=True)
                                 converged=False
 
@@ -403,6 +394,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     mapping={} #temp mapping object
     edges=[] #tmp list for edges
     id2sample={}
+    sample2id={}
     i=0
     for line in f:
         if line.startswith('H'):
@@ -411,6 +403,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             if tag[0]=="ORI":
                 for sample in tag[2].rstrip(sep).split(sep):
                     id2sample[i]=sample
+                    sample2id[sample]=i
                     i+=1
                     if 'samples' in graph.graph:
                         graph.graph['samples'].append(sample)
@@ -447,12 +440,12 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                             intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                    graph.add_node(intv,sample={gfafile},offsets={gfafile:0},aligned=0)
+                    graph.add_node(intv,offsets={gfafile:0},aligned=0)
                     mapping[nodeid]=intv
                 else:
                     if len(s)<3:
                         s.append("")
-                    graph.add_node(gnodeid,sample={gfafile},offsets={gfafile:0},seq=s[2].upper(),aligned=0)
+                    graph.add_node(gnodeid,offsets={gfafile:0},seq=s[2].upper(),aligned=0)
                     mapping[nodeid]=gnodeid
 
             else: #there are annotations on the nodes, so use them
@@ -472,13 +465,13 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 assert(isinstance(ann['ORI'],set))
                 
                 if len(ann['ORI'])<minsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=gnodeid
                 elif maxsamples!=None and len(ann['ORI'])>maxsamples: #dont index these nodes, just add them to the graph
-                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=gnodeid
                 elif (targetsample!=None and targetsample not in ann['ORI']): #dont index these nodes, just add them to the graph
-                    graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                    graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets=offsets)
                     mapping[nodeid]=gnodeid
                 else:
                     if index!=None:
@@ -488,10 +481,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                             intv=index.addsequence(s[2].upper())
                         intv=Interval(intv[0],intv[1])
                         tree.add(intv)
-                        graph.add_node(intv,sample=ann['ORI'],aligned=0,offsets=offsets)
+                        graph.add_node(intv,aligned=0,offsets=offsets)
                         mapping[nodeid]=intv
                     else:
-                        graph.add_node(gnodeid,sample=ann['ORI'],seq=s[2].upper(),aligned=0,offsets=offsets)
+                        graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets=offsets)
                         mapping[nodeid]=gnodeid
         
         #L      206     +       155     +       0M
@@ -510,15 +503,15 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         for sample in graph.graph['samples']:
             maxp=0
             for node,data in graph.nodes(data=True):
-                if sample in data['offsets']:
-                    if data['offsets'][sample]+ (node[1]-node[0]) >maxp:
-                        maxp=data['offsets'][sample]+(node[1]-node[0])
+                if sample2id[sample] in data['offsets']:
+                    if data['offsets'][sample2id[sample]]+ (node[1]-node[0]) >maxp:
+                        maxp=data['offsets'][sample2id[sample]]+(node[1]-node[0])
             genome2length[sample]=maxp
         
         for sample in graph.graph['samples']:
             for node,data in graph.nodes(data=True):
-                if sample in data['offsets']:
-                    graph.node[node]['offsets'][sample]=genome2length[sample]-(graph.node[node]['offsets'][sample]+(node[1]-node[0]))
+                if sample2id[sample] in data['offsets']:
+                    graph.node[node]['offsets'][sample2id[sample]]=genome2length[sample]-(graph.node[node]['offsets'][sample2id[sample]]+(node[1]-node[0]))
         
         graph.reverse(copy=False)
 
@@ -593,10 +586,11 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
                 f.write('S\t'+str(i)+'\t')
         
         #make a list out of samples and sort by id
-        if 'sample' not in data:
-            print "ERROR",node,data
+        #if 'sample' not in data:
+        #    print "ERROR",node,data
         
-        tmp=list(data['sample'])
+        #tmp=list(data['sample'])
+        tmp=data['offsets'].keys()
         tmp.sort(key=lambda s: sample2id[s])
         data['sample']=tmp
         
@@ -608,9 +602,9 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
         else:
             f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\tRC:i:%s\n" % 
                     (
-                    sep.join([str(sample2id[s]) for s in data['sample']]),
-                    sep.join([str(data['offsets'][s]) for s in data['sample']]),
-                    len(data['sample'])*len(seq)
+                    sep.join([str(sample2id[s]) for s in data['offsets']]),
+                    sep.join([str(data['offsets'][s]) for s in data['offsets']]),
+                    len(data['offsets'])*len(seq)
                     )
                 )
         
@@ -621,7 +615,7 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
         for sample in G.graph['samples']:
             path=[]
             for node in nx.topological_sort(G):
-                if sample in G.node[node]['sample']:
+                if sample in G.node[node]['offsets']:
                     i=mapping[node]
                     path.append(str(i)+"+")
             f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
@@ -640,8 +634,8 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
         mapping[n]=str(n)
         d=G.node[n]
          
-        if 'sample' in d:
-            G.node[n]['n']=len(d['sample'])
+        if 'offsets' in d:
+            G.node[n]['n']=len(d['offsets'])
         
         for key in d:
             v=d[key]
@@ -768,6 +762,7 @@ def main():
     parser_finish.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
     parser_finish.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
     parser_finish.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
+    parser_finish.add_argument("--nofix", dest="fix", action="store_false", default=True, help="Don't attempt to fix misassembled contigs.")
     parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Use fixed gapsizes of 100 N.")
     parser_finish.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_finish.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
@@ -868,7 +863,7 @@ def bubbles_cmd(args):
     for pair,bubblenodes,size,ordD in bubbles(G):
         gt=G.successors(pair[0])
         gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
-        sourcesamples=G.node[pair[0]]['sample']
+        sourcesamples=G.node[pair[0]]['offsets'].keys()
         sucs=set(gt)
         pres=set(G.predecessors(pair[1]))
         sucs.discard(pair[1])
@@ -1046,13 +1041,12 @@ def bubbles(G):
         size=(ordD[pair[1]]-ordD[pair[0]])-1
         bubblenodes=ordD_[ordD[pair[0]]:ordD[pair[1]]+1]
         sourcenode=G.node[pair[0]]
-        sourcesamples=sourcenode['sample']
+        sourcesamples=set(sourcenode['offsets'].keys())
         sinknode=G.node[pair[1]]
-        sinksamples=sinknode['sample']
+        sinksamples=set(sinknode['offsets'].keys())
         
         #TODO: supbub algorithm detects invalid bubbles; filter them out here
         if sourcesamples!=sinksamples:
-            #print "ERROR, skipping invalid bubble"
             continue
         yield pair,bubblenodes,size,ordD
 
@@ -1093,13 +1087,13 @@ def align_seq(s1,s2,minlength=1,minscore=0,minn=2):
     intv=idx.addsequence(s1.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s1"},offsets={"s1":0},aligned=0)
+    G.add_node(Intv,offsets={"s1":0},aligned=0)
 
     idx.addsample("s2")
     intv=idx.addsequence(s2.upper())
     Intv=Interval(intv[0],intv[1])
     t.add(Intv)
-    G.add_node(Intv,sample={"s2"},offsets={"s2":0},aligned=0)
+    G.add_node(Intv,offsets={"s2":0},aligned=0)
     
     schemes.ts=t
     schemes.minlength=minlength
@@ -1144,7 +1138,7 @@ def align_cmd(args):
         totbases=idx.n-totnodes
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)*len(data['sample'])
+                alignedbases+=(node.end-node.begin)*len(data['offsets'])
                 alignednodes+=1
     else: #assume seq to graph
         totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
@@ -1240,7 +1234,7 @@ def align_genomes(args):
                 logging.debug("Adding interval: %s"%str(intv))
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)
+                G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! ...")
@@ -1248,7 +1242,6 @@ def align_genomes(args):
     
     schemes.ts=t
     schemes.G=G
-    
     logging.info("Constructing index...")
     idx.construct()
     
@@ -1303,7 +1296,7 @@ def align_contigs(args):
             intv=idx.addsequence(chrom.upper())
             Intv=Interval(intv[0],intv[1])
             t.add(Intv)
-            G.add_node(Intv,sample={ref},contig={chromname.replace(";","")},coordcontig=chromname.replace(";",""),offsets={ref:0},aligned=0)
+            G.add_node(Intv,contig={chromname.replace(";","")},coordcontig=chromname.replace(";",""),offsets={ref:0},aligned=0)
     
     totbases=idx.n-nx.number_of_nodes(G)
     alignedbases=0
@@ -1315,7 +1308,7 @@ def align_contigs(args):
         intv=idx.addsequence(contig.upper())
         Intv=Interval(intv[0],intv[1])
         t.add(Intv)
-        G.add_node(Intv,sample={contigs},contig={contigname.replace(";","")},coordcontig=contigname.replace(";",""),offsets={contigs:0},aligned=0)
+        G.add_node(Intv,contig={contigname.replace(";","")},coordcontig=contigname.replace(";",""),offsets={contigs:0},aligned=0)
 
     logging.info("Constructing index... (size=%d)"%idx.n)
     idx.construct()
@@ -1346,14 +1339,14 @@ def align_contigs(args):
     for node,data in G.nodes(data=True):
         if isinstance(node,Interval):
             neis=G.neighbors(node)
-            if len(neis)<=1 and data['aligned']==0 and contigs not in data['sample']: #use unconnected and unaligned nodes for next run
+            if len(neis)<=1 and data['aligned']==0 and contigs not in data['offsets']: #use unconnected and unaligned nodes for next run
                 intv=idx.addsequence(T[node.begin:node.end])
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 mapping[node]=Intv
                 continue
             
-            if len(neis)==2 and data['aligned']==0 and contigs not in data['sample']: #also index nodes that connect two alignments
+            if len(neis)==2 and data['aligned']==0 and contigs not in data['offsets']: #also index nodes that connect two alignments
                 if len(nx.all_simple_paths(G, source=neis[0], target=neis[1]))==1 and G.node[neis[0]]['aligned']!=0 and G.node[neis[1]]['aligned']!=0:
                     intv=idx.addsequence(T[node.begin:node.end])
                     Intv=Interval(intv[0],intv[1])
@@ -1405,7 +1398,7 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 G.graph['samples'].append(name)
-                G.add_node(Intv,sample={name},offsets={name:0},aligned=0)
+                G.add_node(Intv,offsets={name:0},aligned=0)
         elif isinstance(aobj,str):
             if not os.path.isfile(aobj):
                 logging.fatal("Not a file, expecting fasta or gfa file.")
@@ -1421,7 +1414,7 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
                         Intv=Interval(intv[0],intv[1])
                         t.add(Intv)
                         G.graph['samples'].append(os.path.basename(sample))
-                        G.add_node(Intv,sample={os.path.basename(sample)},offsets={os.path.basename(sample):0},aligned=0)
+                        G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
     
     #connect all sequence at end and beginning
     if global_align:
@@ -1456,12 +1449,6 @@ def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=F
 
     return G,idx
 
-
-
-
-
-
-
 def matches(args): 
     
     if sa64:
@@ -1487,7 +1474,7 @@ def matches(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={reffile},offsets={reffile:0})
+            G.add_node(intv,offsets={reffile:0})
     
     contig2length=dict()
     idx.addsample(ctgfile)
@@ -1500,7 +1487,7 @@ def matches(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={ctgfile},offsets={ctgfile:0})
+            G.add_node(intv,offsets={ctgfile:0})
     
     #map nodes to connected components in the graph
     refnode2component=dict()
@@ -1514,16 +1501,16 @@ def matches(args):
     ci=0
     for nodes in nx.connected_components(G.to_undirected()):
         nodes=list(nodes)
-        if reffile in G.node[nodes[0]]['sample']:
+        if reffile in G.node[nodes[0]]['offsets']:
             for node in nodes:
-                assert(reffile in G.node[node]['sample']) #check the graph is valid
+                assert(reffile in G.node[node]['offsets']) #check the graph is valid
                 refnode2component[node]=ri
                 component2refnode[ri]=node
             ri+=1
             refcomponents.append(nodes)
         else:
             for node in nodes:
-                assert(ctgfile in G.node[node]['sample']) #check the graph is valid
+                assert(ctgfile in G.node[node]['offsets']) #check the graph is valid
                 ctgnode2component[node]=ci
                 component2ctgnode[ci]=node
             ci+=1
@@ -1543,7 +1530,7 @@ def matches(args):
         cnode=t[ctgstart].pop()
         print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], mem[3], 0)
     
-    logging.info("Indexing reverse complement...\n")
+    logging.debug("Indexing reverse complement...\n")
     
     ### index reverse complement
     if sa64:
@@ -1563,7 +1550,7 @@ def matches(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={reffile},offsets={reffile:0},aligned=0)
+            rcG.add_node(intv,offsets={reffile:0},aligned=0)
             refseq=seq
     
     idx.addsample(ctgfile)
@@ -1575,7 +1562,7 @@ def matches(args):
             intv=idx.addsequence(rc(seq))
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={ctgfile},offsets={ctgfile:0},aligned=0)
+            rcG.add_node(intv,offsets={ctgfile:0},aligned=0)
     
     idx.construct()
     
@@ -1586,7 +1573,6 @@ def matches(args):
         cnode=t[ctgstart].pop()
         l=cnode[1]-cnode[0]
         print "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1)
-
 
 def finish(args):
     if sa64:
@@ -1612,7 +1598,7 @@ def finish(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={reffile},offsets={reffile:0})
+            G.add_node(intv,offsets={reffile:0})
     
     contig2length=dict()
     contig2seq=dict()
@@ -1628,7 +1614,7 @@ def finish(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,sample={ctgfile},offsets={ctgfile:0})
+            G.add_node(intv,offsets={ctgfile:0})
     
     #map nodes to connected components in the graph
     refnode2component=dict()
@@ -1643,16 +1629,16 @@ def finish(args):
     ci=0
     for nodes in nx.connected_components(G.to_undirected()):
         nodes=list(nodes)
-        if reffile in G.node[nodes[0]]['sample']:
+        if reffile in G.node[nodes[0]]['offsets']:
             for node in nodes:
-                assert(reffile in G.node[node]['sample']) #check the graph is valid
+                assert(reffile in G.node[node]['offsets']) #check the graph is valid
                 refnode2component[node]=ri
                 component2refnode[ri]=node
             ri+=1
             refcomponents.append(nodes)
         else:
             for node in nodes:
-                assert(ctgfile in G.node[node]['sample']) #check the graph is valid
+                assert(ctgfile in G.node[node]['offsets']) #check the graph is valid
                 ctgnode2component[node]=ci
                 component2ctgnode[ci]=node
             ci+=1
@@ -1688,7 +1674,7 @@ def finish(args):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={reffile},offsets={reffile:0},aligned=0)
+            rcG.add_node(intv,offsets={reffile:0},aligned=0)
             refseq=seq
     
     idx.addsample(ctgfile)
@@ -1700,7 +1686,7 @@ def finish(args):
             intv=idx.addsequence(rc(seq))
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            rcG.add_node(intv,sample={ctgfile},offsets={ctgfile:0},aligned=0)
+            rcG.add_node(intv,offsets={ctgfile:0},aligned=0)
     
     idx.construct()
     
@@ -1715,7 +1701,7 @@ def finish(args):
     #determine best scoring chain per contig
     ctg2mums=dict()
     
-    logging.info("Relating exact matches to contigs...")
+    logging.debug("Relating exact matches to contigs...")
     for mem in mems:
         refchrom, refstart, ctg, ctgstart, l, n, u, o = mem
         refstart=int(refstart)
@@ -1737,21 +1723,16 @@ def finish(args):
     ref2ctg=dict()
     
     logging.info("Mapping contigs to reference.") 
-    #for each contig determine the best location on the reference
+    #for each contig determine the best locations on the reference
     for ctg in ctg2mums:
-        logging.info("Determining best chain for: %s"%ctg)
-        bestp=[]
-        bestscore=0
-        bestref=None
-
+        logging.debug("Determining best chain for: %s"%ctg)
         paths=[]
 
         for ref in ctg2mums[ctg]:
             logging.debug("Checking %s"%ref)
-            
             mems=ctg2mums[ctg][ref]
             #determine optimal chain of mems
-            path,score=bestpath(mems,contig2length[ctg],rc=False)
+            path,score=bestmempath(mems,contig2length[ctg],rc=False)
             
             if len(path)>0:
                 refstart=path[-1][0]
@@ -1759,72 +1740,44 @@ def finish(args):
                 ctgstart=path[-1][1]
                 ctgend=path[0][1]+path[0][2]
                 logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
-                
                 paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
-                
-                if score>bestscore:
-                    bestscore=score
-                    bestp=path
-                    bestref=ref
-                    revcomp=False
-            
+                 
             #determine optimal chain of mems in reverse complement
-            rpath,rscore=bestpath(mems,contig2length[ctg],rc=True)
+            rpath,rscore=bestmempath(mems,contig2length[ctg],rc=True)
             if len(rpath)>0:
                 refstart=rpath[-1][0]
                 refend=rpath[0][0]+rpath[0][2]
                 ctgstart=(rpath[-1][1]+rpath[-1][2])
                 ctgend=rpath[0][1]
                 logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
-                
                 paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
-                
-                if rscore>bestscore:
-                    bestscore=rscore
-                    bestp=rpath
-                    bestref=ref
-                    revcomp=True
         
         if len(paths)==0:
             continue
         
-        paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score
+        paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score in descending order, best first
         
-        #take all paths until ctgstart,end start to overlap...
-        
+        #take the n-best paths that do not overlap
         it=IntervalTree()
         for path in paths:
             score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
             if revcomp:
                 ctgstart,ctgend=ctgend,ctgstart
-            
             if it[ctgstart:ctgend]==set():
                 it[ctgstart:ctgend]=path
             else:
                 break
         
         if len(it)>1:
-            logging.fatal("Contig %s aligns to %d distinct locations on the reference, probably misassembly!"%(ctg,len(it)))
+            logging.warn("Contig (len=%d) %s aligns to %d distinct locations on the reference, probably misassembly!"%(contig2length[ctg],ctg[:30],len(it)))
         
-        bestscore,ctgstart,ctgend,refstart,refend,bestref,revcomp,bestp=paths[0]
-        
-        if bestp==[]:
-            continue
-        
-        #refbegin=bestp[-1][0]
-        #refend=bestp[0][0]+bestp[0][2]
-        
-        #if revcomp:
-        #    ctgbegin=bestp[-1][1]+bestp[-1][2]
-        #    ctgend=bestp[0][1]
-        #else:
-        #    ctgbegin=bestp[-1][1]
-        #    ctgend=bestp[0][1]+bestp[0][2]
-        
-        if bestref in ref2ctg:
-            ref2ctg[bestref].append((ctg,revcomp,bestp,refstart,refend,ctgstart,ctgend,0,contig2length[ctg]))
-        else:
-            ref2ctg[bestref]=[(ctg,revcomp,bestp,refstart,refend,ctgstart,ctgend,0,contig2length[ctg])]
+        for i,p in enumerate(it):
+            start,end,path=p
+            score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
+            if ref in ref2ctg:
+                ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg]))
+            else:
+                ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg])]
     
     resbase=reffile[:reffile.rfind('.')]+"_"+ctgfile[:ctgfile.rfind('.')]
     
@@ -1837,12 +1790,18 @@ def finish(args):
             finished=open(resbase+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
         
         logging.info("Determining contig order for: %s"%ref)
-        ref2ctg[ref].sort(key=lambda c: (c[3],c[3]-c[4])) #sort by start position of chains, then by length of the chain
+        
+        ref2ctg[ref].sort(key=lambda c: c[4]) #sort by ref start position of chains
         ctgs=ref2ctg[ref]
+        
+        ctgs=bestctgpath(ctgs)
+        
+        #TODO: output statistics on number and sequence content of unplaced contigs
+        
         frp=0
         if args.plot:
             plt.clf()
-            plt.figure(0,figsize=(20,20))
+            plt.figure(0,figsize=(15,15))
             ax = plt.axes()
             plt.title(ref)
         
@@ -1860,60 +1819,49 @@ def finish(args):
         pctgend=0
         pctgbegin=0
         prevcomp=False
-        for ctg,revcomp,path,refbegin,refend,ctgbegin,ctgend,ctgseqstart,ctgseqend in ctgs:
+        
+        for ctg,revcomp,path,score,refbegin,refend,ctgbegin,ctgend,ctglength in ctgs:
             
-            ctglength=ctgseqend-ctgseqstart
+            if revcomp:
+                ctgbegin,ctgend=ctgend,ctgbegin
+            
+            alength=ctgend-ctgbegin
+            assert(alength>0)
+            
+            if args.fix:
+                reloffset=ctgbegin
+            else:
+                reloffset=0
             
             if refend<=frp:
-                logging.info("skipping contained contig %s with length %d"%(ctg,ctglength))
-                continue
+                logging.error("Contained contig should not be in best contig path! %s with alignment length %d"%(ctg,alength))
+                break
             else:
                 frp=refend
             
             a=refbegin-prefend
-            b=0
-            if revcomp:
-                assert(ctgend<ctgbegin)
-                if prevcomp:
-                    assert(pctgend<=pctgbegin)
-                    b=((coffset-pctgbegin)+ctgend)
-                    gapsize=(refbegin-prefend)-b
-                else:
-                    assert(pctgend>=pctgbegin)
-                    b=((coffset-pctgend)+ctgend)
-                    gapsize=(refbegin-prefend)-b
-            else:
-                assert(ctgend>ctgbegin)
-                if prevcomp:
-                    assert(pctgend<=pctgbegin)
-                    b=((coffset-pctgbegin)+ctgbegin)
-                    gapsize=(refbegin-prefend)-b                        
-                else:
-                    assert(pctgend>=pctgbegin)
-                    b=((coffset-pctgend)+ctgbegin)
-                    gapsize=(refbegin-prefend)-b
+            b=coffset-pctgend
+            gapsize=a-b
             
             logging.debug("coffset=%d, pctgend=%d, pctgbegin=%d, ctgbegin=%d, ctgend=%d"%(coffset,pctgend,pctgbegin,ctgbegin,ctgend))
-            logging.info("Estimated gap size between %s and %s is %d (%d,%d)."%(pctg,ctg,gapsize,a,b))
+            logging.debug("Estimated gap size between %s and %s is %d (%d,%d)."%(pctg,ctg,gapsize,a,b))
             
-            if gapsize>0 and not args.fixedsize:
-                for x in xrange(gapsize):
-                    finished.write("N")
-            else:
+            if gapsize<0 or args.fixedsize:
                 gapsize=100
-                finished.write("N"*gapsize)
+            
+            finished.write("N"*gapsize)
             
             if args.plot:
+                plt.axhline(coffset)
                 ax.add_patch(
                     patches.Rectangle(
-                        (0, coffset),
-                        ref2length[ref],
-                        gapsize,
+                        (0, coffset), #bottom left
+                        ref2length[ref], #width
+                        gapsize, #height
                         alpha=.25
                     )
                 )
                 
-                #ax.axhline(offset+gapsize)
                 if args.plotall:
                     for mem in ctg2mums[ctg][ref]:
                         if revcomp:
@@ -1921,23 +1869,26 @@ def finish(args):
                         else:
                             ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1],coffset+gapsize+mem[1]+mem[2]],'r:')
                 
-                ax.plot([refbegin,refend],[ctgbegin+gapsize+coffset,ctgend+gapsize+coffset],'bx')
+                if revcomp:
+                    ax.plot([refbegin,refend],[ctgend+gapsize+coffset-reloffset,ctgbegin+gapsize+coffset-reloffset],'bx')
+                else:
+                    ax.plot([refbegin,refend],[ctgbegin+gapsize+coffset-reloffset,ctgend+gapsize+coffset-reloffset],'bx')
                 
                 if revcomp:
                     for mem in path:
-                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1]+mem[2],coffset+gapsize+mem[1]],'g-',linewidth=2)
+                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1]+mem[2]-reloffset,coffset+gapsize+mem[1]-reloffset],'g-',linewidth=2)
                 else:
                     for mem in path:
-                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1],coffset+gapsize+mem[1]+mem[2]],'r-',linewidth=2)
-                #ax.axhline(offset+gapsize+ctglength)
+                        ax.plot([mem[0],mem[0]+mem[2]],[coffset+gapsize+mem[1]-reloffset,coffset+gapsize+mem[1]+mem[2]-reloffset],'r-',linewidth=2)
             
-            pctgend=ctgend+coffset+gapsize
-            pctgbegin=ctgbegin+coffset+gapsize
+            pctgend=ctgend-reloffset+coffset+gapsize
             prevcomp=revcomp
-            
             prefend=refend
             
-            coffset=coffset+gapsize+ctglength
+            if args.fix:
+                coffset=coffset+gapsize+alength #use the length of the aligned chain
+            else:
+                coffset=coffset+gapsize+ctglength #use the length of the entire contig
             
             yticks.append(coffset)
             yticklabels.append(ctg[0:15])
@@ -1945,10 +1896,17 @@ def finish(args):
             logging.info("%d - Contig (revcomp=%d): %s"%(i,revcomp,ctg))
             i+=1
             
-            if revcomp:
-                finished.write(rc(contig2seq[ctg]))
+            if args.fix:
+                if revcomp:
+                    finished.write(rc(contig2seq[ctg][ctgbegin:ctgend]))
+                else:
+                    finished.write(contig2seq[ctg][ctgbegin:ctgend])
             else:
-                finished.write(contig2seq[ctg])
+                if revcomp:
+                    finished.write(rc(contig2seq[ctg]))
+                else:
+                    finished.write(contig2seq[ctg])
+            
             pctg=ctg
         
         finished.write("\n")
@@ -1965,7 +1923,73 @@ def finish(args):
         if args.split:
             finished.close()
 
-def bestpath(mems,ctglength,n=10000,rc=False):
+def bestctgpath(ctgs,n=10000):
+    
+    start=(0,0,0,0,0,0,0,0,0)
+
+    link=dict() #key is combination of ctgname and orientation, which should be unique for each chromosome
+    score=dict({(0,0):0})
+
+    processed=[]
+    active=[start]
+    maxscore=0
+     
+    for ctg in ctgs:
+        ctgname,revcomp,path,cscore,refbegin,refend,ctgbegin,ctgend,ctglength=ctg
+        print ctgname, cscore, refbegin, refend, refend-refbegin
+        
+        remove=[]
+        for pctg in processed:
+            pctgname,prevcomp,ppath,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength=pctg
+            if prefbegin<refbegin:
+                active.append(pctg)
+                remove.append(pctg)
+        
+        for r in remove:
+            processed.remove(r)
+        
+        best=None
+        w=None
+        
+        for actg in active:
+            #calculate score of connecting to active point
+            actgname,arevcomp,apath,ascore,arefbegin,arefend,actgbegin,actgend,actglength=actg
+            if w==None:
+                w=score[(actg[0],actg[1])]+cscore
+                best=actg
+            else:
+                if arefend>refbegin:
+                    penalty=arefend-refbegin #penalize by the amount of overlap
+                    print ctgname[0:15],actgname[0:15],penalty,arefbegin,arefend,refbegin
+                else:
+                    penalty=0
+                
+                tmpw=score[(actg[0],actg[1])]+cscore-penalty
+                if tmpw>w:
+                    w=tmpw
+                    best=actg
+        
+        assert(best!=None)
+
+        link[(ctg[0],ctg[1])]=best
+        score[(ctg[0],ctg[1])]=w
+        
+        if w>maxscore:
+            maxscore=w
+            end=ctg
+        
+        processed.append(ctg)
+    
+    #backtrack
+    minscore=0
+    path=[]
+    while end[0]!=start[0]:
+        path.append(end)
+        end=link[(end[0],end[1])]
+    
+    return path[::-1]
+
+def bestmempath(mems,ctglength,n=10000,rc=False):
     
     if len(mems)>n: #take only n largest mems
         mems.sort(key=lambda mem: mem[2]) #sort by size
@@ -1989,9 +2013,7 @@ def bestpath(mems,ctglength,n=10000,rc=False):
     active=[init]
     processed=[]
     start=init
-    end=None
-    #(889051, 1124491, 1113, 2, 1, 1)
-    
+    end=None 
     maxscore=0
     
     for mem in mems:
@@ -2059,7 +2081,6 @@ def bestpath(mems,ctglength,n=10000,rc=False):
         maxscore-=score[start]
     
     return path,maxscore
-
 
 def plot(args):
     #from matplotlib import pyplot as plt
@@ -2239,7 +2260,6 @@ def plot(args):
         fn2=b2[0:args.fastas[1].rfind('.')] if b2.find('.')!=-1 else b2
         plt.savefig(fn1+"_"+fn2+".png")
 
-
 def realign_bubble_cmd(args):
     if len(args.graph)<1:
         logging.fatal("Specify a gfa file for which bubbles should be realigned.")
@@ -2267,8 +2287,8 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
 
     assert(source in G)
     assert(sink in G)
-    sourcesamples=G.node[source]['sample']
-    sinksamples=G.node[sink]['sample']
+    sourcesamples=set(G.node[source]['offsets'].keys())
+    sinksamples=set(G.node[sink]['offsets'].keys())
     assert(sourcesamples==sinksamples)
     
     bubblesnodes=[]
@@ -2352,8 +2372,8 @@ def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100):
     
     #detect all complex bubbles
     for pair,bubblenodes,size,ordD in bubbles(G):
-        sourcesamples=G.node[pair[0]]['sample']
-        sinksamples=G.node[pair[1]]['sample']
+        sourcesamples=set(G.node[pair[0]]['offsets'].keys())
+        sinksamples=set(G.node[pair[1]]['offsets'].keys())
 
         if not isinstance(sourcesamples,set):
             print pair,"skipping, not set"
@@ -2495,7 +2515,7 @@ def convert(args):
             i=0
             for name,seq in fasta_reader(graph):
                 g.graph['samples'].append(os.path.basename(graph))
-                g.add_node(i,sample={os.path.basename(graph)},offsets={os.path.basename(graph):0},seq=seq)
+                g.add_node(i,offsets={os.path.basename(graph):0},seq=seq)
                 i+=1
             filename=graph[:graph.rfind(".")]+".gfa"
             write_gfa(g,"", outputfile=filename)
@@ -2535,7 +2555,7 @@ def extract_cmd(args):
 def extract(G,sample):
     sg=[]
     for node,data in G.nodes(data=True):
-        if sample in data['sample']:
+        if sample in data['offsets']:
             sg.append(node)
     for i,contig in enumerate(nx.connected_components(G.subgraph(sg).to_undirected())):
         seq=""
