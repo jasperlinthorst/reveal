@@ -11,10 +11,25 @@ from setuptools import setup, Extension
 
 setup(name="reveal", version="0.1",
         install_requires=['intervaltree','networkx'],
-        scripts = ["reveal.py","schemes.py","utils/falcon2gfa.py","utils/dformat.py"],
+        scripts = ["reveal.py",
+                    "schemes.py",
+                    "finish.py",
+                    "plot.py",
+                    "utils.py",
+                    "merge.py",
+                    "comp.py",
+                    "align.py",
+                    "realign.py",
+                    "bubbles.py",
+                    "extract.py",
+                    "convert.py",
+                    "subgraph.py",
+                    "matches.py",
+                    "utils/falcon2gfa.py",
+                    "utils/dformat.py"],
         ext_modules=[ \
-                #Extension("reveallib", ["reveal.c","interface.c"], libraries=['z','divsufsort','pthread'], define_macros = [('REVEALDEBUG',0)], undef_macros=['NDEBUG'] ), \
-                Extension("reveallib", ["reveal.c","interface.c"], libraries=['z','divsufsort','pthread'], define_macros = [], undef_macros=['NDEBUG'] ), \
+                Extension("reveallib", ["reveal.c","interface.c"], libraries=['z','divsufsort','pthread'], define_macros = [('REVEALDEBUG',0)], undef_macros=['NDEBUG'] ), \
+                #Extension("reveallib", ["reveal.c","interface.c"], libraries=['z','divsufsort','pthread'], define_macros = [], undef_macros=['NDEBUG'] ), \
                 Extension("reveallib64", ["reveal.c","interface.c"], libraries=['z','divsufsort64','pthread'], define_macros = [('SA64',1)], undef_macros=['NDEBUG'] ), \
                 ],
         entry_points = {

@@ -235,9 +235,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
             if (start1<=aStart && end1>=aStart){
                 
                 lpenalty=diff(aStart,start1);
-                //lpenalty= abs( (aStart-start1)-(bStart-start2) ); //leading penalty
                 tpenalty=diff((end1-(aStart+index->LCP[i])),(end2-(bStart+index->LCP[i])));
-                //tpenalty=abs((end1-(aStart+index->LCP[i]))-(end2-(bStart+index->LCP[i]))); //trailing penalty
                 
                 assert(lpenalty>=0);
                 assert(tpenalty>=0);
@@ -251,9 +249,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
             } else {
                 
                 lpenalty=diff((bStart-start1),(aStart-start2));
-                //lpenalty=abs((bStart-start1)-(aStart-start2)); //leading penalty
                 tpenalty=diff((end1-(bStart+index->LCP[i])), (end2-(aStart+index->LCP[i])));
-                //tpenalty=abs((end1-(bStart+index->LCP[i]))-(end2-(aStart+index->LCP[i]))); //trailing penalty
                 
                 assert(lpenalty>=0);
                 assert(tpenalty>=0);
@@ -262,7 +258,6 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
                 } else {
                     penalty=lpenalty;
                 }
-                //penalty=tpenalty+lpenalty;
                 assert(penalty>=0);
             }
         }

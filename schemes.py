@@ -37,21 +37,25 @@ def multimumpicker(multimums,idx):
                 if n==bestmum[2] and l<=bestmum[0]:
                     continue
             
-            ds=[start-ts[start].pop()[0] for start in sp]
-            ads=sum(ds)/n
-            de=[ts[start].pop()[1]-(start+l) for start in sp]
-            ade=sum(de)/n
-            
-            spenalty=sum([abs(p-ads) for p in ds])
-            epenalty=sum([abs(p-ade) for p in de])
-            penalty=min([spenalty,epenalty])
-            
             if idx.depth==0: #no other anchors yet, dont penalize first anchor
                 score=int(wscore*(l*(n**exp)))
                 penalty=0
             else:
-                penalty=int((wpen*penalty)**(.5))
+                
+                if wpen>0:
+                    ds=[start-ts[start].pop()[0] for start in sp]
+                    ads=sum(ds)/n
+                    de=[ts[start].pop()[1]-(start+l) for start in sp]
+                    ade=sum(de)/n
+                    spenalty=sum([abs(p-ads) for p in ds])
+                    epenalty=sum([abs(p-ade) for p in de])
+                    penalty=min([spenalty,epenalty])
+                    penalty=int((wpen*penalty)**(.5))
+                else:
+                    penalty=0
+                
                 score=int(wscore*(l*(n**exp)))
+                
                 if penalty>score:
                     score=minscore
                 else:
@@ -68,7 +72,7 @@ def multimumpicker(multimums,idx):
                     bestmum=(l,idx,n,score,sp,penalty)
             else:
                 bestmum=(l,idx,n,score,sp,penalty)
-            
+        
         if bestmum!=None:
             if bestmum[3] > sys.maxint:
                 bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])

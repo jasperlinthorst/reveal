@@ -697,13 +697,12 @@ reveal_dealloc(RevealIndex *self)
 {
 #ifdef REVEALDEBUG
     fprintf(stderr,"Dealloc index of size %zd\n",self->n);
-    fprintf(stderr,"Nodes refcount %zd\n",self->nodes->ob_refcnt);
-    fprintf(stderr,"Samples refcount %zd\n",self->samples->ob_refcnt);
-    fprintf(stderr,"Left refcount %zd\n",self->left->ob_refcnt);
-    fprintf(stderr,"Right refcount %zd\n",self->right->ob_refcnt);
+    //fprintf(stderr,"Nodes refcount %zd\n",self->nodes->ob_refcnt);
+    //fprintf(stderr,"Samples refcount %zd\n",self->samples->ob_refcnt);
+    //fprintf(stderr,"Left refcount %zd\n",self->left->ob_refcnt);
+    //fprintf(stderr,"Right refcount %zd\n",self->right->ob_refcnt);
 #endif
     totdealloc=totdealloc+1;
-    //fprintf(stderr,"dealloc index %d!\n",self->depth);
     if (self->depth==0){ //only there for the main index
         
 #ifdef REVEALDEBUG
