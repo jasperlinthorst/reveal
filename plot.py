@@ -154,6 +154,8 @@ def plot(args):
     else:
         start=0
         end=idx.nsep[0]
+    
+    del idx
 
     print "Drawing",len(mmems),"matches."
     
@@ -179,15 +181,15 @@ def plot(args):
                         plt.plot([sp1,ep1],[sp2,ep2],'r-')
             else:
                 if args.uniq: #only uniq matches in the list
-                    plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+                    plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'g-')
                 else:
                     if mem[4]==0: #non-uniq
-                        plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'y-')
+                        plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'y-')
                     else:
-                        plt.plot([sp1,ep1],[ls-sp2,ls-ep2],'g-')
+                        plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'g-')
     
     del mmems
-    
+
     for p,l in zip(horzgaps,horzgapsizes):
         ax.add_patch(
             patches.Rectangle(
