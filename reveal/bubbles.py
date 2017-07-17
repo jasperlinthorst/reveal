@@ -10,6 +10,7 @@ def bubbles_cmd(args):
     reference=args.reference
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
+    complexbubblenodes=[]
     
     if 'samples' in G.graph:
         gori=sorted(G.graph['samples'])
@@ -71,12 +72,29 @@ def bubbles_cmd(args):
         
         sys.stdout.write("%d\t%d\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join([str(x) for x in bubblenodes]),ref,pos,",".join(genotypes)))
         
+        if args.exportcomplex and not simple:
+            if args.separate:
+                sg=G.subgraph(bubblenodes)
+                if args.gml:
+                    write_gml(sg,None,outputfile="%s_%s.gml"%(pair[0],pair[1]),partition=False)
+                else:
+                    write_gfa(sg,None,remap=False,outputfile="%s_%s.gfa"%(pair[0],pair[1]))
+            else:
+                complexbubblenodes+=bubblenodes
+        
         for sample in gori:
             if sample in calls:
                 sys.stdout.write("\t%s"%calls[sample])
             else:
                 sys.stdout.write("\t-")
         sys.stdout.write("\n")
+    
+    if args.exportcomplex and not args.separate:
+        sg=G.subgraph(set(complexbubblenodes))
+        if args.gml:
+            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+        else:
+            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
 
 def bubbles(G):
     def entrance(G,v):
