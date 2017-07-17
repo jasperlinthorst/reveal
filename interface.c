@@ -163,7 +163,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
        
     if (self->safile[0]==0){
-        fprintf(stderr,"Sorting suffixes...");
+        //fprintf(stderr,"Sorting suffixes...");
 #ifdef SA64
         if (divsufsort64((const sauchar_t *) self->T, self->SA, self->n)!=0){
 #else
@@ -172,7 +172,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
             PyErr_SetString(RevealError, "divsufsort failed");
             return NULL;
         }
-        fprintf(stderr," Done.\n");
+        //fprintf(stderr," Done.\n");
     } else {
         //read SA from file
         fprintf(stderr,"Reading suffix array from file: %s",self->safile);
@@ -185,11 +185,11 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     
     //fill the inverse array
     saidx_t i;
-    fprintf(stderr,"Filling inverse suffix array...");
+    //fprintf(stderr,"Filling inverse suffix array...");
     for (i=0; i<self->n; i++) {
         self->SAi[self->SA[i]]=i;
     }
-    fprintf(stderr," Done.\n");
+    //fprintf(stderr," Done.\n");
 
     self->LCP=malloc(sizeof(lcp_t)*self->n);
     
@@ -199,9 +199,9 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     }
     
     if (self->lcpfile[0]==0){
-        fprintf(stderr,"Compute LCP...");
+        //fprintf(stderr,"Compute LCP...");
         compute_lcp(self->T, self->SA, self->SAi, self->LCP, self->n);
-        fprintf(stderr," Done.\n");
+        //fprintf(stderr," Done.\n");
     } else {
         //read LCP from file
         fprintf(stderr,"Reading lcp array from file: %s",self->lcpfile);
@@ -606,6 +606,7 @@ reveal_getnsamples(RevealIndex *self, void *closure)
 static PyObject *
 reveal_getsamples(RevealIndex *self, void *closure)
 {
+    Py_INCREF(self->samples);
     return self->samples;
 }
 

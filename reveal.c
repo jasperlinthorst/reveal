@@ -7,6 +7,7 @@
 #include <time.h>
 #include "Python.h"
 #include "reveal.h"
+#include <math.h>
 
 /* The mutex lock */
 extern pthread_mutex_t mutex, python;
@@ -376,7 +377,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
 
     for (i=1;i<index->n;i++){
         
-        if (index->LCP[i]*w_score > mum->score){
+        if ((index->LCP[i]*4*w_score) > mum->score){
             if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
                continue;
             }
@@ -416,42 +417,25 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                     lpenalty=diff((aStart-start1),(bStart-start2));
                     tpenalty=diff((end1-(aStart+index->LCP[i])),(end2-(bStart+index->LCP[i])));
                     
-                    //lpenalty=abs((aStart-start1)-(bStart-start2)); //leading penalty
-                    //tpenalty=abs( (end1-(aStart+index->LCP[i]))-(end2-(bStart+index->LCP[i]))); //trailing penalty
-                    
-                    assert(lpenalty>=0);
-                    assert(tpenalty>=0);
-
                     if (lpenalty>tpenalty){
                         penalty=tpenalty;
                     } else {
                         penalty=lpenalty;
                     }
-                    //penalty=tpenalty+lpenalty;
-                    assert(penalty>=0);
                 } else {
-                    //fprintf(stderr,"lcp=%d bStart=%d, start1=%lld, aStart=%d start2=%lld\n",index->LCP[i],bStart,start1,aStart,start2);
-                    
                     lpenalty=diff((bStart-start1),(aStart-start2));
                     tpenalty=diff((end1-(bStart+index->LCP[i])), (end2-(aStart+index->LCP[i])));
                     
-                    //lpenalty=abs((bStart-start1)-(aStart-start2)); //leading penalty
-                    //tpenalty=abs((end1-(bStart+index->LCP[i]))-(end2-(aStart+index->LCP[i]))); //trailing penalty
-                    
-                    assert(lpenalty>=0);
-                    assert(tpenalty>=0);
                     if (lpenalty>tpenalty){
                         penalty=tpenalty;
                     } else {
                         penalty=lpenalty;
                     }
-                    //penalty=tpenalty+lpenalty;
-                    assert(penalty>=0);
                 }
             }
             
-            score=(w_score*(index->LCP[i]*2))-sqrt(w_penalty*penalty);
-             
+            score=(w_score*(index->LCP[i]*4))-sqrt(w_penalty*penalty); //always pairwise
+            
             if (score > mum->score){
                 mum->score=score;
                 mum->penalty=w_penalty*penalty;
@@ -460,8 +444,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                 mum->sp[1]=bStart;
             }
         }
-    }
-    
+    }    
     return 0;
 }
 
@@ -576,11 +559,9 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
         
         for (j=lb; j<ub; j++){ //check maximal
             if (idx->SA[j]==0){
-
                 return 1; //success
             }
             if (idx->SA[j+1]==0){
-
                 return 1; //success
             }
             if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
@@ -591,13 +572,35 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
     return 0;
 }
 
+int ismultimem(RevealIndex * idx, lcp_t l, int lb, int ub) {
+    if (l>0){
+        int j;
+        
+        for (j=lb; j<ub; j++){ //check maximal
+            if (idx->SA[j]==0){
+                return 1; //success
+            }
+            if (idx->SA[j+1]==0){
+                return 1; //success
+            }
+            if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
+                return 1; //success
+            }
+        }
+    }
+    return 0;
+}
+
+
 PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
     lcp_t minl=0;
 
+    static char *kwlist[] = {"minlength","uniq", NULL};
+    int u=1;
     if (args!=NULL) {
-        if (!PyArg_ParseTuple(args, "i", &minl))        
-            return NULL;
+        if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ii", kwlist, &minl, &u))
+            return NULL;    
     }
     
     PyObject * multimums;
@@ -632,25 +635,46 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             depth--;
             int n=(i_ub-i_lb)+1;
             
-            if (i_lcp>minl){
+            if (i_lcp>=minl){
                 if (n<=main->nsamples){
-                    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                        int x;
-                        PyObject *sp=PyList_New(n);
-                        for (x=0;x<n;x++) {
+                    if (u==1){
+                        if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                            int x;
+                            PyObject *sp=PyList_New(n);
+                            for (x=0;x<n;x++) {
 #ifdef SA64
-                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                                PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
-                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                            PyList_SET_ITEM(sp, x, v);
+                                PyList_SET_ITEM(sp, x, v);
+                            }
+
+                            PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                            Py_DECREF(sp);
+
+                            PyList_Append(multimums,multimum);
+                            Py_DECREF(multimum);
                         }
+                    } else {
+                        if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
+                            int x;
+                            PyObject *sp=PyList_New(n);
+                            for (x=0;x<n;x++) {
+#ifdef SA64
+                                PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+#else
+                                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+#endif
+                                PyList_SET_ITEM(sp, x, v);
+                            }
 
-                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                        Py_DECREF(sp);
+                            PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                            Py_DECREF(sp);
 
-                        PyList_Append(multimums,multimum);
-                        Py_DECREF(multimum);
+                            PyList_Append(multimums,multimum);
+                            Py_DECREF(multimum);
+                        }
                     }
                 }
             }
@@ -692,24 +716,47 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
         depth--;
         
         int n=(i_ub-i_lb)+1;
-        if (n<=main->nsamples){
-            if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                int x;
-                PyObject *sp=PyList_New(n);
-                for (x=0;x<n;x++) {
+        if (i_lcp>=minl){
+            if (n<=main->nsamples){
+                if (u==1) {
+                    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                        int x;
+                        PyObject *sp=PyList_New(n);
+                        for (x=0;x<n;x++) {
 #ifdef SA64
-                    PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
-                    PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                    PyList_SET_ITEM(sp, x, v);
+                            PyList_SET_ITEM(sp, x, v);
+                        }
+
+                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                        PyList_Append(multimums,multimum);
+                        Py_DECREF(sp);
+
+                        Py_DECREF(multimum);
+                    }
+                } else {
+                    if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
+                        int x;
+                        PyObject *sp=PyList_New(n);
+                        for (x=0;x<n;x++) {
+#ifdef SA64
+                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+#else
+                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+#endif
+                            PyList_SET_ITEM(sp, x, v);
+                        }
+
+                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                        PyList_Append(multimums,multimum);
+                        Py_DECREF(sp);
+
+                        Py_DECREF(multimum);
+                    }
                 }
-
-                PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                PyList_Append(multimums,multimum);
-                Py_DECREF(sp);
-
-                Py_DECREF(multimum);
             }
         }
     }
