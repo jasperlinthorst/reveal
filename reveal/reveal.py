@@ -22,6 +22,7 @@ import align
 import realign
 import bubbles
 import matches
+import chain 
 
 def main():
     desc="""
@@ -47,15 +48,16 @@ def main():
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.")
+    parser_chain = subparsers.add_parser('chain', prog="reveal chain", description="Use default chaining scheme to construct GFA graph based on a global multi-alignment of all input genomes.")
     
-    parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta). When only one gfa file is supplied, variants are called within the graph file.')
+    parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
-    parser_aln.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
-    parser_aln.add_argument("-e", dest="exp", type=int, default=2, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (default=2).")
+    parser_aln.add_argument("-n", dest="minn", type=int, default=None, help="Only align graph on exact matches that occur in at least this many samples (default: None, equal to total number of genomes in the (sub)index).")
+    parser_aln.add_argument("-e", dest="exp", type=int, default=None, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (by default equals the number of genomes that are aligned).")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
     parser_aln.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
@@ -83,7 +85,9 @@ def main():
     parser_plot.add_argument('fastas', nargs='*', help='Two fasta files for which a mumplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize (default=100).")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
-    parser_plot.add_argument("-u", dest="uniq", action="store_true", default=False, help="Plot only maximal unique matches.")
+    parser_plot.add_argument("-u", dest="uniq", action="store_true", default=True, help="Plot only maximal unique matches.")
+    parser_plot.add_argument("-e", dest="uniq", action="store_false", default=True, help="Plot all maximal exact matches.")
+    parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
     parser_plot.set_defaults(func=plot.plot)
     
@@ -109,6 +113,9 @@ def main():
     parser_matches.add_argument('reference', help='Graph or sequence to which query/contigs should be assigned.')
     parser_matches.add_argument('contigs', help='Graph or fasta that is to be reverse complemented with respect to the reference.')    
     parser_matches.add_argument("-m", dest="minlength", type=int, default=100, help="Min length of maximal exact matches for considering (default 20).")
+    parser_matches.add_argument("-u", dest="uniq", action="store_true", default=True, help="Output only unique exact matches.")
+    parser_matches.add_argument("-e", dest="uniq", action="store_false", default=True, help="Output all exact matches.")
+    parser_matches.add_argument("--norc", dest="rc", action="store_false", default=True, help="Also output reverse complement matches.")
     parser_matches.add_argument("--cache", dest="cache", default=False, action="store_true", help="When specified, it caches the text, suffix and lcp array to disk after construction.")
     parser_matches.add_argument("--sa1", dest="sa1", default="", help="Specify a preconstructed suffix array for extracting matches between the two genomes in their current orientation.")
     parser_matches.add_argument("--lcp1", dest="lcp1", default="", help="Specify a preconstructed lcp array for extracting matches between the two genomes in their current orientation.")
@@ -132,6 +139,9 @@ def main():
     
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_bubbles.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
+    parser_bubbles.add_argument("-e", dest="exportcomplex", action="store_true", default=False, help="Output complex bubble structures in a separate gfa file.")
+    parser_bubbles.add_argument("-s", dest="separate", action="store_true", default=False, help="Write a seperate gfa file for each complex bubble structure.")
+    parser_bubbles.add_argument("--gml", dest="gml", action="store_true", default=False, help="Output gml instead of gfa.")
     parser_bubbles.set_defaults(func=bubbles.bubbles_cmd)
     
     parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format for which a bubble should be realigned.') 
@@ -149,6 +159,13 @@ def main():
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
     parser_merge.add_argument("-o", dest="outprefix", type=str, default=None, help="Prefix of the file to which merged graph is written.")
     parser_merge.set_defaults(func=merge.merge_cmd)
+    
+    parser_chain.add_argument('fastas', nargs='*', help='Fasta files specifying sequences to be (multi-)aligned into a graph.')
+    parser_chain.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact (multi-)match to consider for chaining (default 15).")
+    parser_chain.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
+    parser_chain.add_argument("-a", dest="maxmums", type=int, default=5000, help="Number of largest mums to use for chaining (default 5000).")
+    parser_chain.add_argument("--recurse", dest="recurse", action="store_true", default=False, help="Use recursive approach to chain gaps.")
+    parser_chain.set_defaults(func=chain.chain_cmd)
     
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
