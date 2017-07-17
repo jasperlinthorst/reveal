@@ -41,57 +41,59 @@ def plot(args):
         
         sep=idx.nsep[0]
         
-        #get mmems for reverse orientation
-        if args.sa64:
-            idx=reveallib64.index()
-        else:
-            idx=reveallib.index()
+        if args.rc:
+
+            #get mmems for reverse orientation
+            if args.sa64:
+                idx=reveallib64.index()
+            else:
+                idx=reveallib.index()
+            
+            sample=args.fastas[0]
+            idx.addsample(sample)
+            for name,seq in fasta_reader(sample,truncN=False):
+                pc=None
+                gapsize=None
+                for i,c in enumerate(seq):
+                    if c=='N' and pc!='N':
+                        horzgaps.append(i)
+                        gapsize=1
+                    elif c=='N' and pc=='N':
+                        gapsize+=1
+                    elif c!='N' and pc=='N':
+                        horzgapsizes.append(gapsize)
+                    pc=c
+                reflength+=len(seq)
+                intv=idx.addsequence(seq.upper())
+                break #expect only one sequence per fasta for now
+            
+            sample=args.fastas[1]
+            idx.addsample(sample)
+            for name,seq in fasta_reader(sample,truncN=False):
+                pc=None
+                gapsize=None
+                for i,c in enumerate(seq):
+                    if c=='N' and pc!='N':
+                        vertgaps.append(i)
+                        gapsize=1
+                    elif c=='N' and pc=='N':
+                        gapsize+=1
+                    elif c!='N' and pc=='N':
+                        vertgapsizes.append(gapsize)
+                    pc=c
+                qrylength+=len(seq)
+                intv=idx.addsequence(rc(seq.upper()))
+                break #expect only one sequence per fasta for now
+            idx.construct()
+            
+            if args.uniq:
+                print "Extracting RC mums..."            
+                mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength)]
+            else:
+                print "Extracting RC mems..."            
+                mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength)]
+            print "done."
         
-        sample=args.fastas[0]
-        idx.addsample(sample)
-        for name,seq in fasta_reader(sample,truncN=False):
-            pc=None
-            gapsize=None
-            for i,c in enumerate(seq):
-                if c=='N' and pc!='N':
-                    horzgaps.append(i)
-                    gapsize=1
-                elif c=='N' and pc=='N':
-                    gapsize+=1
-                elif c!='N' and pc=='N':
-                    horzgapsizes.append(gapsize)
-                pc=c
-            reflength+=len(seq)
-            intv=idx.addsequence(seq.upper())
-            break #expect only one sequence per fasta for now
-        
-        sample=args.fastas[1]
-        idx.addsample(sample)
-        for name,seq in fasta_reader(sample,truncN=False):
-            pc=None
-            gapsize=None
-            for i,c in enumerate(seq):
-                if c=='N' and pc!='N':
-                    vertgaps.append(i)
-                    gapsize=1
-                elif c=='N' and pc=='N':
-                    gapsize+=1
-                elif c!='N' and pc=='N':
-                    vertgapsizes.append(gapsize)
-                pc=c
-            qrylength+=len(seq)
-            intv=idx.addsequence(rc(seq.upper()))
-            break #expect only one sequence per fasta for now
-        idx.construct()
-        
-        if args.uniq:
-            print "Extracting RC mums..."            
-            mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength)]
-        else:
-            print "Extracting RC mems..."            
-            mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength)]
-        print "done."
-    
     elif len(args.fastas)==1:
         
         if args.sa64:
