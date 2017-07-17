@@ -76,12 +76,13 @@ def finish(args):
     idx.construct()
     mems=[]
 
-    for mem in idx.getmems(args.minlength):
+    for mem in idx.getmums(args.minlength):
         refstart=mem[2][0]
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
-        mems.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], mem[3], 0))
+        #mems.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], mem[3], 0))
+        mems.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mem[0], mem[1], 0))
     
     logging.info("Indexing reverse complement...\n")
     
@@ -119,33 +120,38 @@ def finish(args):
     
     idx.construct()
     
-    for mem in idx.getmems(args.minlength):
+    for mem in idx.getmums(args.minlength):
         refstart=mem[2][0]
         ctgstart=mem[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
         l=cnode[1]-cnode[0]
-        mems.append((rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1))
+        #mems.append((rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], mem[3], 1))
+        mems.append((rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mem[0]), mem[0], mem[1], 1))
     
     #determine best scoring chain per contig
     ctg2mums=dict()
     
     logging.debug("Relating exact matches to contigs...")
     for mem in mems:
-        refchrom, refstart, ctg, ctgstart, l, n, u, o = mem
+        #refchrom, refstart, ctg, ctgstart, l, n, u, o = mem
+        refchrom, refstart, ctg, ctgstart, l, n, o = mem
         refstart=int(refstart)
         ctgstart=int(ctgstart)
         l=int(l)
         n=int(n)
-        u=int(u)
+        #u=int(u)
         o=int(o)
         if ctg in ctg2mums:
             if refchrom in ctg2mums[ctg]:
-                ctg2mums[ctg][refchrom].append((refstart,ctgstart,l,n,u,o))
+                #ctg2mums[ctg][refchrom].append((refstart,ctgstart,l,n,u,o))
+                ctg2mums[ctg][refchrom].append((refstart,ctgstart,l,n,o))
             else:
-                ctg2mums[ctg][refchrom]=[(refstart,ctgstart,l,n,u,o)]
+                #ctg2mums[ctg][refchrom]=[(refstart,ctgstart,l,n,u,o)]
+                ctg2mums[ctg][refchrom]=[(refstart,ctgstart,l,n,o)]
         else:
-            ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,u,o)]})
+            #ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,u,o)]})
+            ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,o)]})
 
     logging.info("Done.")
     
@@ -422,7 +428,8 @@ def bestmempath(mems,ctglength,n=10000,rc=False):
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
-    mems=[m for m in mems if m[5]==rc]
+    #mems=[m for m in mems if m[5]==rc]
+    mems=[m for m in mems if m[4]==rc]
     
     if len(mems)==0:
         return [],0
