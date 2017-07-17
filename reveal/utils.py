@@ -200,7 +200,7 @@ def write_fasta(G,T,outputfile="reference.fasta"):
                 logging.warn("No sequence for node: %s"%nodename)
     f.close()
 
-def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
+def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False, remap=True):
     
     if not outputfile.endswith(".gfa"):
         outputfile+=".gfa"
@@ -223,9 +223,13 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
     
     mapping={}
     
-    for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
-        mapping[node]=i+1 #one-based for vg
-    
+    if remap:
+        for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
+            mapping[node]=i+1 #one-based for vg
+    else:
+        for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
+            mapping[node]=node
+
     for i,node in enumerate(nx.topological_sort(G)):
         if isinstance(node,str):
             if node=='start' or node=='end':
@@ -235,30 +239,32 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
         data=G.node[node]
         seq=""
         if 'seq' in data:
-            f.write('S\t'+str(i)+'\t'+data['seq'].upper())
+            #f.write('S\t'+str(i)+'\t'+data['seq'].upper())
+            f.write('S\t'+str(mapping[node])+'\t'+data['seq'].upper())
             seq=data['seq']
         else:
             if isinstance(node,Interval):
-                f.write('S\t'+str(i)+'\t'+T[node.begin:node.end].upper())
                 seq=T[node.begin:node.end].upper()
+                #f.write('S\t'+str(i)+'\t'+seq)
+                f.write('S\t'+str(mapping[node])+'\t'+seq)
+            elif isinstance(node,tuple):
+                seq=T[node[0]:node[0]+G.node[node]['l']].upper()
+                #f.write('S\t'+str(i)+'\t'+seq)
+                f.write('S\t'+str(mapping[node])+'\t'+seq)
             else:
-                f.write('S\t'+str(i)+'\t')
+                #f.write('S\t'+str(i)+'\t')
+                f.write('S\t'+str(mapping[node])+'\t')
         
-        #make a list out of samples and sort by id
-        #if 'sample' not in data:
-        #    print "ERROR",node,data
-        
-        #tmp=list(data['sample'])
-        tmp=data['offsets'].keys()
-        tmp.sort(key=lambda s: sample2id[s])
-        data['sample']=tmp
-        
-        if not isinstance(data['offsets'],dict):
-            print "ERROR offset data:", data['offsets']
-        
-        if nometa:
+        if nometa or 'offsets' not in data:
             f.write("\n")
         else:
+            tmp=data['offsets'].keys()
+            tmp.sort(key=lambda s: sample2id[s])
+            data['sample']=tmp
+            
+            if not isinstance(data['offsets'],dict):
+                print "ERROR offset data:", data['offsets']
+            
             f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\tRC:i:%s\n" % 
                     (
                     sep.join([str(sample2id[s]) for s in data['offsets']]),
@@ -266,7 +272,7 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False):
                     len(data['offsets'])*len(seq)
                     )
                 )
-        
+         
         for to in G[node]:
             f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
     
@@ -292,7 +298,7 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
-         
+        
         if 'offsets' in d:
             G.node[n]['n']=len(d['offsets'])
         
@@ -321,14 +327,15 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
                 if sgn==[]:
                     fr=n
                 sgn.append(n)
-                if G.node[n]['n']==totn: #join/split node
-                    if len(sgn)>=hwm:
-                        sg=G.subgraph(sgn)
-                        fn=outputfile+'.'+str(i)+'.gml'
-                        nx.write_gml(sg,fn)
-                        outputfiles.append(fn)
-                        sgn=[]
-                        i+=1
+                if 'offsets' in G.node[n]:
+                    if len(G.node[n]['offsets'])==totn: #join/split node
+                        if len(sgn)>=hwm:
+                            sg=G.subgraph(sgn)
+                            fn=outputfile+'.'+str(i)+'.gml'
+                            nx.write_gml(sg,fn)
+                            outputfiles.append(fn)
+                            sgn=[]
+                            i+=1
             if len(sgn)>0:
                 sg=G.subgraph(sgn)
                 fn=outputfile+'.'+str(i)+'.gml'
