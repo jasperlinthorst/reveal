@@ -11,25 +11,25 @@ import sys
 import math
 import logging
 
-global minlength, minscore, pcutoff
-minlength=20
-minscore=0
-ts=IntervalTree()
-G=nx.DiGraph()
-wscore=1
-wpen=1
-exp=2
-
 def multimumpicker(multimums,idx):
+    idxn=idx.nsamples
+    if idxn==0:
+        return None
+    
+    if minn==None:
+        lminn=idxn
+    else:
+        lminn=minn
+    
     try:
-        logging.debug("Selecting best out of %d MUMs in multimumpicker."%len(multimums))
+        logging.debug("Selecting best out of %d MUMs in multimumpicker (wpen=%d, wscore=%d, exp=%d, minn=%d ,samples=%d)."%(len(multimums),wpen,wscore,exp,lminn,idxn))
         bestmum=None
         
         for multimum in multimums:
             l,n,sp=multimum
             if l<minlength:
                 continue
-            if n<minn:
+            if n<lminn:
                 continue
             if bestmum!=None:
                 if n<bestmum[2]:
@@ -76,16 +76,31 @@ def multimumpicker(multimums,idx):
         if bestmum!=None:
             if bestmum[3] > sys.maxint:
                 bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
+            if bestmum[2]!=idxn:
+                logging.debug("Branching of group of %d samples out of %s based on match of length %d."%(bestmum[2],idxn,bestmum[0]))
         
         logging.debug("Selected %s"%str(bestmum))
+        
         return bestmum
     except:
         print "MULTIMUMPICKER ERROR", sys.exc_info()[0]
         return None
 
 def graphmumpicker(mums,idx,penalize=True):
+    idxn=idx.nsamples
+    if idxn==0:
+        return None
+     
+    if minn==None:
+        lminn=idxn
+    else:
+        lminn=minn
+    
     try:
-        logging.debug("Selecting best out of %d MUMs in graphmumpicker."%len(mums))
+        logging.debug("Selecting best out of %d MUMs in graphmumpicker (score weight: %d and penalty weight: %d)."%(len(mums),wscore,wpen))
+        if not penalize:
+            logging.debug("Not penalizing MUMs.")
+        
         bestmum=None
         bestn=2
         bestscore=None
@@ -119,7 +134,7 @@ def graphmumpicker(mums,idx,penalize=True):
             n2samples=set(n2data['offsets'].keys())
             n=len(n1samples)+len(n2samples) #make sure we intersect only the paths that we're following
             
-            if n<minn:
+            if n<lminn:
                 continue
             
             if bestmum!=None:
