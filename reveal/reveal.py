@@ -22,7 +22,8 @@ import align
 import realign
 import bubbles
 import matches
-import chain 
+import chain
+import stats
 
 def main():
     desc="""
@@ -49,6 +50,7 @@ def main():
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.")
     parser_chain = subparsers.add_parser('chain', prog="reveal chain", description="Use default chaining scheme to construct GFA graph based on a global multi-alignment of all input genomes.")
+    parser_stats = subparsers.add_parser('stats', prog="reveal stats", description="Output statistics (number of node, edges, genomes etc.) for a graph.")
     
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -154,6 +156,9 @@ def main():
     parser_realign.add_argument("--all", action="store_true", dest="all", default=False, help="Trigger realignment for all complex bubbles.")
     parser_realign.add_argument("--maxlen", dest="maxlen", type=int, default=10000000, help="Maximum length of the cumulative sum of all paths that run through the complex bubble.")
     parser_realign.add_argument("--maxsize", dest="maxsize", type=int, default=500, help="Maximum allowed number of nodes that are contained in a complex bubble.")
+    parser_realign.add_argument("-e", dest="exp", type=int, default=None, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (by default equals the number of genomes that are aligned).")
+    parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
+    parser_realign.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
     
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
@@ -167,7 +172,11 @@ def main():
     parser_chain.add_argument("--recurse", dest="recurse", action="store_true", default=False, help="Use recursive approach to chain gaps.")
     parser_chain.set_defaults(func=chain.chain_cmd)
     
+    parser_stats.add_argument('gfa', nargs=1, help='GFA file for which statistics should be calculated.')
+    parser_stats.set_defaults(func=stats.stats_cmd)
+    
     args = parser.parse_args()
+    
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
     logging.logThreads = 0
     

@@ -1,7 +1,8 @@
-
 from utils import *
 from extract import extract
 from align import align,prune_nodes
+import bubbles
+import schemes
 
 def seq2node(G,T,toupper=True):
     for node in G:
@@ -18,11 +19,14 @@ def realign_bubble_cmd(args):
     
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
+
+    if args.exp==None:
+        args.exp=len(G.graph['samples'])
     
     if args.all:
-        G=realign_all(G,minscore=args.minscore,minlength=args.minlength,minn=args.minn,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
+        G=realign_all(G,minscore=args.minscore,minlength=args.minlength,minn=args.minn,exp=args.exp,wscore=args.wscore,wpen=args.wpen,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
     else:
-        G=realign_bubble(G,args.source,args.sink,minscore=args.minscore,minlength=args.minlength,minn=args.minn,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
+        G=realign_bubble(G,args.source,args.sink,minscore=args.minscore,minlength=args.minlength,minn=args.minn,exp=args.exp,wscore=args.wscore,wpen=args.wpen,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
     
     if args.outfile==None:
         fn=args.graph[0].replace(".gfa",".realigned.gfa")
@@ -31,11 +35,11 @@ def realign_bubble_cmd(args):
     
     write_gfa(G,"",outputfile=fn)
 
-def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxlen=10000000,sa64=False):
+def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxlen=10000000,exp=2,wscore=3,wpen=1,sa64=False):
     #print "Realigning graph between %s and %s"%(source,sink)
     nn=max(G.nodes())+1
     bubblenodes=[]
-
+    
     assert(source in G)
     assert(sink in G)
     sourcesamples=set(G.node[source]['offsets'].keys())
@@ -75,6 +79,9 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
             return G
         #TODO: check that bubbles dont that get too big for multi alignment, put some upper limit!
     
+    schemes.wpen=wpen
+    schemes.wscore=wscore
+    schemes.exp=exp
     ng,idx=align(aobjs,global_align=False,minscore=minscore,minlength=minlength,minn=minn,sa64=sa64)
     T=idx.T
     prune_nodes(ng,T)
@@ -119,13 +126,13 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     
     return G
 
-def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100,sa64=False):
+def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,exp=2,wscore=3,wpen=1,maxsize=100,sa64=False):
     complexbubbles=dict()
     source2sink=dict()
     sink2source=dict()
     
     #detect all complex bubbles
-    for pair,bubblenodes,size,ordD in bubbles(G):
+    for pair,bubblenodes,size,ordD in bubbles.bubbles(G):
         sourcesamples=set(G.node[pair[0]]['offsets'].keys())
         sinksamples=set(G.node[pair[1]]['offsets'].keys())
 
@@ -208,7 +215,7 @@ def realign_all(G,minscore=0,minlength=20,minn=2,maxlen=10000000,maxsize=100,sa6
     i=1
     for source,sink in distinctbubbles:
         #print i,"realigning",source,sink,len(distinctbubbles[(source,sink)])
-        G=realign_bubble(G,source,sink,minscore=minscore,minlength=minlength,minn=minn)
+        G=realign_bubble(G,source,sink,minscore=minscore,minlength=minlength,minn=minn,exp=exp,wscore=wscore,wpen=wpen)
         i+=1
     
     return G
