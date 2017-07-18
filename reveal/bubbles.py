@@ -26,18 +26,7 @@ def bubbles_cmd(args):
         gt=G.successors(pair[0])
         gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
         sourcesamples=set(G.node[pair[0]]['offsets'].keys())
-        sucs=set(gt)
-        pres=set(G.predecessors(pair[1]))
-        sucs.discard(pair[1])
-        pres.discard(pair[0])
-        
-        simple=True
-        for suc in sucs:
-            if len(G.successors(suc))!=1:
-                simple=False
-        for pre in pres:
-            if len(G.predecessors(pre))!=1:
-                simple=False
+        simple=issimple(G,pair[0],pair[1])
 
         #determine genotypes, associate genotype with numerical value
         if len(gt)<size or not simple:
@@ -95,6 +84,21 @@ def bubbles_cmd(args):
             write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
         else:
             write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+
+def issimple(G,source,sink):
+    gt=G.successors(source)
+    sucs=set(gt)
+    pres=set(G.predecessors(sink))
+    sucs.discard(sink)
+    pres.discard(source)
+    simple=True
+    for suc in sucs:
+        if len(G.successors(suc))!=1:
+            simple=False
+    for pre in pres:
+        if len(G.predecessors(pre))!=1:
+            simple=False
+    return simple
 
 def bubbles(G):
     def entrance(G,v):
