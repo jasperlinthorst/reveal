@@ -233,7 +233,12 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
 
 def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True):
     k=idx.nsamples
-    mums=idx.getmultimums(minlength=minlength,uniq=uniq)
+    
+    if k>2:
+        mums=idx.getmultimums(minlength=minlength,uniq=uniq)
+    else:
+        mums=idx.getmums(minlength)
+    
     points=[]
     G=nx.DiGraph()
     localoffsets=tuple([0]+[sep+1 for sep in idx.nsep])
