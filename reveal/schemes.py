@@ -12,6 +12,7 @@ import math
 import logging
 
 def multimumpicker(multimums,idx):
+
     idxn=idx.nsamples
     if idxn==0:
         return None
@@ -22,7 +23,7 @@ def multimumpicker(multimums,idx):
         lminn=minn
     
     try:
-        logging.debug("Selecting best out of %d MUMs in multimumpicker (wpen=%d, wscore=%d, exp=%d, minn=%d ,samples=%d)."%(len(multimums),wpen,wscore,exp,lminn,idxn))
+        logging.debug("Selecting best out of %d MUMs in multimumpicker (wpen=%s, wscore=%s, exp=%s, minn=%s ,samples=%s)."%(len(multimums),wpen,wscore,exp,lminn,idxn))
         bestmum=None
         
         for multimum in multimums:
@@ -82,8 +83,8 @@ def multimumpicker(multimums,idx):
         logging.debug("Selected %s"%str(bestmum))
         
         return bestmum
-    except:
-        print "MULTIMUMPICKER ERROR", sys.exc_info()[0]
+    except Exception as e:
+        print "MULTIMUMPICKER ERROR", e, sys.exc_info()[0]
         return None
 
 def graphmumpicker(mums,idx,penalize=True):
@@ -195,9 +196,9 @@ def graphmumpicker(mums,idx,penalize=True):
     
         logging.debug("Selected: %s\n"%str(bestmum))
         return bestmum
-    except:
-        print "graphmumpicker",n1data['offsets'],len(n1data['offsets']),n2data['offsets'],len(n2data['offsets']),len(nleft['offsets']),len(nright['offsets'])
-        print "GRAPHMUMPICKER ERROR", sys.exc_info()[0]
+    except Exception as e:
+        #print "graphmumpicker",n1data['offsets'],len(n1data['offsets']),n2data['offsets'],len(n2data['offsets']),len(nleft['offsets']),len(nright['offsets'])
+        print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
         return None 
 
 def mindist(x,y):
