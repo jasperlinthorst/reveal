@@ -4,7 +4,7 @@ from intervaltree import Interval, IntervalTree
 import sys
 import os
 
-def fasta_reader(fn,truncN=False):
+def fasta_reader(fn,truncN=False,toupper=True):
     seq=""
     with open(fn,'r') as ff:
         for line in ff:
@@ -24,9 +24,15 @@ def fasta_reader(fn,truncN=False):
                             else:
                                 seq+='N'
                         else:
-                            seq+=base
+                            if toupper:
+                                seq+=base.upper()
+                            else:
+                                seq+=base
                 else:
-                    seq+=line.rstrip()
+                    if toupper:
+                        seq+=line.upper().rstrip()
+                    else:
+                        seq+=line.rstrip()
         if seq!="":
             yield name,seq
 
