@@ -93,8 +93,8 @@ def mergenodes(mns,mark=True):
         d=G.node[node]
         for sample in d['offsets']:
             if sample in newoffsets:
-                logging.error("Error, merging nodes that originate from the same sample.")
-            assert(sample not in newoffsets)
+                logging.warn("WARNING: merging nodes that originate from the same sample: %s in %s."%(sample,str(newoffsets.keys())))
+            #assert(sample not in newoffsets)
             newoffsets[sample]=d['offsets'][sample]
     
     G.node[refnode]['offsets']=newoffsets
@@ -241,6 +241,9 @@ def graphalign(l,index,n,score,sp,penalty):
     logging.debug("Number of parallel intervals: %d"%len(rest))
     logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
     
+    #G.node[mn]['penalty']=penalty
+    #G.node[mn]['score']=score
+    
     newleft=mn
     newright=mn
     
@@ -304,40 +307,41 @@ def prune_nodes(G,T):
                 continue
             
             for run in [0,1]:
-                if data['aligned']!=0:
-                    if run==0:
-                        neis=G.successors(node)
-                    else:
-                        neis=G.predecessors(node)
-                    seqs={}
-                    for nei in neis:
-                        if 'seq' not in G.node[nei]:
-                            if not isinstance(nei,Interval):
-                                continue
-                            seq=T[nei.begin:nei.end]
+                if 'aligned' in data:
+                    if data['aligned']!=0:
+                        if run==0:
+                            neis=G.successors(node)
                         else:
-                            seq=G.node[nei]['seq']
-                        if seq in seqs:
-                            seqs[seq].append(nei)
-                        else:
-                            seqs[seq]=[nei]
-                    
-                    for key in seqs.keys():
-                        group=seqs[key]
-                        if len(group)>1:
-                            merge=True
-                            for v in group:
-                                if run==0:
-                                    if len(G.predecessors(v))>1:
-                                        merge=False
-                                        break
-                                else:
-                                    if len(G.successors(v))>1:
-                                        merge=False
-                                        break
-                            if merge:
-                                mergenodes(group,mark=True)
-                                converged=False
+                            neis=G.predecessors(node)
+                        seqs={}
+                        for nei in neis:
+                            if 'seq' not in G.node[nei]:
+                                if not isinstance(nei,Interval):
+                                    continue
+                                seq=T[nei.begin:nei.end]
+                            else:
+                                seq=G.node[nei]['seq']
+                            if seq in seqs:
+                                seqs[seq].append(nei)
+                            else:
+                                seqs[seq]=[nei]
+                        
+                        for key in seqs.keys():
+                            group=seqs[key]
+                            if len(group)>1:
+                                merge=True
+                                for v in group:
+                                    if run==0:
+                                        if len(G.predecessors(v))>1:
+                                            merge=False
+                                            break
+                                    else:
+                                        if len(G.successors(v))>1:
+                                            merge=False
+                                            break
+                                if merge:
+                                    mergenodes(group,mark=True)
+                                    converged=False
 
 def align_seq(s1,s2,minlength=1,minscore=0,minn=2,sa64=False):
     global t,G,reference,o
@@ -395,11 +399,18 @@ def align_cmd(args):
         except:
             logging.error("Install matplotlib to generate mumplot.")
             sys.exit(1)
-
+    
     G,idx=align_genomes(args)
     
     if args.output==None:
-        args.output="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.inputfiles])
+        pref=[]
+        for f in args.inputfiles:
+            bn=os.path.basename(f)
+            if '.' in bn:
+                pref.append(bn[:bn.find('.')])
+            else:
+                pref.append(bn)
+        args.output="_".join(pref)
     
     logging.info("Merging nodes...")
     T=idx.T
@@ -411,10 +422,10 @@ def align_cmd(args):
     
     alignedbases=0
     alignednodes=0
-    totnodes=nx.number_of_nodes(G)
-
+    
+    totnodes=G.number_of_nodes()
     if idx.nsamples>2: #was multi-alignment
-        totbases=idx.n-totnodes
+        totbases=idx.n-T.count('$') #TODO: inefficient, need a count of the number of nodes before the alignment
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
                 alignedbases+=(node.end-node.begin)*len(data['offsets'])
@@ -483,7 +494,8 @@ def align_genomes(args):
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
     schemes.minn=args.minn
-    schemes.exp=args.exp
+    schemes.wscore=args.wscore
+    schemes.wpen=args.wpen
     
     graph=False
     
@@ -518,6 +530,11 @@ def align_genomes(args):
         logging.error("*** Input is not a DAG! ...")
         return
     
+    if args.exp==None:
+        schemes.exp=len(G.graph['samples'])
+    else:
+        schemes.exp=args.exp
+    
     schemes.ts=t
     schemes.G=G
     logging.info("Constructing index...")
@@ -539,6 +556,7 @@ def align_genomes(args):
         else:
             logging.info("Constructing pairwise-alignment...")
             idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
+            #idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
     
     return G,idx
 
