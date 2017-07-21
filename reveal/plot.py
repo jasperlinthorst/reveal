@@ -8,6 +8,22 @@ try:
 except:
     pass
 
+def gplot(args):
+    G=nx.DiGraph()
+    read_gfa(args.graph,None,None,G)
+    
+    if args.x==None and args.y==None:
+        args.x=G.graph['samples'][0]
+        args.y=G.graph['samples'][1]
+    else:
+        if args.x not in G.graph['samples']:
+            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.x,G.graph['samples']))
+            sys.exit(1)
+        if args.y not in G.graph['samples']:
+            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.y,G.graph['samples']))
+            sys.exit(1)
+    plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
+
 def plot(args):
     #from matplotlib import pyplot as plt
     vertgaps=[]
@@ -149,13 +165,8 @@ def plot(args):
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
     
-    if args.region!=None:
-        start,end=args.region.split(":")
-        start=int(start)
-        end=int(end)
-    else:
-        start=0
-        end=idx.nsep[0]
+    start=0
+    end=idx.nsep[0]
     
     del idx
 
@@ -222,9 +233,9 @@ def plot(args):
     plt.autoscale(enable=False)
     
     if args.region!=None:
-        start,end=args.region.split(":")
-        plt.axvline(x=int(start),linewidth=3,color='b',linestyle='dashed')
-        plt.axvline(x=int(end),linewidth=3,color='b',linestyle='dashed')
+        rstart,rend=args.region.split(":")
+        plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
+        plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
     
     if args.interactive:
         plt.show()

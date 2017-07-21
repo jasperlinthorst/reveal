@@ -377,7 +377,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
 
     for (i=1;i<index->n;i++){
         
-        if ((index->LCP[i]*4*w_score) > mum->score){
+        if ((index->LCP[i]*2*w_score) > mum->score){
             if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
                continue;
             }
@@ -417,24 +417,28 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                     lpenalty=diff((aStart-start1),(bStart-start2));
                     tpenalty=diff((end1-(aStart+index->LCP[i])),(end2-(bStart+index->LCP[i])));
                     
-                    if (lpenalty>tpenalty){
+                    /*if (lpenalty>tpenalty){
                         penalty=tpenalty;
                     } else {
                         penalty=lpenalty;
-                    }
+                    }*/
                 } else {
                     lpenalty=diff((bStart-start1),(aStart-start2));
                     tpenalty=diff((end1-(bStart+index->LCP[i])), (end2-(aStart+index->LCP[i])));
                     
-                    if (lpenalty>tpenalty){
+                    /*if (lpenalty>tpenalty){
                         penalty=tpenalty;
                     } else {
                         penalty=lpenalty;
-                    }
+                    }*/
                 }
+                penalty=lpenalty+tpenalty;
             }
             
-            score=(w_score*(index->LCP[i]*4))-sqrt(w_penalty*penalty); //always pairwise
+            //fprintf(stderr,"mum length: %d score: %lld penalty: %llu\n",index->LCP[i],score,penalty);
+
+            //score=(w_score*(index->LCP[i]*4))-sqrt(w_penalty*penalty); //always pairwise
+            score=(w_score*(index->LCP[i]*2))-(w_penalty*penalty); //always pairwise
             
             if (score > mum->score){
                 mum->score=score;
@@ -444,7 +448,10 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                 mum->sp[1]=bStart;
             }
         }
-    }    
+    }
+
+    //fprintf(stderr,"SELECTED mum length: %d score: %lld penalty: %llu\n",mum->l,mum->score,mum->penalty);
+
     return 0;
 }
 

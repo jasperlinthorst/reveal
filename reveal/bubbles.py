@@ -228,9 +228,7 @@ def bubbles(G):
         sinknode=G.node[pair[1]]
         sinksamples=set(sinknode['offsets'].keys())
         
-        #TODO: supbub algorithm detects invalid bubbles; filter them out here
         if sourcesamples!=sinksamples:
+            logging.warn("Invalid bubble detected between node %s and node %s."%pair)
             continue
         yield pair,bubblenodes,size,ordD
-
-

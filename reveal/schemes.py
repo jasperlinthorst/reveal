@@ -57,13 +57,15 @@ def multimumpicker(multimums,idx):
                 
                 score=int(wscore*(l*(n**exp)))
                 
-                if penalty>score:
-                    score=minscore
-                else:
-                    score=score-penalty
+                if minscore!=None:
+                    if penalty>score:
+                        score=minscore
+                    else:
+                        score=score-penalty
             
-            if score<minscore:
-                continue
+            if minscore!=None:
+                if score<minscore:
+                    continue
             
             if isinstance(sp,tuple):
                 sp=list(sp)
@@ -184,8 +186,9 @@ def graphmumpicker(mums,idx,penalize=True):
             if trace:
                 print l, penalty, score
             
-            if score<minscore:
-                continue
+            if minscore!=None:
+                if score<minscore:
+                    continue
             
             bestmum=(l,idx,2,score,[sp[0],sp[1]],penalty)
             

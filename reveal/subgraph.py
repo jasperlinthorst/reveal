@@ -17,5 +17,5 @@ def subgraph(args):
     if args.gml:
         write_gml(sg,"",outputfile=args.outfile)
     else:
-        write_gfa(sg,"",outputfile=args.outfile)
+        write_gfa(sg,"",outputfile=args.outfile, remap=False)
 

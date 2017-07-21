@@ -52,16 +52,6 @@ def range_search(kdtree, qstart, qend):
             stack.append((tree['left'],depth+1))
     return points
 
-def sumofpairs(pointa,pointb):
-    assert(len(pointa)==len(pointb))
-    
-    D=[pointa[i]-pointb[i] for i in range(len(pointa))]
-    p=0
-    for i in range(len(D)):
-        for j in range(i+1,len(D)):
-            p+=abs(D[i]-D[j])
-    return p
-
 def chain_cmd(args):
     fastas=args.fastas
     idx=reveallib.index()
@@ -201,7 +191,20 @@ def chain_cmd(args):
     
     print "Aligned",tot,"bases in",totn,"nodes. Nodes total:",G.number_of_nodes(),"Edges total:",G.number_of_edges()
     
-    write_gfa(G,T,outputfile='chaingraph.gfa')
+    if args.mumplot:
+        plotgraph(G, G.graph['samples'][0], G.graph['samples'][1], interactive=args.interactive)
+    
+    if args.output==None:
+        pref=[]
+        for f in args.fastas:
+            bn=os.path.basename(f)
+            if '.' in bn:
+                pref.append(bn[:bn.find('.')])
+            else:
+                pref.append(bn)
+        args.output="_".join(pref)
+    
+    write_gfa(G,T,nometa=args.nometa,outputfile=args.output+'.gfa',paths=args.paths)
     
     #G.graph['samples']=str(G.graph['samples'])
     #for node,data in G.nodes(data=True):
@@ -215,16 +218,26 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
     if merge:
         seq=[]
         uvarseq=dict()
+        gaps=[]
         for n,l in zip(varnodes,lengths):
             s=T[n:n+l]
-            if s in uvarseq:
-                uvarseq[s]+=[n]
+            if 'N' not in s: #dont merge gaps, biases statistics
+                if s in uvarseq:
+                    uvarseq[s]+=[n]
+                else:
+                    uvarseq[s]=[n]
             else:
-                uvarseq[s]=[n]
+                gaps.append((n,l))
+        
         for uv in uvarseq:
             G.add_node(tuple(uvarseq[uv]),l=len(uv),aligned=1 if len(uvarseq[uv])>1 else 0)
             G.add_edge(source,tuple(uvarseq[uv]))
             G.add_edge(tuple(uvarseq[uv]),sink)
+        
+        for gap,l in gaps:
+            G.add_node(tuple([gap]),l=l,aligned=0)
+            G.add_edge(source,tuple([gap]))
+            G.add_edge(tuple([gap]),sink)
     else:
         for v,l in zip(varnodes,lengths):
             G.add_node(v,l=l)

@@ -46,12 +46,82 @@ def fasta_writer(fn,name_seq,lw=100):
             for i in range( (len(seq)/lw)+(len(seq) % lw > 0)):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
+def sumofpairs(pointa,pointb):
+    assert(len(pointa)==len(pointb))
+    D=[pointa[i]-pointb[i] for i in range(len(pointa))]
+    p=0
+    for i in range(len(D)):
+        for j in range(i+1,len(D)):
+            p+=abs(D[i]-D[j])
+    return p
+
 def rc(seq):
     d = {'A':'T','C':'G','G':'C','T':'A','N':'N','a':'t','c':'g',\
         'g':'c','t':'a','n':'n','Y':'R','R':'Y','K':'M','M':'K',\
         'S':'S','W':'W','B':'V','V':'B','D':'H','H':'D','N':'N',\
         'X':'X','-':'-'}
     return "".join([d[b] for b in reversed(seq)])
+
+def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
+    try:
+        from matplotlib import pyplot as plt
+        from matplotlib import patches as patches
+    except:
+        logging.error("Install matplotlib to generate mumplot.")
+        return
+    
+    plt.xlabel(s1)
+    plt.ylabel(s2)
+    plt.title("REVEAL "+" ".join(sys.argv[1:]))
+    maxx=0
+    maxy=0
+    minx=None
+    miny=None
+    for node,data in G.nodes(data=True):
+        if 'seq' in data:
+            l=len(data['seq']) #either seq argument
+        else:
+            l=node.end-node.begin #or interval as node
+        if l<minlength:
+            continue
+        
+        s1t=False
+        s2t=False
+        if s1 in data['offsets']:
+            s1t=True
+            if minx==None:
+                minx=data['offsets'][s1]
+            
+            if data['offsets'][s1]+l > maxx:
+                maxx=data['offsets'][s1]+l
+            if data['offsets'][s1] < minx:
+                minx=data['offsets'][s1]
+        
+        if s2 in data['offsets']:
+            s2t=True
+            if miny==None:
+                miny=data['offsets'][s2]
+            
+            if data['offsets'][s2]+l > maxy:
+                maxy=data['offsets'][s2]+l
+            if data['offsets'][s2] < miny:
+                miny=data['offsets'][s2]
+        
+        if s1t and s2t:
+            plt.plot([data['offsets'][s1], data['offsets'][s1]+l], [data['offsets'][s2], data['offsets'][s2]+l], 'r-')
+    
+    plt.plot(minx,miny,'bx')
+    plt.plot(maxx,maxy,'bx')
+    
+    if region!=None:
+        rstart,rend=region.split(":")
+        plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
+        plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+    
+    if interactive:
+        plt.show()
+    else:
+        plt.savefig("%s_%s.png"%(s1[:s1.rfind('.')],s2[:s2.rfind('.')]))
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False):
     f=open(gfafile,'r')
@@ -213,7 +283,7 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False, remap=T
     
     f=open(outputfile,'wb')
     sep=';'
-    f.write('H\tVN:Z:1.0\n')
+    f.write('H\tVN:Z:1.0\tCL:Z:%s\n'%" ".join(sys.argv))
     f.write('H\tORI:Z:')
     
     sample2id=dict()

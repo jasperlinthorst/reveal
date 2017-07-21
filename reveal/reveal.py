@@ -39,7 +39,7 @@ def main():
     
     subparsers = parser.add_subparsers()
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Construct a population graph from input genomes or other graphs.")
-    parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate mumplot for two fasta files.")
+    parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate a mumplot that shows all mums between two fasta files.")
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.")
     parser_extract = subparsers.add_parser('extract', prog="reveal extract", description="Extract the input sequence from a graph.")
     parser_comp = subparsers.add_parser('comp', prog="reveal comp", description="Reverse complement the graph.")
@@ -51,13 +51,14 @@ def main():
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.")
     parser_chain = subparsers.add_parser('chain', prog="reveal chain", description="Use default chaining scheme to construct GFA graph based on a global multi-alignment of all input genomes.")
     parser_stats = subparsers.add_parser('stats', prog="reveal stats", description="Output statistics (number of node, edges, genomes etc.) for a graph.")
-    
+    parser_gplot = subparsers.add_parser('gplot', prog="reveal gplot", description="Generate a plot that represents the alignment of two samples in a graph.")
+
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
-    parser_aln.add_argument("-c", dest="minscore", type=int, default=0, help="Min score of an exact match (default 0), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
+    parser_aln.add_argument("-c", dest="minscore", type=int, default=None, help="Min score of an exact match (default None), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=None, help="Only align graph on exact matches that occur in at least this many samples (default: None, equal to total number of genomes in the (sub)index).")
     parser_aln.add_argument("-e", dest="exp", type=int, default=None, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (by default equals the number of genomes that are aligned).")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
@@ -92,6 +93,14 @@ def main():
     parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
     parser_plot.set_defaults(func=plot.plot)
+    
+    parser_gplot.add_argument('graph', help='A graph representing two the genomes of two or more samples.')
+    parser_gplot.add_argument("-m", dest="minlength", type=int, default=10, help="Minimum length of exact matches to vizualize (default=100).")
+    parser_gplot.add_argument("-x", default=None, help='Name of sample 1 (x-axis), when graph contains more than two samples, assignment is random.')
+    parser_gplot.add_argument("-y", default=None, help='Name of sample 2 (y-axis), when graph contains more than two samples, assignment is random.')
+    parser_gplot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot (default=False).")
+    parser_gplot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
+    parser_gplot.set_defaults(func=plot.gplot)
     
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp.comp_cmd)
@@ -166,10 +175,15 @@ def main():
     parser_merge.set_defaults(func=merge.merge_cmd)
     
     parser_chain.add_argument('fastas', nargs='*', help='Fasta files specifying sequences to be (multi-)aligned into a graph.')
+    parser_chain.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     parser_chain.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact (multi-)match to consider for chaining (default 15).")
     parser_chain.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
     parser_chain.add_argument("-a", dest="maxmums", type=int, default=5000, help="Number of largest mums to use for chaining (default 5000).")
     parser_chain.add_argument("--recurse", dest="recurse", action="store_true", default=False, help="Use recursive approach to chain gaps.")
+    parser_chain.add_argument("--mumplot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
+    parser_chain.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
+    parser_chain.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
+    parser_chain.add_argument("--paths", dest="paths", action="store_true", default=False, help="Output paths in GFA.")    
     parser_chain.set_defaults(func=chain.chain_cmd)
     
     parser_stats.add_argument('gfa', nargs=1, help='GFA file for which statistics should be calculated.')

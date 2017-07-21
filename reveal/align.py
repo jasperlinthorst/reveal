@@ -203,10 +203,11 @@ def graphalign(l,index,n,score,sp,penalty):
         logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
     
-    if score<schemes.minscore:
-        logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
-        return
-    
+    if schemes.minscore!=None:
+        if score<schemes.minscore:
+            logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
+            return
+        
     if l<schemes.minlength:
         logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
@@ -343,7 +344,7 @@ def prune_nodes(G,T):
                                     mergenodes(group,mark=True)
                                     converged=False
 
-def align_seq(s1,s2,minlength=1,minscore=0,minn=2,sa64=False):
+def align_seq(s1,s2,minlength=1,minscore=None,minn=2,sa64=False):
     global t,G,reference,o
 
     t=IntervalTree()
@@ -392,14 +393,6 @@ def align_cmd(args):
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
         return
     
-    if args.mumplot:
-        try:
-            from matplotlib import pyplot as plt
-            from matplotlib import patches as patches
-        except:
-            logging.error("Install matplotlib to generate mumplot.")
-            sys.exit(1)
-    
     G,idx=align_genomes(args)
     
     if args.output==None:
@@ -433,24 +426,11 @@ def align_cmd(args):
     else: #assume seq to graph
         totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
         
-        if args.mumplot:
-            if len(G.graph['samples'])>2:
-                logging.info("Can't make a mumplot for more than 2 genomes.")
-                args.mumplot=False
-            else:
-                s1=G.graph['samples'][0]
-                plt.xlabel(s1)
-                s2=G.graph['samples'][1]
-                plt.ylabel(s2)
-                plt.title("REVEAL "+" ".join(sys.argv[1:]))
-        
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
                 l=node.end-node.begin
                 alignedbases+=l
                 alignednodes+=1
-                if args.mumplot:
-                    plt.plot([data['offsets'][s1], data['offsets'][s1]+l], [data['offsets'][s2], data['offsets'][s2]+l], 'r-')
 
     logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
     logging.info("Writing graph...")
@@ -462,17 +442,9 @@ def align_cmd(args):
     logging.info("Done.")
     logging.info("Alignment graph written to: %s"%graph)
     
-    if args.mumplot and idx.nsamples==2:
-        plt.plot(0,0,'bx')
-        plt.plot(idx.nsep[0],idx.n-idx.nsep[0],'bx')
-        logging.info("Storing mumplot as %s.png..."%args.output)
-        plt.savefig(args.output+".png")
-        logging.info("Done.")
-        if args.interactive:
-            logging.info("Showing interactive mumplot...")
-            plt.show()
-            logging.info("Done.")
-
+    if args.mumplot:
+        plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+    
 def align_genomes(args):
     logging.info("Loading input...")
     #global variables to simplify callbacks from c extension
@@ -560,7 +532,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=15,minscore=0,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None,wpen=1,wscore=3,sa64=False):
+def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None,wpen=1,wscore=3,sa64=False):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
