@@ -194,7 +194,7 @@ def segmentgraph(node,nodes):
 def graphalign(l,index,n,score,sp,penalty):
     nodes=index.nodes
     isize=index.n
-
+    
     if len(nodes)==0:
         logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
@@ -205,9 +205,24 @@ def graphalign(l,index,n,score,sp,penalty):
     
     if schemes.minscore!=None:
         if score<schemes.minscore:
-            logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
-            return
-        
+            if schemes.pcutoff!=None: #when too much deviation from diagonal, check validity of a match, by approximating a pvalue based on a uniform random distribution of bases, use threshold
+                asl=((isize/len(nodes))-l) #assume equal length sequence
+                if asl<0:
+                    asl=1
+                p=float((.25**(n-1))**l)
+                npos=(asl**n)
+                cp=(npos*(p*((1-p)**(npos-1))))# / ((1-p)**(npos))
+                logging.error("cp=%.4g -- p=%.4g (l=%d,score=%d,n=%d,samples=%d,npos=%d,asl=%d,indexsize=%d,cutoff=%.4g)"%(cp,p,l,score,n,len(nodes),npos,asl,isize,schemes.pcutoff))
+                if cp>schemes.pcutoff:
+                    logging.error("Reject MUM, pvalue=%.4g (l=%d,n=%d,samples=%d,indexsize=%d,cutoff=%.4g)"%(cp,l,n,len(nodes),isize,schemes.pcutoff))
+                    return
+                else:
+                    logging.error("Accept MUM, pvalue=%.4g (l=%d,n=%d,samples=%d,indexsize=%d,cutoff=%.4g)"%(cp,l,n,len(nodes),isize,schemes.pcutoff))
+            else:
+                logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
+                return
+    
+    
     if l<schemes.minlength:
         logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
@@ -462,7 +477,7 @@ def align_genomes(args):
     G=nx.DiGraph()
     G.graph['samples']=[]
     o=0
-    #schemes.pcutoff=args.pcutoff
+    schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
     schemes.minn=args.minn

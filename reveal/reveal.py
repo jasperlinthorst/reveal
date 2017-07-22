@@ -47,6 +47,7 @@ def main():
     parser_matches = subparsers.add_parser('matches', prog="reveal matches", description="Outputs all (multi) m(u/e)ms.")
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.")
     parser_bubbles = subparsers.add_parser('bubbles', prog="reveal bubbles", description="Extract all bubbles from the graph.")
+    parser_variants = subparsers.add_parser('variants', prog="reveal variants", description="Extract variant calls from the graph.")
     parser_realign = subparsers.add_parser('realign', prog="reveal realign", description="Realign between two nodes in the graph.")
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.")
     parser_chain = subparsers.add_parser('chain', prog="reveal chain", description="Use default chaining scheme to construct GFA graph based on a global multi-alignment of all input genomes.")
@@ -55,7 +56,7 @@ def main():
 
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    #parser_aln.add_argument("-p", dest="pcutoff", type=float, default=1e-3, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
+    parser_aln.add_argument("-p", dest="pcutoff", type=float, default=None, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped (default 1e-3).")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match (default 20).")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=None, help="Min score of an exact match (default None), exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
@@ -149,11 +150,14 @@ def main():
     parser_subgraph.set_defaults(func=subgraph.subgraph)
     
     parser_bubbles.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
-    parser_bubbles.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
     parser_bubbles.add_argument("-e", dest="exportcomplex", action="store_true", default=False, help="Output complex bubble structures in a separate gfa file.")
     parser_bubbles.add_argument("-s", dest="separate", action="store_true", default=False, help="Write a seperate gfa file for each complex bubble structure.")
     parser_bubbles.add_argument("--gml", dest="gml", action="store_true", default=False, help="Output gml instead of gfa.")
     parser_bubbles.set_defaults(func=bubbles.bubbles_cmd)
+    
+    parser_variants.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
+    parser_variants.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
+    parser_variants.set_defaults(func=bubbles.variants_cmd)
     
     parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format for which a bubble should be realigned.') 
     parser_realign.add_argument("source", nargs='?', type=int, help='Source node.')

@@ -1,7 +1,7 @@
 import networkx as nx
 from utils import *
 import sys
-import bubbles
+from bubbles import bubbles,Bubble,Variant
 
 def stats_cmd(args):
     if len(args.gfa)!=1:
@@ -36,12 +36,30 @@ def stats(gfafile):
     #count bubble stats
     complexbubbles=0
     simplebubbles=0
-    for bubble in bubbles.bubbles(G):
-        pair,bubblenodes,size,ordD=bubble
-        if bubbles.issimple(G,pair[0],pair[1]):
+    snpcount=0
+    indelcount=0
+    multicount=0
+    regioncount=0
+    unknowncount=0
+    
+    for bubble in bubbles(G):
+        if bubble.issimple:
             simplebubbles+=1
         else:
             complexbubbles+=1
+        
+        v=Variant(bubble)
+        
+        if v.vtype=='snp':
+            snpcount+=1
+        elif v.vtype=='indel':
+            indelcount+=1
+        elif v.vtype=='multi-allelic':
+            multicount+=1
+        elif v.vtype=='region':
+            regioncount+=1
+        else:
+            unknowncount+=1
     
     #chain stats
     chain=[]
@@ -77,6 +95,13 @@ def stats(gfafile):
     stats["Number of bubbles (total)"]=complexbubbles+simplebubbles
     stats["Number of bubbles (simple)"]=simplebubbles
     stats["Number of bubbles (complex)"]=complexbubbles
+    
+    stats["Number of variants (snps)"]=snpcount
+    stats["Number of variants (indels)"]=indelcount
+    stats["Number of variants (multi-allelic)"]=multicount
+    stats["Number of variants (complex)"]=unknowncount
+    stats["Number of variants (regions)"]=regioncount
+    
     stats["Number of samples"]=len(G.graph['samples'])
     #stats["Samples"]=",".join(G.graph['samples'])
     stats["Number of nodes"]=G.number_of_nodes()
