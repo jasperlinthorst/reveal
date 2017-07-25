@@ -115,7 +115,7 @@ def finish(args):
     #obtain matches between ref and contigs
     mums,ref2length,contig2length,contig2seq = getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength)
     logging.debug("MUMS in normal orientation: %d"%len(mums))
-
+    
     #obtain matches between ref and reverse complemented contigs
     rcmums,_,_,_ = getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength)
     logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
@@ -124,7 +124,7 @@ def finish(args):
     mems=mums+rcmums
     
     logging.debug("MUMS in both: %d"%len(mems))
-
+    
     #relate mums to contigs
     ctg2mums=mapmumstocontig(mems)
     
@@ -148,6 +148,7 @@ def finish(args):
     #write finished assembly based on contigs or chains that map on each reference chromosome
     if not args.split:
         finished=open(args.output+".fasta",'w')
+        unplaced=open(args.output+".unplaced.fasta",'w')
     
     if args.plot:
         from matplotlib import pyplot as plt
@@ -157,14 +158,33 @@ def finish(args):
     for ref in ref2ctg:
         if args.split:
             finished=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
+            unplaced=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+"unplaced.fasta",'w')
         
+        if ref=='unplaced':
+            logging.info("The following %d contigs could not be placed anywhere on the reference sequence.")
+            for name in ref2ctg[ref]:
+                logging.info("%s (length=%d)"%(name,contig2length[name]))
+                unplaced.write(">%s\n"%name)
+                unplaced.write("%s\n"%contig2seq[name])
+            continue
+
         logging.info("Determining contig/chain order for: %s"%ref)
         
         ref2ctg[ref].sort(key=lambda c: c[4]) #sort by ref start position of chains
-        ctgs=ref2ctg[ref]
-        ctgs=bestctgpath(ctgs)
         
-        #TODO: output statistics on number and sequence content of unplaced contigs
+        ctgs=ref2ctg[ref]
+        b=set([(c[0],c[8]) for c in ctgs])
+
+        ctgs=bestctgpath(ctgs)
+        a=set([(c[0],c[8]) for c in ctgs])
+        
+        if args.order=='contigs':
+            if len(b)-len(a)>0:
+                logging.info("The following %d contigs were placed on reference sequence %s but were not used:"%(len(b)-len(a),ref))
+                for name,l in b - a:
+                    logging.info("%s (length=%d)"%(name,l))
+                    unplaced.write(">%s\n"%name)
+                    unplaced.write("%s\n"%contig2seq[name])
         
         frp=0
         if args.plot:
@@ -279,6 +299,7 @@ def finish(args):
         
         if args.split:
             finished.close()
+            unplaced.close()
         
         if args.plot:
             ax.set_yticks(yticks)
@@ -288,6 +309,10 @@ def finish(args):
                 plt.show()
             else:
                 plt.savefig(args.output+"_"+ref.split()[0]+".png")
+    
+    if not args.split:
+        finished.close()
+        unplaced.close()
 
 def chainstorefence(ctg2mums,contig2length,maxgapsize=20000,minchainlength=100,minchainsum=65):
     
@@ -391,32 +416,37 @@ def contigstorefence(ctg2mums,contig2length):
                 ctgend=rpath[0][1]
                 logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
                 paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
-        
+
         if len(paths)==0:
+            if 'unplaced' in ref2ctg:
+                ref2ctg['unplaced'].append(ctg)
+            else:
+                ref2ctg['unplaced']=[ctg]
             continue
         
-        logging.debug("Found a total of %d chains that map to $d different reference chromosomes.")
         paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score in descending order, best first
         
         #take the n-best paths that do not overlap on the contig
-        it=IntervalTree()
-        for path in paths:
-            score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
-            if revcomp:
-                ctgstart,ctgend=ctgend,ctgstart
-            if it[ctgstart:ctgend]==set():
-                it[ctgstart:ctgend]=path
+        #it=IntervalTree()
+        #for path in paths:
+        #    score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
+        #    if revcomp:
+        #        ctgstart,ctgend=ctgend,ctgstart
+        #    if it[ctgstart:ctgend]==set():
+        #        it[ctgstart:ctgend]=path
         
-        if len(it)>1:
-            logging.warn("Contig (len=%d) aligns to %d distinct locations or orientations on the reference."%(contig2length[ctg],len(it)))
+        #if len(it)>1:
+        #    logging.warn("Contig (len=%d) aligns to %d distinct locations or orientations on the reference."%(contig2length[ctg],len(it)))
         
-        for i,p in enumerate(it):
-            start,end,path=p
-            score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
-            if ref in ref2ctg:
-                ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg]))
-            else:
-                ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg])]
+        #for i,p in enumerate(it):
+        #start,end,path=p 
+        
+        
+        score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=paths[0] #just take the best path
+        if ref in ref2ctg:
+            ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg]))
+        else:
+            ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg])]
     
     return ref2ctg
 
