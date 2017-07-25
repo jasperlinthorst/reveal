@@ -216,7 +216,7 @@ def plot(args):
     for p,l in zip(vertgaps,vertgapsizes):
         ax.add_patch(
             patches.Rectangle(
-                (0, p), #bottom left
+                (0, p+1), #bottom left
                 reflength, #width
                 l, #height
                 alpha=.25

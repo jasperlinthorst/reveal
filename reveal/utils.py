@@ -47,7 +47,9 @@ def fasta_writer(fn,name_seq,lw=100):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
 def sumofpairs(pointa,pointb):
-    assert(len(pointa)==len(pointb))
+    #assert(len(pointa)==len(pointb))
+    if len(pointa)==1:
+        return abs(pointa[0]-pointb[0])
     D=[pointa[i]-pointb[i] for i in range(len(pointa))]
     p=0
     for i in range(len(D)):
