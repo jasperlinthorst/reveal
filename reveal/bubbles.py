@@ -277,14 +277,14 @@ def variants_cmd(args):
         logging.fatal("Specified reference not available in graph, graph knows of: %s."%str(G.graph['samples']))
         return
     
-    sys.stdout.write("#pos(on %s)\ttype\tgenotypes"%args.reference)
+    sys.stdout.write("#pos(on %s)\tsource\tsink\ttype\tgenotypes"%args.reference)
     for sample in gori:
         sys.stdout.write("\t%s"%sample)
     sys.stdout.write("\n")
     
     for b in bubbles(G):
         v=Variant(b)
-        sys.stdout.write("%d\t%s\t%s"%(v.vpos[args.reference], v.vtype, ",".join(v.genotypes)))
+        sys.stdout.write("%d\t%s\t%s\t%s\t%s"%(v.vpos[args.reference],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
