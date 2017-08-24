@@ -183,7 +183,7 @@ def plot(args):
         ep1=sp1+l
         ep2=sp2+l
         
-        if sp1>start and ep1<end:
+        if sp1>=start and ep1<=end:
             if mem[3]==0:
                 if args.uniq:
                     plt.plot([sp1,ep1],[sp2,ep2],'r-')
