@@ -15,11 +15,18 @@ def stats_cmd(args):
     stats(args.gfa[0])
 
 def stats(gfafile):
+    stats=dict()
     G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
     nsamples=len(G.graph['samples'])
-
-    stats=dict()
+    
+    stats["Graph"]=os.path.basename(gfafile)
+    stats["Number of samples"]=nsamples
+    for i,sample in enumerate(samples):
+        stats["Sample %d"%i]=sample
+    stats["Number of nodes"]=G.number_of_nodes()
+    stats["Number of edges"]=G.number_of_edges()    
+    
     seqperngenomes=dict()
     
     i=1
@@ -61,6 +68,16 @@ def stats(gfafile):
         else:
             unknowncount+=1
     
+    stats["Number of bubbles (total)"]=complexbubbles+simplebubbles
+    stats["Number of bubbles (simple)"]=simplebubbles
+    stats["Number of bubbles (complex)"]=complexbubbles
+    stats["Number of variants (snps)"]=snpcount
+    stats["Number of variants (indels)"]=indelcount
+    stats["Number of variants (multi-allelic)"]=multicount
+    stats["Number of variants (complex)"]=unknowncount
+    stats["Number of variants (regions)"]=regioncount    
+
+
     #chain stats
     chain=[]
     chainweight=0
@@ -92,20 +109,8 @@ def stats(gfafile):
     stats["Chain weight"]=chainweight
     stats["Chain penalty"]=chainpenalty
     stats["Chain score"]=chainweight-chainpenalty
-    stats["Number of bubbles (total)"]=complexbubbles+simplebubbles
-    stats["Number of bubbles (simple)"]=simplebubbles
-    stats["Number of bubbles (complex)"]=complexbubbles
     
-    stats["Number of variants (snps)"]=snpcount
-    stats["Number of variants (indels)"]=indelcount
-    stats["Number of variants (multi-allelic)"]=multicount
-    stats["Number of variants (complex)"]=unknowncount
-    stats["Number of variants (regions)"]=regioncount
     
-    stats["Number of samples"]=len(G.graph['samples'])
-    #stats["Samples"]=",".join(G.graph['samples'])
-    stats["Number of nodes"]=G.number_of_nodes()
-    stats["Number of edges"]=G.number_of_edges()
     
     for label in sorted(stats.keys()):
         sys.stdout.write("%s:\t%s\n"%(label.ljust(35),str(stats[label]).rjust(15)))
