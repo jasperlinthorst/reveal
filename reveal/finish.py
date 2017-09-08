@@ -115,10 +115,12 @@ def finish(args):
     #p=Pool(2)
     #p.apply_async(getmums,(args.reference,args.contigs),dict(sa64=args.sa64,minlength=args.minlength))
     
+    logging.debug("Extracting mums in normal orientation.")
     #obtain matches between ref and contigs
     mums,ref2length,contig2length,contig2seq = getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength)
     logging.debug("MUMS in normal orientation: %d"%len(mums))
     
+    logging.debug("Extracting mums in reverse complemented normal orientation.")
     #obtain matches between ref and reverse complemented contigs
     rcmums,_,_,_ = getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength)
     logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
@@ -126,13 +128,14 @@ def finish(args):
     #combine matches
     mems=mums+rcmums
     
+    logging.debug("Associating mums to contigs.")
     #relate mums to contigs
     ctg2mums=mapmumstocontig(mems,filtercontained=args.filtercontained,maxgapsize=args.maxgapsize,minchainlength=args.minchainlength)
     
     if args.order=='chains':
         ref2ctg=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainlength=args.minchainlength,minchainsum=args.minchainsum)
     else:
-        ref2ctg=contigstorefence(ctg2mums,contig2length)
+        ref2ctg=contigstorefence(ctg2mums,contig2length,maxn=args.maxn)
     
     if args.output==None:
         pref=[]
@@ -414,19 +417,19 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainlength=1500,m
     return ref2ctg
 
 
-def contigstorefence(ctg2mums,contig2length):
+def contigstorefence(ctg2mums,contig2length,maxn=15000):
     
     ref2ctg=dict()
 
     for ctg in ctg2mums:
-        logging.debug("Determining best chain(s) for: %s"%ctg)
+        logging.debug("Determining best chain for: %s"%ctg)
         paths=[]
         
         for ref in ctg2mums[ctg]:
             logging.debug("Checking %s"%ref)
             mems=ctg2mums[ctg][ref]
-            path,score=bestmempath(mems,contig2length[ctg],revcomp=False)
-            rpath,rscore=bestmempath(mems,contig2length[ctg],revcomp=True)
+            path,score=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=False)
+            rpath,rscore=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=True)
             
             if score>rscore:
                 refstart=path[-1][0]
@@ -793,7 +796,7 @@ def bestmempath(mems,ctglength,n=15000,revcomp=False):
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
-    mems=[m for m in mems if m[4]==revcomp]
+    mems=[tuple(m) for m in mems if m[4]==revcomp]
     
     if len(mems)==0:
         return [],0
