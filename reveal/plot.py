@@ -167,9 +167,14 @@ def plot(args):
     
     start=0
     end=idx.nsep[0]
-    
+
     del idx
 
+    if len(mmems)>args.maxn:
+        logging.info("Too many mums (%d), taking the %d largest."%(len(mmems),args.maxn))
+        mmems.sort(key=lambda mem: mem[0],reverse=True) #sort by size
+        mmems=mmems[:args.maxn] #take the n largest
+    
     print "Drawing",len(mmems),"matches."
     
     #pos=args.pos
@@ -223,6 +228,7 @@ def plot(args):
             )
         )
     
+    plt.xlim(start,end)
     plt.title(" vs. ".join(args.fastas))
     if len(args.fastas)==2:
         plt.xlabel(args.fastas[0])
@@ -236,7 +242,7 @@ def plot(args):
         rstart,rend=args.region.split(":")
         plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
         plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
-    
+
     if args.interactive:
         plt.show()
     else:

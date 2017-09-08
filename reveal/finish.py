@@ -127,6 +127,8 @@ def finish(args):
     
     #combine matches
     mems=mums+rcmums
+
+    assert(len(mems)==len(mums)+len(rcmums))
     
     logging.debug("Associating mums to contigs.")
     #relate mums to contigs
@@ -173,14 +175,18 @@ def finish(args):
         logging.info("Determining %s order for: %s"%(args.order,ref))
         
         ref2ctg[ref].sort(key=lambda c: c[4]) #sort by ref start position
+
         ctgs=ref2ctg[ref]
-        
+        nctgsin=len(ctgs)
+
         b=set([(c[0],c[8]) for c in ctgs])
         
         ctgs=bestctgpath(ctgs)
         
         a=set([(c[0],c[8]) for c in ctgs])
-        
+       
+        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),nctgsin,args.order,ref))
+
         if args.order=='contigs':
             if len(b)-len(a)>0:
                 logging.info("The following %d contigs were placed on reference sequence %s but were not used:"%(len(b)-len(a),ref))
@@ -465,6 +471,7 @@ def contigstorefence(ctg2mums,contig2length,maxn=15000):
 
 def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainlength=1500):
     ctg2mums=dict()
+    logging.debug("Mapping %d mums to contigs."%len(mems))
     for mem in mems:
         refchrom, refstart, ctg, ctgstart, l, n, o = mem
         refstart=int(refstart)
@@ -489,6 +496,7 @@ def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainlength=150
                 #ctg2mums[ctg][ref]=filtercontainedmums(ctg2mums[ctg][ref])
                 #ctg2mums[ctg][ref]=filtercontainedmumsboth(ctg2mums[ctg][ref])
                 #ctg2mums[ctg][ref]=filtercontainedmumsratio(ctg2mums[ctg][ref])
+                
                 ctg2mums[ctg][ref]=filtermumsrange(ctg2mums[ctg][ref],maxgapsize=maxgapsize,minchainlength=minchainlength)
     
     return ctg2mums
@@ -639,6 +647,8 @@ def filtercontainedmumsratio(mems,ratio=.1):
 
 def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
     #filter mems before trying to form chains
+    
+    logging.debug("Number of mems before filtering: %d"%len(mems))
 
     mems.sort(key=lambda m: m[0]) #sort by reference position
     filteredmems=[]
@@ -648,6 +658,7 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
             continue
         if mems[i][2]>=minchainlength:
             filteredmems.append(mems[i])
+            continue
         
         prefstart=mems[i-1][0]
         prefend=mems[i-1][0]+mems[i-1][2]
@@ -662,7 +673,9 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
             continue
         else:
             filteredmems.append(mems[i])
-    
+   
+
+
     filteredmems.sort(key=lambda m: m[1]) #sort by qry position
     mems=[]
 
@@ -671,7 +684,8 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
             continue
         if filteredmems[i][2]>=minchainlength:
             mems.append(filteredmems[i])
-        
+            continue
+
         pqrystart=filteredmems[i-1][1]
         pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
         qrystart=filteredmems[i][1]
@@ -685,6 +699,8 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
             continue
         else:
             mems.append(filteredmems[i])
+    
+    logging.debug("Number of mems after filtering: %d"%len(mems))
     
     return mems
 
@@ -758,7 +774,10 @@ def bestctgpath(ctgs):
                 w=score[tuple(actg[2])]+cscore
                 best=actg
             else:
-                penalty=abs(arefend-refbegin) #penalize by the amount of overlap
+                if arefend>refbegin:
+                    penalty=abs(arefend-refbegin) #penalize by the amount of overlap
+                else:
+                    penalty=0
                 
                 tmpw=score[tuple(actg[2])]+cscore-penalty
                 if tmpw>w:
@@ -1220,9 +1239,14 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainlength
             assert(refend>refstart)
             
             if refend-refstart>minchainlength:
-                if sum([m[2] for m in path])>minchainsum:
+                chainsum=sum([m[2] for m in path])
+                if chainsum>=minchainsum:
                     paths.append((path,maxscore,o,ctgstart,ctgend,refstart,refend))
-                    logging.debug("Added path from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d."%(refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart))
+                    logging.debug("Added path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart))
+                else:
+                    logging.debug("Skipping path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d and sum %d (minchainsum=%d)."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart,chainsum,minchainsum))
+            else:
+                logging.debug("Skipping path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d (minchainlength=%d)."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart,minchainlength))
             
             if o==1:
                 assert(ctgstart>ctgend)
