@@ -325,8 +325,10 @@ def finish(args):
                     )
                 
                 if revcomp:
-                    ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'bx')
-                    ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'g-')
+                    #ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'bx')
+                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
+                    #ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'g-')
+                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'g-')
                 else:
                     ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
                     ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'r-')
@@ -407,7 +409,6 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainlength=1500,m
                 else:
                     it[ctgstart:ctgend]=path
                     selectedpaths.append(path)
-        
         
         paths=sorted(selectedpaths,key=lambda c: c[1] if c[6] else c[2])
         
@@ -673,8 +674,6 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
             continue
         else:
             filteredmems.append(mems[i])
-   
-
 
     filteredmems.sort(key=lambda m: m[1]) #sort by qry position
     mems=[]
@@ -802,9 +801,13 @@ def bestctgpath(ctgs):
         path.append(end)
         end=link[tuple(end[2])]
     
-    for i,chain in enumerate(path):
-        ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=chain
-        linkedto=link[tuple(cpath)]
+    #npath=[]
+    #relabel indices of the path
+    #for i,chain in enumerate(path):
+        #ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=chain
+        #npath.append((ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,i))
+        #npath.append((ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci))
+        #linkedto=link[tuple(cpath)]
     
     return path[::-1]
 
@@ -812,6 +815,7 @@ def bestctgpath(ctgs):
 def bestmempath(mems,ctglength,n=15000,revcomp=False):
     
     if len(mems)>n: #take only n largest mems
+
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
@@ -905,9 +909,11 @@ def bestmempath(mems,ctglength,n=15000,revcomp=False):
 
 def mempaths(mems,ctglength,n=15000,revcomp=False,maxgapsize=1500,minchainlength=1500,minchainsum=65):
     
-    if len(mems)>n: #take only n largest mems
-        mems.sort(key=lambda mem: mem[2], reverse=True) #sort by size
-        mems=mems[:n]
+    nmums=len(mems)
+    if nmums>n: #take only n largest mems
+        logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
+        mems.sort(key=lambda mem: mem[2],reverse=True) #sort by size
+        mems=mems[:n] #take the n largest
     
     mems=[m for m in mems if m[4]==revcomp]
     
@@ -1028,11 +1034,12 @@ def mempaths(mems,ctglength,n=15000,revcomp=False,maxgapsize=1500,minchainlength
 
 
 def bestmempathwithinversions(mems,n=15000):
-    
-    if len(mems)>n: #take only n largest mems
+    nmums=len(mems)
+    if nmums>n: #take only n largest mems
+        logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
         mems.sort(key=lambda mem: mem[2],reverse=True) #sort by size
-        mems=mems[:n]
-    
+        mems=mems[:n] #take the n largest
+
     if len(mems)==0:
         return [],0
     
