@@ -18,7 +18,8 @@ def stats(gfafile):
     stats=dict()
     G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
-    nsamples=len(G.graph['samples'])
+    samples=G.graph['samples']
+    nsamples=len(samples)
     
     stats["Graph"]=os.path.basename(gfafile)
     stats["Number of samples"]=nsamples
