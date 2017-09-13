@@ -2,89 +2,6 @@
 from utils import *
 import sys
 
-def bubbles__cmd(args):
-    if len(args.graph)<1:
-        logging.fatal("Specify a gfa file to extract bubbles.")
-        return
-    
-    reference=args.reference
-    G=nx.DiGraph()
-    read_gfa(args.graph[0],None,"",G)
-    complexbubblenodes=[]
-    
-    if 'samples' in G.graph:
-        gori=sorted(G.graph['samples'])
-    else:
-        gori=[]
-    
-    sys.stdout.write("#source\tsink\tsubgraph\tref\tpos\tvariant")
-    for sample in gori:
-        sys.stdout.write("\t%s"%sample)
-    sys.stdout.write("\n")
-    
-    for pair,bubblenodes,size,ordD in bubbles(G):
-        gt=G.successors(pair[0])
-        gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
-        sourcesamples=set(G.node[pair[0]]['offsets'].keys())
-        simple=issimple(G,pair[0],pair[1])
-
-        #determine genotypes, associate genotype with numerical value
-        if len(gt)<size or not simple:
-            #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
-            genotypes=['N']*len(gt)
-        else:
-            genotypes=[None]*len(gt)
-            for i,node in enumerate(gt):
-                genotypes[i]=G.node[node]['seq']
-                if node==pair[1]:
-                    genotypes[i]="-"
-        
-        #make call, associate sample with the numerical value of the genotype
-        tmpsource=sourcesamples.copy()
-        calls={}
-        for i,node in enumerate(gt):
-            n=G.node[node]
-            for sample in n['offsets'].keys():
-                if sample not in tmpsource:
-                    continue
-                calls[sample]=i
-                tmpsource.discard(sample)
-        
-        d=G.node[pair[0]]
-        
-        if reference==None or reference not in d['offsets'].keys():
-            ref=d['offsets'].keys()[0]
-            pos=d['offsets'][ref]+len(d['seq'])+1
-        else:
-            ref=reference
-            pos=d['offsets'][reference]+len(d['seq'])+1
-        
-        sys.stdout.write("%d\t%d\t%s\t%s\t%s\t%s"%(pair[0],pair[1],",".join([str(x) for x in bubblenodes]),ref,pos,",".join(genotypes)))
-        
-        if args.exportcomplex and not simple:
-            if args.separate:
-                sg=G.subgraph(bubblenodes)
-                if args.gml:
-                    write_gml(sg,None,outputfile="%s_%s.gml"%(pair[0],pair[1]),partition=False)
-                else:
-                    write_gfa(sg,None,remap=False,outputfile="%s_%s.gfa"%(pair[0],pair[1]))
-            else:
-                complexbubblenodes+=bubblenodes
-        
-        for sample in gori:
-            if sample in calls:
-                sys.stdout.write("\t%s"%calls[sample])
-            else:
-                sys.stdout.write("\t-")
-        sys.stdout.write("\n")
-    
-    if args.exportcomplex and not args.separate:
-        sg=G.subgraph(set(complexbubblenodes))
-        if args.gml:
-            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
-        else:
-            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
-
 def issimple(G,source,sink):
     gt=G.successors(source)
     sucs=set(gt)
@@ -277,20 +194,42 @@ def variants_cmd(args):
         logging.fatal("Specified reference not available in graph, graph knows of: %s."%str(G.graph['samples']))
         return
     
-    sys.stdout.write("#pos(on %s)\tsource\tsink\ttype\tgenotypes"%args.reference)
-    for sample in gori:
-        sys.stdout.write("\t%s"%sample)
-    sys.stdout.write("\n")
-    
-    for b in bubbles(G):
-        v=Variant(b)
-        sys.stdout.write("%d\t%s\t%s\t%s\t%s"%(v.vpos[args.reference],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+    if not args.fastaout:
+        sys.stdout.write("#pos(on %s)\tsource\tsink\ttype\tgenotypes"%args.reference)
         for sample in gori:
-            if sample in v.calls:
-                sys.stdout.write("\t%s"%v.calls[sample])
-            else:
-                sys.stdout.write("\t-")
+            sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
+        
+        for b in bubbles(G):
+            v=Variant(b)
+            sys.stdout.write("%d\t%s\t%s\t%s\t%s"%(v.vpos[args.reference],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+            for sample in gori:
+                if sample in v.calls:
+                    sys.stdout.write("\t%s"%v.calls[sample])
+                else:
+                    sys.stdout.write("\t-")
+            sys.stdout.write("\n")
+    else:
+        for b in bubbles(G):
+            v=Variant(b)
+            #invert dict
+
+            #call2samples=dict()
+            #for sample in v.calls:
+            #    call=v.calls[sample]
+            #    if call in call2samples:
+            #        call2samples[call].append(sample)
+            #    else:
+            #        call2samples[call]=[sample]
+            
+            #call2samples = dict((v,k) for k,v in v.calls.iteritems())
+            #for call in call2samples:
+            #sys.stdout.write(">%s_%s\n"%(v.source,"_".join(call2samples[call]) ))
+
+            for i,seq in enumerate(v.genotypes):
+                if seq!='-':
+                    sys.stdout.write(">%s_%d\n"%(v.source,i))
+                    sys.stdout.write("%s\n"%seq)
 
 class Bubble:
     def __init__(self,G,source,sink,nodes,ordD):
@@ -326,7 +265,11 @@ class Variant(Bubble):
 
         Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.nodes,bubble.ordD)
         
-        self.genotypes=[]
+        self.genotypes=[] #list of variant sequence
+        self.vtype='undefined' #type definition of the variant
+        self.calls=dict() #key is sample, value is index within genotypes
+        self.vpos=dict() #key is sample, value is position within sample
+
         gt=self.G.successors(self.source)
         gt.sort(key=lambda l: self.ordD[l])
         if self.issimple:
@@ -340,7 +283,6 @@ class Variant(Bubble):
             for v in gt:
                 self.genotypes.append('N')
         
-        self.vtype='undefined'
         if self.issimple:
             if self.G.has_edge(self.source,self.sink):
                 self.vtype='indel'
@@ -353,30 +295,14 @@ class Variant(Bubble):
                 self.vtype='multi-allelic'
             
         n=self.G.node[self.source]
-        self.vpos=dict()
+        
         for s in n['offsets']:
             self.vpos[s]=n['offsets'][s]+len(n['seq'])+1
 
-        #gt=G.successors(pair[0])
-        #gt.sort(key=lambda l: ordD[l]) #topological sort neighbors
-        #sourcesamples=set(G.node[pair[0]]['offsets'].keys())
-
-        #determine genotypes, associate genotype with numerical value
-        #if len(gt)<size or not simple:
-            #complex bubble; not possible to output the actual alleles, instead we can make a call based on branching at source node and output the nodes that make up the complex bubble so we can export and vizualize the subgraph
-        #    genotypes=['N']*len(gt)
-        #else:
-        #    genotypes=[None]*len(gt)
-        #    
-        #    for i,node in enumerate(gt):
-        #        genotypes[i]=G.node[node]['seq']
-        #        if node==pair[1]:
-        #            genotypes[i]="-"
-        
         #make call, associate sample with the numerical value of the genotype
         sourcesamples=set(self.G.node[self.source]['offsets'].keys())
         tmpsource=sourcesamples.copy()
-        self.calls={}
+        
         for i,node in enumerate(gt):
             n=self.G.node[node]
             for sample in n['offsets'].keys():

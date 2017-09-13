@@ -173,6 +173,7 @@ def main():
     
     parser_variants.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_variants.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
+    parser_variants.add_argument("--fasta", dest="fastaout", action="store_true", default=False, help="Output variant sequence in a fasta format.")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
     
     parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format for which a bubble should be realigned.') 
