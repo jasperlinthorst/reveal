@@ -2,20 +2,20 @@
 from utils import *
 import sys
 
-def issimple(G,source,sink):
-    gt=G.successors(source)
-    sucs=set(gt)
-    pres=set(G.predecessors(sink))
-    sucs.discard(sink)
-    pres.discard(source)
-    simple=True
-    for suc in sucs:
-        if len(G.successors(suc))!=1:
-            simple=False
-    for pre in pres:
-        if len(G.predecessors(pre))!=1:
-            simple=False
-    return simple
+#def issimple(G,source,sink):
+#    gt=G.successors(source)
+#    sucs=set(gt)
+#    pres=set(G.predecessors(sink))
+#    sucs.discard(sink)
+#    pres.discard(source)
+#    simple=True
+#    for suc in sucs:
+#        if len(G.successors(suc))!=1:
+#            simple=False
+#    for pre in pres:
+#        if len(G.predecessors(pre))!=1:
+#            simple=False
+#    return simple
 
 def bubbles(G):
     def entrance(G,v):
@@ -89,7 +89,15 @@ def bubbles(G):
         if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
             del candidates[-1]
             return
+        
+        #print "reporting supbub",vstart,vexit
+
         si=previousEntrance[vexit[0]]
+        
+        if si==None:
+            del candidates[-1]
+            return
+
         s=ordD_[si]
         while ordD[s] >= ordD[vstart[0]]:
             valid = validatesuperbubble(s, vexit[0], ordD, ordD_, outchild, outparent, previousEntrance, G)
@@ -146,7 +154,7 @@ def bubbles(G):
         sinksamples=set(sinknode['offsets'].keys())
         
         if sourcesamples!=sinksamples:
-            logging.warn("Invalid bubble detected between node %s and node %s."%pair)
+            #logging.warn("Invalid bubble detected between node %s and node %s."%pair)
             continue
 
         #yield pair,bubblenodes,size,ordD
@@ -160,17 +168,29 @@ def bubbles_cmd(args):
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
     
+    allcomplexnodes=[]
     sys.stdout.write("#source\tsink\tsubgraph\ttype\n")
     for b in bubbles(G):
-        t=b.issimple
+        t=b.issimple()
         sys.stdout.write("%d\t%d\t%s\t%s\n"%(b.source,b.sink,",".join([str(x) for x in b.nodes]), 'simple' if t else 'complex'))
+
         if not t:
-            if args.exportcomplex and not args.separate:
-                sg=G.subgraph(set(b.nodes))
-                if args.gml:
-                    write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+            if args.exportcomplex:
+                if args.separate:
+                    sg=G.subgraph(set(b.nodes))
+                    if args.gml:
+                        write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".%d.%d.complex.gml"%(b.source,b.sink)),partition=False)
+                    else:
+                        write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa","%d.%d.complex.gfa"%(b.source,b.sink)))
                 else:
-                    write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+                    allcomplexnodes+=b.nodes
+
+    if not args.separate:
+        sg=G.subgraph(allcomplexnodes)
+        if args.gml:
+            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+        else:
+            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
 
 def variants_cmd(args):
     if len(args.graph)<1:
@@ -189,20 +209,27 @@ def variants_cmd(args):
     
     if args.reference==None:
         args.reference=gori[0]
+        logging.warn("No reference specified as a coordinate system, use %s where possible."%args.reference)
     
     if args.reference not in G.graph['samples']:
         logging.fatal("Specified reference not available in graph, graph knows of: %s."%str(G.graph['samples']))
         return
     
     if not args.fastaout:
-        sys.stdout.write("#pos(on %s)\tsource\tsink\ttype\tgenotypes"%args.reference)
+        sys.stdout.write("#reference\tpos\tsource\tsink\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
         
         for b in bubbles(G):
             v=Variant(b)
-            sys.stdout.write("%d\t%s\t%s\t%s\t%s"%(v.vpos[args.reference],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+
+            if args.reference in v.vpos:
+                cds=args.reference
+            else:
+                cds=v.vpos.keys()[0]
+            
+            sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(cds,v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
             for sample in gori:
                 if sample in v.calls:
                     sys.stdout.write("\t%s"%v.calls[sample])
@@ -212,20 +239,6 @@ def variants_cmd(args):
     else:
         for b in bubbles(G):
             v=Variant(b)
-            #invert dict
-
-            #call2samples=dict()
-            #for sample in v.calls:
-            #    call=v.calls[sample]
-            #    if call in call2samples:
-            #        call2samples[call].append(sample)
-            #    else:
-            #        call2samples[call]=[sample]
-            
-            #call2samples = dict((v,k) for k,v in v.calls.iteritems())
-            #for call in call2samples:
-            #sys.stdout.write(">%s_%s\n"%(v.source,"_".join(call2samples[call]) ))
-
             for i,seq in enumerate(v.genotypes):
                 if seq!='-':
                     sys.stdout.write(">%s_%d\n"%(v.source,i))
@@ -242,20 +255,25 @@ class Bubble:
     
     def issimple(self):
         if self.simple==None:
-            gt=self.G.successors(self.source)
-            sucs=set(gt)
+            
+            sucs=set(self.G.successors(self.source))
             pres=set(self.G.predecessors(self.sink))
+            
             sucs.discard(self.sink)
             pres.discard(self.source)
+            
             for suc in sucs:
-                if len(self.G.successors(suc))!=1:
+                if len(self.G.successors(suc))!=1 or self.G.successors(suc)[0]!=self.sink:
                     self.simple=False
                     return self.simple
+            
             for pre in pres:
-                if len(self.G.predecessors(pre))!=1:
+                if len(self.G.predecessors(pre))!=1 or self.G.predecessors(pre)[0]!=self.source:
                     self.simple=False
                     return self.simple
+            
             self.simple=True
+            
             return self.simple
         else:
             return self.simple 

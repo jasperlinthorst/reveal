@@ -482,13 +482,10 @@ def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainlength=150
         o=int(o)
         if ctg in ctg2mums:
             if refchrom in ctg2mums[ctg]:
-                #ctg2mums[ctg][refchrom].append((refstart,ctgstart,l,n,o))
                 ctg2mums[ctg][refchrom].append([refstart,ctgstart,l,n,o])
             else:
-                #ctg2mums[ctg][refchrom]=[(refstart,ctgstart,l,n,o)]
                 ctg2mums[ctg][refchrom]=[[refstart,ctgstart,l,n,o]]
         else:
-            #ctg2mums[ctg]=dict({refchrom : [(refstart,ctgstart,l,n,o)]})
             ctg2mums[ctg]=dict({refchrom : [[refstart,ctgstart,l,n,o]]})
     
     if filtercontained:
@@ -497,7 +494,7 @@ def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainlength=150
                 #ctg2mums[ctg][ref]=filtercontainedmums(ctg2mums[ctg][ref])
                 #ctg2mums[ctg][ref]=filtercontainedmumsboth(ctg2mums[ctg][ref])
                 #ctg2mums[ctg][ref]=filtercontainedmumsratio(ctg2mums[ctg][ref])
-                
+                logging.debug("Filtering mums between %s and %s"%(ref,ctg))
                 ctg2mums[ctg][ref]=filtermumsrange(ctg2mums[ctg][ref],maxgapsize=maxgapsize,minchainlength=minchainlength)
     
     return ctg2mums
@@ -801,21 +798,12 @@ def bestctgpath(ctgs):
         path.append(end)
         end=link[tuple(end[2])]
     
-    #npath=[]
-    #relabel indices of the path
-    #for i,chain in enumerate(path):
-        #ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=chain
-        #npath.append((ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,i))
-        #npath.append((ctgname,revcomp,cpath,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci))
-        #linkedto=link[tuple(cpath)]
-    
     return path[::-1]
 
 
 def bestmempath(mems,ctglength,n=15000,revcomp=False):
     
     if len(mems)>n: #take only n largest mems
-
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
@@ -1180,6 +1168,10 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainlength
             
             for r in remove:
                 processed.remove(r)
+            
+            #make active a kd tree, so we can search amems in log(n)! Add amems dynamically to the tree...
+
+            #or remove amems for which amem[0]+amem[2]<mem[0]-maxgapsize
             
             best=init
             w=mem[2]

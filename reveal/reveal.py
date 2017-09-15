@@ -189,6 +189,7 @@ def main():
     parser_realign.add_argument("-e", dest="exp", type=int, default=None, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (by default equals the number of genomes that are aligned).")
     parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_realign.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
+    parser_realign.add_argument("-p", dest="pcutoff", type=float, default=None, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped.")
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
     
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
