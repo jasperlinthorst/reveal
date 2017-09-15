@@ -220,29 +220,32 @@ def variants_cmd(args):
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
+    
+    for b in bubbles(G):
+        v=Variant(b)
         
-        for b in bubbles(G):
-            v=Variant(b)
-
-            if args.reference in v.vpos:
-                cds=args.reference
-            else:
-                cds=v.vpos.keys()[0]
-            
-            sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(cds,v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
-            for sample in gori:
-                if sample in v.calls:
-                    sys.stdout.write("\t%s"%v.calls[sample])
-                else:
-                    sys.stdout.write("\t-")
-            sys.stdout.write("\n")
-    else:
-        for b in bubbles(G):
-            v=Variant(b)
+        if v.size<=args.minsize:
+            continue
+        
+        if args.fastaout:
             for i,seq in enumerate(v.genotypes):
                 if seq!='-':
                     sys.stdout.write(">%s_%d\n"%(v.source,i))
                     sys.stdout.write("%s\n"%seq)
+            continue
+        
+        if args.reference in v.vpos:
+            cds=args.reference
+        else:
+            cds=v.vpos.keys()[0]
+        
+        sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(cds,v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+        for sample in gori:
+            if sample in v.calls:
+                sys.stdout.write("\t%s"%v.calls[sample])
+            else:
+                sys.stdout.write("\t-")
+        sys.stdout.write("\n")
 
 class Bubble:
     def __init__(self,G,source,sink,nodes,ordD):
@@ -287,15 +290,20 @@ class Variant(Bubble):
         self.vtype='undefined' #type definition of the variant
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
-
+        self.size=1 #length of the largest allele
+        
         gt=self.G.successors(self.source)
         gt.sort(key=lambda l: self.ordD[l])
+
         if self.issimple:
             for v in gt:
                 if v==self.sink:
                     self.genotypes.append('-')
                 else:
-                    self.genotypes.append(self.G.node[v]['seq'])
+                    s=self.G.node[v]['seq']
+                    self.genotypes.append(s)
+                    if len(s)>self.size:
+                        self.size=len(s)
             self.genotypes.sort()
         else:
             for v in gt:
