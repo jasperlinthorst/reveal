@@ -184,7 +184,7 @@ def plot(args):
         sps=sorted(mem[2])
         l=mem[0]
         sp1=sps[0]
-        sp2=sps[1]-sep
+        sp2=sps[1]-(sep+1)
         ep1=sp1+l
         ep2=sp2+l
         
