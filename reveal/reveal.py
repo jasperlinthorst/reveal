@@ -94,6 +94,7 @@ def main():
     parser_plot.add_argument("-e", dest="uniq", action="store_false", default=True, help="Plot all maximal exact matches.")
     parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("--maxn", dest="maxn", type=int, default=10000, help="Cap the number of MUMs to draw.")
+    parser_plot.add_argument("--nogaps", dest="showgaps", action="store_false", default=True, help="Don't mark gapped sequence.")
     parser_plot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
     parser_plot.set_defaults(func=plot.plot)
     

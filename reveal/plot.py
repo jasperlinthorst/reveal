@@ -25,101 +25,29 @@ def gplot(args):
     plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
 
 def plot(args):
-    #from matplotlib import pyplot as plt
     vertgaps=[]
     horzgaps=[]
     vertgapsizes=[]
     horzgapsizes=[]
+    ctgoffsets=[]
+    refoffsets=[]
     qrylength=0
     reflength=0
     ax = plt.axes()
+    
     if len(args.fastas)==2:
         #get mmems for forward orientation
         if args.sa64:
             idx=reveallib64.index()
         else:
             idx=reveallib.index()
-
-        for sample in args.fastas:
-            idx.addsample(sample)
-            for name,seq in fasta_reader(sample,truncN=False):
-                intv=idx.addsequence(seq.upper())
-                break #expect only one sequence per fasta for now
-        idx.construct()
         
-        if args.uniq:
-            print "Extracting mums..."
-            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength)]
-        else:
-            print "Extracting mems..."
-            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength)]
-        print "done."
-        
-        sep=idx.nsep[0]
-        
-        if args.rc:
-
-            #get mmems for reverse orientation
-            if args.sa64:
-                idx=reveallib64.index()
-            else:
-                idx=reveallib.index()
-            
-            sample=args.fastas[0]
-            idx.addsample(sample)
-            for name,seq in fasta_reader(sample,truncN=False):
-                pc=None
-                gapsize=None
-                for i,c in enumerate(seq):
-                    if c=='N' and pc!='N':
-                        horzgaps.append(i)
-                        gapsize=1
-                    elif c=='N' and pc=='N':
-                        gapsize+=1
-                    elif c!='N' and pc=='N':
-                        horzgapsizes.append(gapsize)
-                    pc=c
-                reflength+=len(seq)
-                intv=idx.addsequence(seq.upper())
-                break #expect only one sequence per fasta for now
-            
-            sample=args.fastas[1]
-            idx.addsample(sample)
-            for name,seq in fasta_reader(sample,truncN=False):
-                pc=None
-                gapsize=None
-                for i,c in enumerate(seq):
-                    if c=='N' and pc!='N':
-                        vertgaps.append(i)
-                        gapsize=1
-                    elif c=='N' and pc=='N':
-                        gapsize+=1
-                    elif c!='N' and pc=='N':
-                        vertgapsizes.append(gapsize)
-                    pc=c
-                qrylength+=len(seq)
-                intv=idx.addsequence(rc(seq.upper()))
-                break #expect only one sequence per fasta for now
-            idx.construct()
-            
-            if args.uniq:
-                print "Extracting RC mums..."            
-                mmems+=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength)]
-            else:
-                print "Extracting RC mems..."            
-                mmems+=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength)]
-            print "done."
-        
-    elif len(args.fastas)==1:
-        
-        if args.sa64:
-            idx=reveallib64.index()
-        else:
-            idx=reveallib.index()
+        ctgid=0
         
         sample=args.fastas[0]
         idx.addsample(sample)
-        for name,seq in fasta_reader(sample, truncN=False):
+        refoffset=0
+        for name,seq in fasta_reader(sample,truncN=False):
             pc=None
             gapsize=None
             for i,c in enumerate(seq):
@@ -131,54 +59,112 @@ def plot(args):
                 elif c!='N' and pc=='N':
                     horzgapsizes.append(gapsize)
                 pc=c
-            reflength+=len(seq)
+            refoffset+=i+2
+            reflength+=len(seq)+1
+            refoffsets.append(refoffset)
             intv=idx.addsequence(seq.upper())
-            break #expect only one sequence per fasta for now
         
-        sample=args.fastas[0]
+        sample=args.fastas[1]
         idx.addsample(sample)
-        ls=0
-        for name,seq in fasta_reader(sample, truncN=False):
+        qryoffset=0
+        for name,seq in fasta_reader(sample,truncN=False):
             pc=None
             gapsize=None
             for i,c in enumerate(seq):
                 if c=='N' and pc!='N':
-                    vertgaps.append(i)
+                    vertgaps.append(qryoffset+i)
                     gapsize=1
                 elif c=='N' and pc=='N':
                     gapsize+=1
                 elif c!='N' and pc=='N':
                     vertgapsizes.append(gapsize)
                 pc=c
-            qrylength+=len(seq)
-            intv=idx.addsequence(rc(seq.upper()))
-            break #expect only one sequence per fasta for now
+            qryoffset+=i+2
+            qrylength+=len(seq)+1
+            ctgoffsets.append(qryoffset)
+            intv=idx.addsequence(seq.upper())
+        
+        qrylength=qrylength-1
+
         idx.construct()
-        sep=idx.nsep[0]
         
         if args.uniq:
-            mmems=[(mem[0],mem[1],mem[2],1) for mem in idx.getmums(args.minlength) if mem[0]>args.minlength]
+            print "Extracting mums..."
+            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength)]
         else:
-            mmems=[(mem[0],mem[1],mem[2],1,mem[3]) for mem in idx.getmems(args.minlength) if mem[0]>args.minlength]
+            print "Extracting mems..."
+            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength)]
         
+        print "done."
+        
+        sep=idx.nsep[0]
+        
+        if args.rc:
+            #get mmems for reverse orientation
+            if args.sa64:
+                idx=reveallib64.index()
+            else:
+                idx=reveallib.index()
+            
+            sample=args.fastas[0]
+            idx.addsample(sample)
+            for name,seq in fasta_reader(sample,truncN=False):
+                idx.addsequence(seq.upper())
+            
+            sample=args.fastas[1]
+            idx.addsample(sample)
+
+            qryintvs=[]
+            for name,seq in fasta_reader(sample,truncN=False):
+                intv=idx.addsequence(rc(seq.upper()))
+                qryintvs.append(intv)
+            
+            idx.construct()
+            
+            print "Extracting RC mems..."            
+            
+            if args.uniq:
+                tmp=idx.getmums(args.minlength)
+            else:
+                tmp=idx.getmems(args.minlength)
+            
+            vi=iter(qryintvs)
+            v=vi.next()
+            
+            tmp=[(m[0],m[1],sorted(m[2])) for m in tmp] #make sure start positions are sorted
+            tmp.sort(key=lambda l: l[2][1]) #sort by query pos
+            
+            nmmems=[]
+            for mem in tmp:
+                if mem[2][1]>v[1]:
+                    v=vi.next()
+                start,end=v
+                newqstart=end-(mem[2][1]-start)-mem[0]
+                if args.uniq:
+                    ntup=(mem[0],mem[1],(mem[2][0],newqstart),1)
+                else:
+                    ntup=(mem[0],mem[1],(mem[2][0],newqstart),mem[3])
+                nmmems.append(ntup)
+            
+            mmems+=nmmems
+            
+            print "done."
+     
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
     
     start=0
-    end=idx.nsep[0]
-
+    end=sep
+    
     del idx
-
+    
     if len(mmems)>args.maxn:
         logging.info("Too many mums (%d), taking the %d largest."%(len(mmems),args.maxn))
         mmems.sort(key=lambda mem: mem[0],reverse=True) #sort by size
         mmems=mmems[:args.maxn] #take the n largest
     
     print "Drawing",len(mmems),"matches."
-    
-    #pos=args.pos
-    #dist=args.env
     
     for mem in mmems:
         sps=sorted(mem[2])
@@ -199,35 +185,40 @@ def plot(args):
                         plt.plot([sp1,ep1],[sp2,ep2],'r-')
             else:
                 if args.uniq: #only uniq matches in the list
-                    plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'g-')
+                    plt.plot([ep1,sp1],[sp2,ep2],'g-')
                 else:
                     if mem[4]==0: #non-uniq
-                        plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'y-')
+                        plt.plot([ep1,sp1],[sp2,ep2],'y-')
                     else:
-                        plt.plot([sp1,ep1],[qrylength-sp2,qrylength-ep2],'g-')
+                        plt.plot([ep1,sp1],[sp2,ep2],'g-')
     
-    del mmems
-
-    for p,l in zip(horzgaps,horzgapsizes):
-        ax.add_patch(
-            patches.Rectangle(
-                (p, 0), #bottom left
-                l, #width
-                qrylength, #height
-                alpha=.25
-            )
-        )
-     
-    for p,l in zip(vertgaps,vertgapsizes):
-        ax.add_patch(
-            patches.Rectangle(
-                (0, p+1), #bottom left
-                reflength, #width
-                l, #height
-                alpha=.25
-            )
-        )
+    for p in ctgoffsets:
+        plt.axhline(y=p,linewidth=.5,color='black',linestyle='solid')
     
+    for p in refoffsets:
+        plt.axvline(x=p,linewidth=.5,color='black',linestyle='solid')
+    
+    if args.showgaps:
+        for p,l in zip(horzgaps,horzgapsizes):
+            ax.add_patch(
+                patches.Rectangle(
+                    (p, 0), #bottom left
+                    l, #width
+                    qrylength, #height
+                    alpha=.1
+                )
+            )
+         
+        for p,l in zip(vertgaps,vertgapsizes):
+            ax.add_patch(
+                patches.Rectangle(
+                    (0, p), #bottom left
+                    reflength, #width
+                    l, #height
+                    alpha=.1
+                )
+            )
+        
     plt.xlim(start,end)
     plt.title(" vs. ".join(args.fastas))
     if len(args.fastas)==2:

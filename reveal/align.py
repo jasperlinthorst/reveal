@@ -202,7 +202,7 @@ def graphalign(l,index,n,score,sp,penalty):
     if l==0:
         logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
         return
-    
+
     if schemes.minscore!=None:
         if score<schemes.minscore:
             if schemes.pcutoff!=None: #when too much deviation from diagonal, check validity of a match, by approximating a pvalue based on a uniform random distribution of bases, use threshold
@@ -221,7 +221,6 @@ def graphalign(l,index,n,score,sp,penalty):
             else:
                 logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
                 return
-    
     
     if l<schemes.minlength:
         logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))

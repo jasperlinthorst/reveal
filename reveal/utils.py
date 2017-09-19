@@ -446,3 +446,55 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
         outputfiles.append(outputfile)
     
     return outputfiles
+
+def kdtree(points, k, depth=0):
+    n=len(points)
+    if n==0:
+        return None
+    if n==1:
+        return points[0]
+    splitdim=depth % k
+    spoints=sorted(points,key=lambda p: p[splitdim])
+    splitvalue=spoints[n/2][splitdim] #take median for splitting
+    if splitvalue==spoints[0][splitdim]:
+        splitvalue+=1
+    left=[p for p in spoints if p[splitdim] < splitvalue]
+    right=[p for p in spoints if p[splitdim] >= splitvalue]
+    return { 'left': kdtree(left, k, depth=depth+1) , 'split' : splitvalue, 'right': kdtree(right, k, depth=depth+1) }
+
+#return all points within the query range
+def range_search(kdtree, qstart, qend):
+    k=len(qstart)
+    points=[]
+    stack=[(kdtree,0)]
+    while len(stack)!=0:
+        tree,depth=stack.pop()
+        splitdim=depth%k
+
+        if tree==None:
+            continue
+        
+        if isinstance(tree,tuple): #reached leaf, tree==point
+            if tree[splitdim]>=qstart[splitdim] and tree[splitdim]<=qend[splitdim]:
+                #check ik point is contained in the range query
+                for d in range(k):
+                    if tree[d]>=qstart[d] and tree[d]<=qend[d]:
+                        continue
+                    else:
+                        break
+                else:
+                    points.append(tree)
+            continue
+        
+        splitvalue=tree['split']
+        
+        if splitvalue>=qstart[splitdim] and splitvalue<=qend[splitdim]: #intersect
+            if splitvalue != qstart[splitdim]: #equal values go right
+                stack.append((tree['left'],depth+1))
+            stack.append((tree['right'],depth+1))
+        elif splitvalue < qstart[splitdim]:
+            stack.append((tree['right'],depth+1))
+        else:
+            stack.append((tree['left'],depth+1))
+        
+    return points

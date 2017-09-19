@@ -77,7 +77,6 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
         if cumsum>maxlen:
             print "Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink)
             return G
-        #TODO: check that bubbles dont that get too big for multi alignment, put some upper limit!
     
     schemes.wpen=wpen
     schemes.wscore=wscore

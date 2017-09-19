@@ -165,7 +165,7 @@ def finish(args):
             unplaced=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+"unplaced.fasta",'w')
         
         if ref=='unplaced':
-            logging.info("The following %d contigs could not be placed anywhere on the reference sequence.")
+            logging.info("The following %d contigs could not be placed anywhere on the reference sequence."%len(ref2ctg[ref]))
             for name in ref2ctg[ref]:
                 logging.info("%s (length=%d)"%(name,contig2length[name]))
                 unplaced.write(">%s\n"%name)
@@ -288,7 +288,7 @@ def finish(args):
                         else:
                             event='error!'
                         
-                        logging.info("Event of type: \'%s\' detected at: %d inserting gap of size: %d"%(event,prefend,gapsize))
+                        logging.info("Event of type: \'%s\' detected at: %d, new start at %d, inserting gap of size: %d"%(event,prefend,refbegin,gapsize))
                         logging.debug("Chains are not consecutive on contig: %s,%s - %s,%s - %s,%s"%(revcomp,prevcomp,pctgname,ctgname,pci,ci-1))
                         
                         gap=True
@@ -304,9 +304,26 @@ def finish(args):
                 
             else:
                 gap=True
-                finished.write("N"*gapsize)
-                l=gapsize+len(contig2seq[ctgname])
                 
+                a=pctgbegin
+                assert(a>=0)
+                b=pctglength-pctgend
+                assert(b>=0)
+                gapsize=gapsize-a-b
+                
+                if gapsize==0: #perfect boundary, stil use one N to be able to distinguish the event
+                    gapsize=1
+
+                if gapsize<0 or args.fixedsize:
+                    gapsize=args.gapsize
+                
+                
+                logging.info("\'%s\' follows \'%s\' inserting gap of size: %d"%(ctgname[:20],pctgname[:20],gapsize))
+
+                finished.write("N"*gapsize)
+                
+                l=gapsize+len(contig2seq[ctgname])
+
                 if revcomp:
                     finished.write(rc(contig2seq[ctgname])) #write the entire contig
                 else:
@@ -325,9 +342,7 @@ def finish(args):
                     )
                 
                 if revcomp:
-                    #ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'bx')
                     ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
-                    #ax.plot([refbegin,refend],[o+alength+gapsize,o+gapsize],'g-')
                     ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'g-')
                 else:
                     ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
@@ -415,12 +430,12 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainlength=1500,m
         for i,path in enumerate(paths):
             score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
             #logging.info("%d -> ctg:%d:%d - ref:%d:%d - %d"%(i,ctgstart,ctgend,refstart,refend,revcomp))
-
+            
             if ref in ref2ctg:
                 ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i))
             else:
                 ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i)]
-
+    
     return ref2ctg
 
 
@@ -560,10 +575,8 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
         if revcomp:
             l=cnode[1]-cnode[0]
             mums.append((rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mum[0]), mum[0], mum[1], 1))
-            #mums.append([rnode[2], refstart-rnode[0], cnode[2], l-((ctgstart-cnode[0])+mum[0]), mum[0], mum[1], 1])
         else:
             mums.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0))
-            #mums.append([rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0])
     
     return mums,ref2length,contig2length,contig2seq
 
@@ -649,52 +662,81 @@ def filtermumsrange(mems,maxgapsize=1500,minchainlength=1500):
     logging.debug("Number of mems before filtering: %d"%len(mems))
 
     mems.sort(key=lambda m: m[0]) #sort by reference position
+
     filteredmems=[]
 
-    for i in xrange(len(mems)-1):
-        if i==0:
-            continue
+    for i in xrange(len(mems)):
         if mems[i][2]>=minchainlength:
             filteredmems.append(mems[i])
             continue
         
-        prefstart=mems[i-1][0]
-        prefend=mems[i-1][0]+mems[i-1][2]
+        if len(mems)<=1:
+            continue
+        
         refstart=mems[i][0]
         refend=mems[i][0]+mems[i][2]
-        nrefstart=mems[i+1][0]
-        nrefend=mems[i+1][0]+mems[i+1][2]
         
-        if abs(refstart-prefend)>maxgapsize:
-            continue
-        elif abs(refend-nrefstart)>maxgapsize:
-            continue
+        if i==0: #first
+            nrefstart=mems[i+1][0]
+            nrefend=mems[i+1][0]+mems[i+1][2]
+            if abs(refend-nrefstart)>maxgapsize:
+                continue
+            else:
+                filteredmems.append(mems[i])
+        elif i==len(mems)-1: #last
+            prefstart=mems[i-1][0]
+            prefend=mems[i-1][0]+mems[i-1][2]
+            if abs(refstart-prefend)>maxgapsize:
+                continue
+            else:
+                filteredmems.append(mems[i])
         else:
-            filteredmems.append(mems[i])
-
+            prefstart=mems[i-1][0]
+            prefend=mems[i-1][0]+mems[i-1][2]
+            nrefstart=mems[i+1][0]
+            nrefend=mems[i+1][0]+mems[i+1][2]
+            if abs(refstart-prefend)>maxgapsize and abs(refend-nrefstart)>maxgapsize:
+                continue
+            else:
+                filteredmems.append(mems[i])
+    
     filteredmems.sort(key=lambda m: m[1]) #sort by qry position
     mems=[]
 
-    for i in xrange(len(filteredmems)-1):
-        if i==0:
-            continue
+    for i in xrange(len(filteredmems)):
         if filteredmems[i][2]>=minchainlength:
             mems.append(filteredmems[i])
             continue
-
-        pqrystart=filteredmems[i-1][1]
-        pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
+        
+        if len(filteredmems)<=1:
+            continue
+        
         qrystart=filteredmems[i][1]
         qryend=filteredmems[i][1]+filteredmems[i][2]
-        nqrystart=filteredmems[i+1][1]
-        nqryend=filteredmems[i+1][1]+filteredmems[i+1][2]
         
-        if abs(qrystart-pqryend)>maxgapsize:
-            continue
-        elif abs(qryend-nqrystart)>maxgapsize:
-            continue
+        if i==0: #first
+            nqrystart=filteredmems[i+1][1]
+            nqryend=filteredmems[i+1][1]+filteredmems[i+1][2]
+            if abs(qryend-nqrystart)>maxgapsize:
+                continue
+            else:
+                mems.append(filteredmems[i])
+        elif i==len(filteredmems)-1: #last
+            pqrystart=filteredmems[i-1][1]
+            pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
+            if abs(qrystart-pqryend)>maxgapsize:
+                continue
+            else:
+                mems.append(filteredmems[i])
         else:
-            mems.append(filteredmems[i])
+            pqrystart=filteredmems[i-1][1]
+            pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
+            nqrystart=filteredmems[i+1][1]
+            nqryend=filteredmems[i+1][1]+filteredmems[i+1][2]
+            if abs(qrystart-pqryend)>maxgapsize and abs(qryend-nqrystart)>maxgapsize:
+                continue
+            else:
+                mems.append(filteredmems[i])
     
     logging.debug("Number of mems after filtering: %d"%len(mems))
     
@@ -1141,7 +1183,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainlength
     logging.debug("Sum of anchors: %d", c)
     logging.debug("Length of contig: %d", ctglength)
     logging.debug("Cov ratio: %s"% (c/float(ctglength)) )
-    
+     
     mems.sort(key=lambda mem: mem[0]) #sort by reference position
     paths=[]
     
@@ -1153,75 +1195,72 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainlength
         active=[]
         processed=[]
         start=init
-        
         end=None
         
+        endpoints=[]
+        rcendpoints=[]
+        pointtomem=dict()
+        for mem in mems:
+            if mem[4]==0:
+                p=(mem[0]+mem[2],mem[1]+mem[2])
+                endpoints.append(p)
+                pointtomem[p]=mem
+            else:
+                p=(mem[0]+mem[2],mem[1])
+                rcendpoints.append(p)
+                pointtomem[p]=mem
+        
+        #build kdtrees
+        memtree=kdtree(endpoints,2)
+        rcmemtree=kdtree(rcendpoints,2)
         maxscore=0
         
         for mem in mems:
-            remove=[]
-            for pmem in processed:
-                pendpoint=pmem[0]+pmem[2]
-                if pendpoint<mem[0]+mem[2]:
-                    active.append(pmem)
-                    remove.append(pmem)
-            
-            for r in remove:
-                processed.remove(r)
-            
-            #make active a kd tree, so we can search amems in log(n)! Add amems dynamically to the tree...
-
-            #or remove amems for which amem[0]+amem[2]<mem[0]-maxgapsize
             
             best=init
             w=mem[2]
             
             if mem[4]==1:
-                subactive=[amem for amem in active if amem[0]+amem[2]>mem[0]-maxgapsize and amem[1]<mem[1]+mem[2]+maxgapsize and amem[4]==mem[4]]
+                frompoint=(mem[0]-maxgapsize, mem[1])
+                topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]+maxgapsize )
+                subactive=[pointtomem[p] for p in range_search(rcmemtree,frompoint,topoint)]
             else:
-                subactive=[amem for amem in active if amem[0]+amem[2]>mem[0]-maxgapsize and amem[1]+amem[2]>mem[1]-maxgapsize and amem[4]==mem[4]]
-            
+                frompoint=(mem[0]-maxgapsize,mem[1]-maxgapsize)
+                topoint=(mem[0]+mem[2]-1,mem[1]+mem[2]-1)
+                subactive=[pointtomem[p] for p in range_search(memtree,frompoint,topoint)]
+
             for amem in subactive:
                 
                 #calculate score of connecting to active point
                 if mem[4]==1:
-                    if amem[1] >= mem[1]:
-                        p1=(mem[0], mem[1]+mem[2])
-                        p2=(amem[0]+amem[2], amem[1])
-                        penalty=sumofpairs(p1,p2)
-                        #tmpw=score[amem]+mem[2]-penalty
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-                        if tmpw>w:
-                            w=tmpw
-                            best=amem
+                    p1=(mem[0], mem[1]+mem[2])
+                    p2=(amem[0]+amem[2], amem[1])
+                    penalty=sumofpairs(p1,p2)
+                    tmpw=score[tuple(amem)]+mem[2]-penalty
+                    if tmpw>w:
+                        w=tmpw
+                        best=amem
                 else:
-                    if amem[1]+amem[2] <= mem[1]+mem[2]:
-                        p1=(amem[0]+amem[2], amem[1]+amem[2])
-                        p2=(mem[0], mem[1])
-                        penalty=sumofpairs(p1,p2)
-                        #tmpw=score[amem]+mem[2]-penalty
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-                        if tmpw>w:
-                            w=tmpw
-                            best=amem
-            
-            #link[mem]=best
-            #score[mem]=w
+                    p1=(amem[0]+amem[2], amem[1]+amem[2])
+                    p2=(mem[0], mem[1])
+                    penalty=sumofpairs(p1,p2)
+                    tmpw=score[tuple(amem)]+mem[2]-penalty
+                    if tmpw>w:
+                        w=tmpw
+                        best=amem
+        
             link[tuple(mem)]=tuple(best)
             score[tuple(mem)]=w
             
             if w>maxscore:
                 maxscore=w
                 end=mem
-            
-            processed.append(mem)
         
         path=[]
         o=end[4]
         while end!=start:
             assert(o==end[4])
             path.append(tuple(end))
-            #end=link[end]
             end=link[tuple(end)]
         
         if len(path)!=0:
@@ -1300,12 +1339,13 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainlength
                 umems.append(mem)
 
             mems=umems
+            mems.sort(key=lambda mem: mem[0]) #sort by reference position
             
         else:
             break
     
     logging.debug("Detected number of chains: %d."%len(paths))
-
+    
     return paths
 
 

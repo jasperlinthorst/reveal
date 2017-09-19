@@ -435,7 +435,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
                 penalty=lpenalty+tpenalty;
             }
             
-            //fprintf(stderr,"mum length: %d score: %lld penalty: %llu\n",index->LCP[i],score,penalty);
+            //fprintf(stderr,"MUM %d %d [%d:%d] [%d:%d] mum length: %d score: %lld penalty: %llu\n",aStart,bStart,start1,end1,start2,end2,index->LCP[i],score,penalty);
 
             //score=(w_score*(index->LCP[i]*4))-sqrt(w_penalty*penalty); //always pairwise
             score=(w_score*(index->LCP[i]*2))-(w_penalty*penalty); //always pairwise
