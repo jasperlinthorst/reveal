@@ -2,21 +2,6 @@
 from utils import *
 import sys
 
-#def issimple(G,source,sink):
-#    gt=G.successors(source)
-#    sucs=set(gt)
-#    pres=set(G.predecessors(sink))
-#    sucs.discard(sink)
-#    pres.discard(source)
-#    simple=True
-#    for suc in sucs:
-#        if len(G.successors(suc))!=1:
-#            simple=False
-#    for pre in pres:
-#        if len(G.predecessors(pre))!=1:
-#            simple=False
-#    return simple
-
 def bubbles(G):
     def entrance(G,v):
         for c in G.successors(v):
@@ -224,7 +209,7 @@ def variants_cmd(args):
     for b in bubbles(G):
         v=Variant(b)
         
-        if v.size<=args.minsize:
+        if v.size<args.minsize:
             continue
         
         if args.fastaout:
@@ -295,7 +280,7 @@ class Variant(Bubble):
         gt=self.G.successors(self.source)
         gt.sort(key=lambda l: self.ordD[l])
 
-        if self.issimple:
+        if self.issimple():
             for v in gt:
                 if v==self.sink:
                     self.genotypes.append('-')
@@ -309,7 +294,7 @@ class Variant(Bubble):
             for v in gt:
                 self.genotypes.append('N')
         
-        if self.issimple:
+        if self.issimple():
             if self.G.has_edge(self.source,self.sink):
                 self.vtype='indel'
             elif len(self.genotypes)==2:
