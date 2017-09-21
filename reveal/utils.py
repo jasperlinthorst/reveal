@@ -388,7 +388,8 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
     G=G.copy()
     mapping={}
     totn=len(G.graph['samples'])
-
+    logging.debug("Graph contains %d samples"%totn)
+    
     for key in G.graph:
         G.graph[key]=str(G.graph[key])
     
@@ -415,25 +416,27 @@ def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
     outputfiles=[]
     
     if partition:
+        logging.debug("Trying to partion graph into subgraphs of size %d."%hwm)
         i=0
-        for subset in nx.connected_components(G.to_undirected()):
+        for sgi,subset in enumerate(nx.connected_components(G.to_undirected())):
+            logging.debug("Partitioning connected component: %d"%sgi)
             sgn=[]
             g=G.subgraph(subset)
             gn=G.graph['samples']
             for n in nx.topological_sort(g):
-                if sgn==[]:
-                    fr=n
                 sgn.append(n)
-                if 'offsets' in G.node[n]:
-                    if len(G.node[n]['offsets'])==totn: #join/split node
-                        if len(sgn)>=hwm:
-                            sg=G.subgraph(sgn)
-                            fn=outputfile+'.'+str(i)+'.gml'
-                            nx.write_gml(sg,fn)
-                            outputfiles.append(fn)
-                            sgn=[]
-                            i+=1
-            if len(sgn)>0:
+                if G.node[n]['n']==totn: #join/split node
+                    logging.debug("Can split graph at node: %s."%n)
+                    if len(sgn)>=hwm:
+                        logging.debug("Splitting graph at node: %s"%n)
+                        sg=G.subgraph(sgn)
+                        fn=outputfile+'.'+str(i)+'.gml'
+                        nx.write_gml(sg,fn)
+                        outputfiles.append(fn)
+                        sgn=[n]
+                        i+=1
+            
+            if len(sgn)>1:
                 sg=G.subgraph(sgn)
                 fn=outputfile+'.'+str(i)+'.gml'
                 nx.write_gml(sg,fn)
