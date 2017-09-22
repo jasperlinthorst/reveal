@@ -17,8 +17,8 @@ except:
 def breaknode(node,pos,l):
     logging.debug("Breaking node: %s"%str(node))
     att=G.node[node]
-    in_edges=G.in_edges(node)
-    out_edges=G.out_edges(node)
+    in_edges=G.in_edges(node,data=True)
+    out_edges=G.out_edges(node,data=True)
     mn=Interval(pos,pos+l)
     other=set()
     
@@ -26,9 +26,12 @@ def breaknode(node,pos,l):
         t.remove(node)
         return node,other
     
+    paths=set()
+    
     moffsets=dict()
     for s in att['offsets']:
         moffsets[s]=att['offsets'][s]+(pos-node.begin)
+        paths.add(s)
     
     soffsets=dict()
     for s in att['offsets']:
@@ -41,7 +44,7 @@ def breaknode(node,pos,l):
         G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
-        G.add_edge(pn,mn)
+        G.add_edge(pn,mn,paths=paths)
         t.add(pn)
         other.add(pn)
     else:
@@ -51,21 +54,21 @@ def breaknode(node,pos,l):
         G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
-        G.add_edge(mn,sn)
+        G.add_edge(mn,sn,paths=paths)
         t.add(sn)
         other.add(sn)
     else:
         sn=mn
     G.remove_node(node)                     #update Graph
     t.remove(node)                          #update intervaltree
-    for e in in_edges:
-        assert(not G.has_edge(e[0],pn))
-        assert(not G.has_edge(pn,e[0]))
-        G.add_edge(e[0],pn)
-    for e in out_edges:
-        assert(not G.has_edge(sn,e[1]))
-        assert(not G.has_edge(e[1],sn))
-        G.add_edge(sn,e[1])
+    for fro,to,d in in_edges:
+        assert(not G.has_edge(fro,pn))
+        assert(not G.has_edge(pn,fro))
+        G.add_edge(fro,pn,**d)
+    for fro,to,d in out_edges:
+        assert(not G.has_edge(sn,to))
+        assert(not G.has_edge(to,sn))
+        G.add_edge(sn,to,**d)
     
     logging.debug("Leading/Trailing node(s): %s"%str(other))
     logging.debug("Matching node: %s"%str(mn))
@@ -87,7 +90,6 @@ def mergenodes(mns,mark=True):
     else:
         refnode=mns[ri]
     
-    #create offset dict for gap penalty calculation from alignment graph
     newoffsets=dict()
     for node in mns:
         d=G.node[node]
@@ -108,12 +110,12 @@ def mergenodes(mns,mark=True):
     assert(tmp==refnode)
     
     for mn in mns: #leave the first node, remove the rest
-        for e in G.in_edges(mn):
-            assert(not G.has_edge(refnode,e[0]))
-            G.add_edge(e[0],refnode)
-        for e in G.out_edges(mn):
-            assert(not G.has_edge(e[1],refnode))
-            G.add_edge(refnode,e[1])
+        for e0,e1,d in G.in_edges(mn,data=True):
+            assert(not G.has_edge(refnode,e0))
+            G.add_edge(e0,refnode,**d)
+        for e0,e1,d in G.out_edges(mn,data=True):
+            assert(not G.has_edge(e1,refnode))
+            G.add_edge(refnode,e1,**d)
         G.remove_node(mn)
     
     return refnode
@@ -241,7 +243,7 @@ def graphalign(l,index,n,score,sp,penalty):
         for node in other:
             if isinstance(node,Interval):
                 nodes.append((node.begin,node.end))
-
+    
     mn=mergenodes(mns)
     
     msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
@@ -421,7 +423,7 @@ def align_cmd(args):
     
     logging.info("Merging nodes...")
     T=idx.T
-    
+
     if len(G.graph['samples'])>2:
         prune_nodes(G,T) #TODO: do this after every alignment step to reduce memory usage of graph
     
@@ -511,7 +513,7 @@ def align_genomes(args):
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
                 G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
-    
+     
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! ...")
         return

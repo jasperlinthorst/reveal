@@ -154,7 +154,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     i=0
     for line in f:
         if line.startswith('H'):
-            h=line.split()
+            h=line.split("\t")
             tag=h[1].split(':')
             if tag[0]=="ORI":
                 for sample in tag[2].rstrip(sep).split(sep):
@@ -248,10 +248,18 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             edges.append(line)
 
     for line in edges:
-        e=line.strip().split()
+        e=line.strip().split("\t")
         assert(not graph.has_edge(mapping[int(e[1])],mapping[int(e[3])]))
         assert(not graph.has_edge(mapping[int(e[3])],mapping[int(e[1])]))
-        graph.add_edge(mapping[int(e[1])],mapping[int(e[3])],ofrom=e[2],oto=e[4],cigar=e[5])
+        tags=dict()
+        tags['ofrom']=e[2]
+        tags['oto']=e[4]
+        tags['cigar']=e[5]
+        if '*' in e: #there are additional tags parse them
+            for tag in e[7:]:
+                key,ttype,value=tag.split(':')
+                tags[key.lower()]=value
+        graph.add_edge(mapping[int(e[1])],mapping[int(e[3])],**tags)
     
     if revcomp:
         genome2length=dict()
@@ -336,20 +344,16 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False, remap=T
         data=G.node[node]
         seq=""
         if 'seq' in data:
-            #f.write('S\t'+str(i)+'\t'+data['seq'].upper())
             f.write('S\t'+str(mapping[node])+'\t'+data['seq'].upper())
             seq=data['seq']
         else:
             if isinstance(node,Interval):
                 seq=T[node.begin:node.end].upper()
-                #f.write('S\t'+str(i)+'\t'+seq)
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             elif isinstance(node,tuple):
                 seq=T[node[0]:node[0]+G.node[node]['l']].upper()
-                #f.write('S\t'+str(i)+'\t'+seq)
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             else:
-                #f.write('S\t'+str(i)+'\t')
                 f.write('S\t'+str(mapping[node])+'\t')
         
         if nometa or 'offsets' not in data:
@@ -360,7 +364,7 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False, remap=T
             data['sample']=tmp
             
             if not isinstance(data['offsets'],dict):
-                print "ERROR offset data:", data['offsets']
+                logging.error("ERROR offset data: %s"%data['offsets'])
             
             f.write("\t*\tORI:Z:%s\tOFFSETS:Z:%s\tRC:i:%s\n" % 
                     (
@@ -369,9 +373,21 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=False, remap=T
                     len(data['offsets'])*len(seq)
                     )
                 )
-         
+        
         for to in G[node]:
-            f.write('L\t'+str(mapping[node])+'\t+\t'+str(mapping[to])+"\t+\t0M\n")
+            f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t0M")
+            d=G[node][to]
+            if len(d)>0:
+                f.write("\t*")
+                for key in d:
+                    f.write("\t"+key.upper()+":Z:"+str(G[node][to][key]))
+            
+            #if 'event' in G[node][to]:
+            #    f.write("\t*\tEVENT:Z:"+G[node][to]['event'])
+            #if 'paths' in G[node][to]:
+            #    f.write("\t*\tPATHS:Z:"+str(G[node][to]['paths']))
+            
+            f.write("\n")
     
     if paths:
         for sample in G.graph['samples']:
