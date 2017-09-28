@@ -33,7 +33,7 @@ def extract_cmd(args):
 def extract(G,sample):
     sg=[]
     for node,data in G.nodes(data=True):
-        if sample in data['offsets']:
+        if G.graph['sample2id'][sample] in data['offsets']:
             sg.append(node)
     for i,contig in enumerate(nx.connected_components(G.subgraph(sg).to_undirected())):
         seq=""

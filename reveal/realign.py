@@ -42,8 +42,10 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     
     assert(source in G)
     assert(sink in G)
-    sourcesamples=set(G.node[source]['offsets'].keys())
-    sinksamples=set(G.node[sink]['offsets'].keys())
+    #sourcesamples=set(G.node[source]['offsets'].keys())
+    #sinksamples=set(G.node[sink]['offsets'].keys())
+    sourcesamples=set([G.graph['id2sample'][sid] for sid in G.node[source]['offsets'].keys()])
+    sinksamples=set([G.graph['id2sample'][sid] for sid in G.node[sink]['offsets'].keys()])
     
     if sourcesamples!=sinksamples:
         logging.error("Specify proper source/sink pair.")
@@ -69,6 +71,7 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
         #TODO: can also be that input was an assembly graph! What to do...
         for i,seq in enumerate(extract(sg,sample)): #has to be just one component
             pass
+        
         assert(i==0)
         cumsum+=len(seq)
         if len(seq)>0:
@@ -98,7 +101,9 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
             endnodes.add(nn)
         corrected=dict()
         for sample in data['offsets']:
-            corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sample]
+            sid=G.graph['sample2id'][ng.graph['id2sample'][sample]]
+            #corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sample]
+            corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sid]
         ng.node[node]['offsets']=corrected
         mapping[node]=nn
         nn+=1

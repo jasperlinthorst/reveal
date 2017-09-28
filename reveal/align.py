@@ -589,6 +589,8 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,global_alig
     G=nx.DiGraph()
     H=G
     G.graph['samples']=[]
+    G.graph['sample2id']=dict()
+    G.graph['id2sample']=dict()
     o=0
     schemes.minlength=minlength
     schemes.minscore=minscore
@@ -604,8 +606,10 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,global_alig
             if intv[1]-intv[0]>0:
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
+                G.graph['sample2id'][name]=len(G.graph['samples'])
+                G.graph['id2sample'][len(G.graph['samples'])]=name
                 G.graph['samples'].append(name)
-                G.add_node(Intv,offsets={name:0},aligned=0)
+                G.add_node(Intv,offsets={G.graph['sample2id'][name]:0},aligned=0)
         elif isinstance(aobj,str):
             if not os.path.isfile(aobj):
                 logging.fatal("Not a file, expecting fasta or gfa file.")
