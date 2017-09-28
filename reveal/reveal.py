@@ -24,6 +24,7 @@ import bubbles
 import matches
 import chain
 import stats
+import split
 
 def main():
     desc="""
@@ -54,6 +55,7 @@ def main():
     parser_chain = subparsers.add_parser('chain', prog="reveal chain", description="Use default chaining scheme to construct GFA graph based on a global multi-alignment of all input genomes.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_stats = subparsers.add_parser('stats', prog="reveal stats", description="Output statistics (number of node, edges, genomes etc.) for a graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_gplot = subparsers.add_parser('gplot', prog="reveal gplot", description="Generate a plot that represents the alignment of two samples in a graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_split = subparsers.add_parser('split', prog="reveal split", description="Split a graph file into a connected component per file.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser_aln.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
@@ -79,7 +81,7 @@ def main():
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
-    parser_aln.add_argument("--paths", dest="paths", action="store_true", default=False, help="Output paths in GFA.")
+    parser_aln.add_argument("--nopaths", dest="paths", action="store_false", default=True, help="Dont' output paths in GFA.")
     parser_aln.set_defaults(func=align.align_cmd)
     
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
@@ -116,14 +118,14 @@ def main():
     parser_finish.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
     parser_finish.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
     parser_finish.add_argument("--outputgraph", dest="outputgraph", action="store_true", default=False, help="Output a graph based representation, in which nodes are contigs/chains and edges represent the reference based order.")
-    parser_finish.add_argument("--nofilter", dest="filtercontained", action="store_false", default=True, help="Also use matches that are contained within matches that originate from the reverse complement.")
+    parser_finish.add_argument("--filter", dest="filtercontained", action="store_true", default=False, help="Reduce search space by filtering exact matches.")
     parser_finish.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
     parser_finish.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
     parser_finish.add_argument("--order", dest="order", default="contigs", choices=["contigs","chains"], help="Determine the order for either contigs or chains. With \'chains\' large scale rearrangements within contigs can be undone in order to obtain colinear genomes.")
     parser_finish.add_argument("--maxgapsize", dest="maxgapsize", type=int, default=1500, help="Maxgapsize between MUMs before breaking chain.")
-    parser_finish.add_argument("--maxn", dest="maxn", type=int, default=100000, help="Max number of MUMs to consider for chaining.")
+    parser_finish.add_argument("--maxn", dest="maxn", type=int, default=1000000, help="Max number of MUMs to consider for chaining.")
     #parser_finish.add_argument("--minchainlength", dest="minchainlength", type=int, default=1500,help="Minimal length of a chain on the reference before its reported.")
-    parser_finish.add_argument("--minchainsum", dest="minchainsum", type=int, default=1000,help="Minimal sum of the length of the MUMs in a chain before its reported.")
+    parser_finish.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000,help="Minimal sum of the length of the MUMs in a chain before its reported.")
     parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
     parser_finish.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
     parser_finish.set_defaults(func=finish.finish)
@@ -208,11 +210,14 @@ def main():
     parser_chain.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_chain.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     parser_chain.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
-    parser_chain.add_argument("--paths", dest="paths", action="store_true", default=False, help="Output paths in GFA.")    
+    parser_chain.add_argument("--nopaths", dest="paths", action="store_false", default=True, help="Don't output paths in GFA.")    
     parser_chain.set_defaults(func=chain.chain_cmd)
     
     parser_stats.add_argument('gfa', nargs=1, help='GFA file for which statistics should be calculated.')
     parser_stats.set_defaults(func=stats.stats_cmd)
+    
+    parser_split.add_argument('gfa', nargs=1, help='GFA file which has to  be split into a GFA file per connected component.')
+    parser_split.set_defaults(func=split.split_cmd)
     
     args = parser.parse_args()
     

@@ -39,7 +39,10 @@ def multimumpicker(multimums,idx):
                     continue
             
             if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                score=int(wscore*(l*(n**exp)))
+                if exp==None:
+                    score=int(wscore*(l*(n**n)))
+                else:
+                    score=int(wscore*(l*(n**exp)))
                 penalty=0
             else:
                 
@@ -55,7 +58,10 @@ def multimumpicker(multimums,idx):
                 else:
                     penalty=0
                 
-                score=int(wscore*(l*(n**exp)))
+                if exp==None:
+                    score=int(wscore*(l*(n**n)))
+                else:
+                    score=int(wscore*(l*(n**exp)))
                 
                 if minscore!=None:
                     if penalty>score:
@@ -179,9 +185,7 @@ def graphmumpicker(mums,idx,penalize=True):
             else:
                 penalty=0
             
-            score=(wscore*(l*(n**exp)))-((wpen*penalty)**(.5))
-            #score=(wscore*(l*n))-(wpen*penalty)
-            #score=int(math.log(l-(wpen*penalty))*n)
+            score=(wscore*(l*(n**n)))-((wpen*penalty)**(.5))
             
             if trace:
                 print l, penalty, score
@@ -196,11 +200,14 @@ def graphmumpicker(mums,idx,penalize=True):
             
             if trace:
                 print bestmum
-    
+        
+        if bestmum!=None:
+            if bestmum[3] > sys.maxint: #cap score, so we dont have problems with overflows in c
+                bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
+        
         logging.debug("Selected: %s\n"%str(bestmum))
         return bestmum
     except Exception as e:
-        #print "graphmumpicker",n1data['offsets'],len(n1data['offsets']),n2data['offsets'],len(n2data['offsets']),len(nleft['offsets']),len(nright['offsets'])
         print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
         return None 
 

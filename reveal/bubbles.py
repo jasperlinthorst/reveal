@@ -195,6 +195,12 @@ def variants_cmd(args):
     if args.reference==None:
         args.reference=gori[0]
         logging.warn("No reference specified as a coordinate system, use %s where possible."%args.reference)
+    else:
+        if args.reference in G.graph['sample2id']:
+            args.reference=G.graph['sample2id'][args.reference]
+        else:
+            logging.error("Unkown reference sequence: %s")
+            sys.exit(1)
     
     if args.reference not in G.graph['samples']:
         logging.fatal("Specified reference not available in graph, graph knows of: %s."%str(G.graph['samples']))
@@ -224,7 +230,7 @@ def variants_cmd(args):
         else:
             cds=v.vpos.keys()[0]
         
-        sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(cds,v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+        sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
@@ -304,7 +310,7 @@ class Variant(Bubble):
                     self.vtype='region'
             else:
                 self.vtype='multi-allelic'
-            
+        
         n=self.G.node[self.source]
         
         for s in n['offsets']:
@@ -316,11 +322,15 @@ class Variant(Bubble):
         
         for i,node in enumerate(gt):
             n=self.G.node[node]
-            for sample in n['offsets'].keys():
-                if sample not in tmpsource:
+            #for sample in n['offsets'].keys():
+            for sampleid in n['offsets'].keys():
+                #if sample not in tmpsource:
+                if sampleid not in tmpsource:
                     continue
-                self.calls[sample]=i
-                tmpsource.discard(sample)
+                #self.calls[sample]=i
+                self.calls[bubble.G.graph['id2sample'][sampleid]]=i
+                #tmpsource.discard(sample)
+                tmpsource.discard(sampleid)
 
     def isinversion(self):
         if self.vtype=='undefined':

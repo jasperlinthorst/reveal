@@ -109,13 +109,22 @@ def mergenodes(mns,mark=True):
     tmp=mns.pop(ri)
     assert(tmp==refnode)
     
-    for mn in mns: #leave the first node, remove the rest
+    for mn in mns: #leave the first node, merge the rest
         for e0,e1,d in G.in_edges(mn,data=True):
             assert(not G.has_edge(refnode,e0))
-            G.add_edge(e0,refnode,**d)
+            if G.has_edge(e0,refnode):
+                for p in d['paths']:
+                    G[e0][refnode]['paths'].add(p)
+            else:
+                G.add_edge(e0,refnode,**d)
+
         for e0,e1,d in G.out_edges(mn,data=True):
             assert(not G.has_edge(e1,refnode))
-            G.add_edge(refnode,e1,**d)
+            if G.has_edge(refnode,e1):
+                for p in d['paths']:
+                    G[refnode][e1]['paths'].add(p)
+            else:
+                G.add_edge(refnode,e1,**d)
         G.remove_node(mn)
     
     return refnode
@@ -194,6 +203,8 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(l,index,n,score,sp,penalty):
+    logging.debug("In graphalign.")
+
     nodes=index.nodes
     isize=index.n
     
@@ -248,6 +259,8 @@ def graphalign(l,index,n,score,sp,penalty):
     
     msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
     
+    logging.debug("Merging samples: %s"%str(msamples))
+
     intervals=segmentgraph(mn,nodes)
     
     leading,trailing,rest, merged=intervals
@@ -459,7 +472,13 @@ def align_cmd(args):
     logging.info("Alignment graph written to: %s"%graph)
     
     if args.mumplot:
-        plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+        if len(G.graph['samples']==2):
+            plotgraph(sg,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+        else:
+            logging.info("Unable to make plot for graphs with more than 2 paths.")
+    
+    #plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+
     
 def align_genomes(args):
     logging.info("Loading input...")
@@ -477,6 +496,9 @@ def align_genomes(args):
     
     G=nx.DiGraph()
     G.graph['samples']=[]
+    G.graph['sample2id']=dict()
+    G.graph['id2sample']=dict()
+
     o=0
     schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
@@ -489,6 +511,7 @@ def align_genomes(args):
     
     for i,sample in enumerate(args.inputfiles):
         idx.addsample(os.path.basename(sample))
+
         if sample.endswith(".gfa"):
             graph=True
             #TODO: now applies to all graphs! probably want to have this graph specific if at all...
@@ -506,23 +529,23 @@ def align_genomes(args):
             logging.info("Done.")
         else: #consider it to be a fasta file
             logging.info("Reading fasta: %s ..." % sample)
-            G.graph['samples'].append(os.path.basename(sample))
             for name,seq in fasta_reader(sample):
+                sid=len(G.graph['samples'])
+                name=name.replace(":","").replace(";","")
+                G.graph['samples'].append(name)
+                G.graph['sample2id'][name]=sid
+                G.graph['id2sample'][sid]=name
                 intv=idx.addsequence(seq.upper())
                 logging.debug("Adding interval: %s"%str(intv))
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
-     
+                G.add_node(Intv,offsets={sid:0},aligned=0)
+    
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! ...")
         return
     
-    if args.exp==None:
-        schemes.exp=len(G.graph['samples'])
-    else:
-        schemes.exp=args.exp
-    
+    schemes.exp=args.exp
     schemes.ts=t
     schemes.G=G
     logging.info("Constructing index...")
@@ -544,7 +567,6 @@ def align_genomes(args):
         else:
             logging.info("Constructing pairwise-alignment...")
             idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
-            #idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
     
     return G,idx
 

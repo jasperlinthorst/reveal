@@ -942,13 +942,15 @@ void *aligner(void *arg) {
         }
         
         if (hasindex==1){
-            //fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
-            //fprintf(stderr,"samples=%d\n",idx->nsamples);
-            //fprintf(stderr,"depth=%d\n",idx->depth);
-            //fprintf(stderr,"n=%d\n",idx->n);
-            
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
+            fprintf(stderr,"samples=%d\n",idx->nsamples);
+            fprintf(stderr,"depth=%d\n",idx->depth);
+            fprintf(stderr,"n=%d\n",idx->n);
+#endif
             assert(idx->nsamples>0);
-            
+
             RevealMultiMUM mmum;
             mmum.sp=(saidx_t *) malloc(idx->nsamples*sizeof(saidx_t));
             mmum.l=0;
@@ -994,7 +996,7 @@ void *aligner(void *arg) {
                 
 #ifdef REVEALDEBUG
                 time(&t0);
-                fprintf(stderr,"Selecting best mum (python callback)... ");
+                fprintf(stderr,"Selecting best mum (python callback)...\n");
 #endif
 
                 PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
@@ -1036,11 +1038,23 @@ void *aligner(void *arg) {
                 
                 PyObject *sp=NULL;
                 PyObject *tidx=NULL;
-                
+
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Parsing mum tuple...\n");
+#endif                
                 PyArg_ParseTuple(mum,"IOiLOK", &mmum.l, &tidx, &mmum.n, &mmum.score, &sp, &mmum.penalty);
                 
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Done.\n");
+#endif
+
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Convert PyList[%d] to c...\n",mmum.n);
+#endif
+
                 for (i=0; i<mmum.n; i++){
                     PyObject * pos=PyList_GetItem(sp,i);
+                    
                     if (pos==NULL){
                         fprintf(stderr,"**** invalid results from mumpicker\n");
                         mmum.sp[i]=0;
@@ -1053,7 +1067,19 @@ void *aligner(void *arg) {
 #endif
                 }
 
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Done.\n");
+#endif
+
+
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Graphalign (python callback)...\n");
+#endif
                 result = PyEval_CallObject(rw->graphalign, mum);
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Done.\n");
+#endif
+
                 Py_DECREF(arglist);
                 Py_DECREF(mum);
                 Py_DECREF(multimums);

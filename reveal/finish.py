@@ -112,10 +112,6 @@ def inversions(args):
 
 def finish(args):
     
-    #from multiprocessing import Pool
-    #p=Pool(2)
-    #p.apply_async(getmums,(args.reference,args.contigs),dict(sa64=args.sa64,minlength=args.minlength))
-    
     logging.debug("Extracting mums in normal orientation.")
     #obtain matches between ref and contigs
     mums,ref2length,contig2length,contig2seq = getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength)
@@ -135,14 +131,14 @@ def finish(args):
     
     logging.debug("Associating mums to contigs.")
     #relate mums to contigs
-    ctg2mums=mapmumstocontig(mems,filtercontained=args.filtercontained,maxgapsize=args.maxgapsize)#,minchainlength=args.minchainlength)
-    
+    ctg2mums=mapmumstocontig(mems,filtercontained=args.filtercontained,maxgapsize=args.maxgapsize)    
+
     logging.info("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
     if args.order=='chains':
-        ref2ctg=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum)#minchainlength=args.minchainlength)
+        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum)
     else:
-        ref2ctg=contigstorefence(ctg2mums,contig2length,maxn=args.maxn)
+        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn)
     
     if args.output==None:
         pref=[]
@@ -166,22 +162,88 @@ def finish(args):
     totsequnplaced=0
     totseqplaced=0
     
+    #TODO: consider what to do with multiple chromosomes in one file. Graph per chromosome probably best, so move this within loop
     G=nx.DiGraph()
-    G.graph['samples']=set()
-    for ref in ref2ctg.keys():
-        if ref=='unchained' or ref=='unplaced':
-            continue
-        else:
-            G.graph['samples'].add(os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0])
-    gapi=0
+    G.graph['samples']=[]
+    G.graph['sample2id']=dict()
     
-    #for each reference chromosome, order the assigned chains
+    gapi=0
+    pathi=0
+    
+    defref2ctg=dict()
+    unused=[]
+    
+    #filter out the chains that cant be layed out on the reference
     for ref in ref2ctg:
+        if ref=='unchained' or ref=='unplaced':
+            defref2ctg[ref]=ref2ctg[ref]
+            continue
+        
+        ref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
+        ctgs=ref2ctg[ref]
+        nctgsin=len(ctgs)
+        
+        b=set(ctgs)
+        ctgs=bestctgpath(ctgs) #layout contigs/chains with respect to reference
+        a=set(ctgs)
+        
+        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),nctgsin,args.order,ref))
+        
+        if len(b)-len(a)>0:
+            logging.info("The following %d %s were placed on reference sequence %s but were not used in the layout:"%(len(b)-len(a),args.order,ref))
+            if args.order=='contigs':
+                for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
+                    logging.info("Unused: %s (length=%d)"%(ctgname,contig2length[ctgname]))
+                    ref2ctg['unplaced'].append(ctgname)
+            else:
+                for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
+                    if ctgbegin<ctgend:
+                        logging.info("Unused: (%s,%s,%s) (length=%d)"%(ctgname,ctgbegin,ctgend,ctgend-ctgbegin))
+                        ref2ctg['unchained'].add((ctgname,ctgbegin,ctgend))
+                    else:
+                        logging.info("Unused: (%s,%s,%s) (length=%d)"%(ctgname,ctgbegin,ctgend,ctgbegin-ctgend))
+                        ref2ctg['unchained'].add((ctgname,ctgend,ctgbegin))
+                    unused.append((ctgname,ci))
+        defref2ctg[ref]=ctgs
+    
+    if args.order=="chains":
+        unused.sort(reverse=True)    
+        #remove unused chains from the ctg2ref mapping
+        for name,i in unused:
+            del ctg2ref[name][i]
+            uchains=[]
+            for chain in ctg2ref[name]:
+                ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=chain
+                assert(ci!=i)
+                if ci>i:
+                    chain=ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci-1
+                uchains.append(chain)
+            ctg2ref[name]=uchains
+        
+        keys=sorted(defref2ctg)
+        #update the index of the chains, so that we can detect consecutive chains again!
+        for ref in keys:
+            if ref=='unchained' or ref=='unplaced':
+                defref2ctg[ref]=ref2ctg[ref]
+                continue
+            for name,i in unused:
+                ctgs=[]
+                for ctg in defref2ctg[ref]:
+                    ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
+                    assert(not(ctgname==name and ci==i))
+                    if ctgname==name and ci>i:
+                        ctg=ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci-1
+                    ctgs.append(ctg)
+                defref2ctg[ref]=ctgs
+     
+    #build graph/fasta for the structural layout of the genome
+    #for ref in sorted(reindexdefref2ctg):
+    for ref in sorted(defref2ctg):
         pn=None
         
         if args.split:
             finished=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
-            unplaced=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+"unplaced.fasta",'w')
+            unplaced=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
         
         if ref=='unplaced':
             logging.info("The following %d contigs could not be placed anywhere on the reference sequence."%len(ref2ctg[ref]))
@@ -197,38 +259,10 @@ def finish(args):
         
         logging.info("Determining %s order for: %s"%(args.order,ref))
         
-        ref2ctg[ref].sort(key=lambda c: c[4]) #sort by ref start position
+        #defref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
         
-        ctgs=ref2ctg[ref]
-        nctgsin=len(ctgs)
-        
-        b=set([(c[0],c[6],c[7]) for c in ctgs])
-        ctgs=bestctgpath(ctgs)
-        a=set([(c[0],c[6],c[7]) for c in ctgs])
-        
-        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),nctgsin,args.order,ref))
-        
-        if len(b)-len(a)>0:
-            logging.info("The following %d %s were placed on reference sequence %s but were not used:"%(len(b)-len(a),args.order,ref))
-            if args.order=='contigs':
-                #for name,l in b - a:
-                for name,start,end in b - a:
-                    logging.info("%s (length=%d)"%(name,contig2length[name]))
-                    unplaced.write(">%s\n"%name)
-                    unplaced.write("%s\n"%contig2seq[name])
-                    totsequnplaced+=contig2length[name]
-            else:
-                for name,start,end in b - a:
-                    if start<end:
-                        logging.info("%s (length=%d)"%(name,end-start))
-                        unplaced.write(">%s[%d:%d]\n"%(name,start,end))
-                        unplaced.write("%s\n"%contig2seq[name][start:end])
-                        totsequnplaced+=end-start
-                    else:
-                        logging.info("%s (length=%d)"%(name,start-end))
-                        unplaced.write(">%s[%d:%d]\n"%(name,end,start))
-                        unplaced.write("%s\n"%rc(contig2seq[name][end:start]))
-                        totsequnplaced+=start-end
+        ctgs=defref2ctg[ref]
+        ctgs.sort(key=lambda c: c[3]) #sort by ref start position
         
         if args.plot:
             plt.clf()
@@ -241,23 +275,25 @@ def finish(args):
         
         yticks=[]
         yticklabels=[]
-        
-        ctgchromname=os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0] #name for the finished pseudomolecule
 
-        finished.write(">%s (finished using: %s)\n"%(ctgchromname,ref))
+        ctgchromname=os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0] #name for the finished pseudomolecule
+        G.graph['samples'].append(ctgchromname)
+        G.graph['sample2id'][ctgchromname]=pathi
+        
+        finished.write(">%s (finished using %s)\n"%(ctgchromname,ref))
         
         i=0
         o=0
-        pctg=(None,ctgs[0][1],[],0,0,0,0,0,0,0)
-        
+        pctg=(None,ctgs[0][1],0,0,0,0,0,0,0)
+         
         for ctg in ctgs:
             
-            ctgname,revcomp,path,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
+            ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
             
             if revcomp:
                 ctgbegin,ctgend=ctgend,ctgbegin
             
-            pctgname,prevcomp,ppath,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength,pci=pctg
+            pctgname,prevcomp,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength,pci=pctg
             
             if prevcomp:
                 pctgbegin,pctgend=pctgend,pctgbegin
@@ -302,8 +338,10 @@ def finish(args):
                     else:  #chains do not overlap, but are consecutive, so there's sequence in between the two chains that does not match the reference anywhere, output sequence instead of gap
                         if revcomp:
                             assert(ctgend<=pctgbegin)
-                            assert((ctgname,ctgend,pctgbegin) in ref2ctg['unchained'])
-                            ref2ctg['unchained'].discard((ctgname,ctgend,pctgbegin)) #no longer unplaced
+                            
+                            if (ctgname,ctgend,pctgbegin) in ref2ctg['unchained']:
+                                ref2ctg['unchained'].discard((ctgname,ctgend,pctgbegin)) #no longer unplaced
+                            
                             finished.write(rc(contig2seq[ctgname][ctgend:pctgbegin]))
                             
                             if args.outputgraph:
@@ -313,8 +351,10 @@ def finish(args):
                             gapsize=pctgbegin-ctgend #update gapsize so offset calculation is still correct
                         else:
                             assert(pctgend<=ctgbegin)
-                            assert((ctgname,pctgend,ctgbegin) in ref2ctg['unchained'])
-                            ref2ctg['unchained'].discard((ctgname,pctgend,ctgbegin)) #no longer unplaced
+                            
+                            if  (ctgname,pctgend,ctgbegin) in ref2ctg['unchained']:
+                                ref2ctg['unchained'].discard((ctgname,pctgend,ctgbegin)) #no longer unplaced
+                            
                             finished.write(contig2seq[ctgname][pctgend:ctgbegin])
                             
                             if args.outputgraph:
@@ -324,18 +364,26 @@ def finish(args):
                             gapsize=ctgbegin-pctgend
                     gap=False
                 else:
-                    if i==0:
-                        event='start'
-                    elif pctgname!=ctgname:
-                        event='cross-contig'
-                    elif revcomp!=prevcomp:
-                        event='inversion'
-                    elif ((pci!=ci+1 and revcomp==1) or (pci!=ci-1 and revcomp==0)):
-                        event='translocation'
-                    else:
-                        event='error!'
                     
-                    logging.info("Event of type: \'%s\' detected at: %d, new start at %d, inserting gap of size: %d"%(event,prefend,refbegin,gapsize))
+                    if pctgname==None and ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)): #first chain of the chromosome
+                        event='contig break'
+                    elif ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)) and ((pci==len(ctg2ref[pctgname])-1 and prevcomp==0) or (prevcomp==1 and pci==0)):
+                        event='contig break'
+                    else: #not first or last chain of contig, so has to be stuctural event
+                        if pctgname!=ctgname:
+                            event="translocation between contigs" #between contig
+                        else:
+                            if revcomp!=prevcomp:
+                                event="inversion"
+                            else:
+                                event="translocation within contig" #within contig
+                        
+                        logging.info("Event of type: \'%s\' between %d and %d."%(event,prefend,refbegin))
+                        logging.info("Index within contig (%s, %d) layout: %d (of %d)"%(ctgname,revcomp,ci,len(ctg2ref[ctgname])))
+                        if pctgname!=None:
+                            logging.info("Index within previous contig (%s, %d) layout: %d (of %d)"%(pctgname,prevcomp,pci,len(ctg2ref[pctgname])))
+                    
+                    logging.debug("Inserting gap of size: %d"%gapsize)
                     logging.debug("Chains are not consecutive on contig: %s,%s - %s,%s - %s,%s"%(revcomp,prevcomp,pctgname,ctgname,pci,ci-1))
                     
                     gap=True
@@ -363,14 +411,14 @@ def finish(args):
                         if gapsize>0: #add a gap node
                             gapi+=1
                             n=(gapi)
-                            G.add_node(n,seq="N"*gapsize,offsets={ctgchromname:o})
+                            G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
                             if pn!=None:
-                                G.add_edge(pn,n,event=event)
+                                G.add_edge(pn,n,event={G.graph['sample2id'][ctgchromname]:event},paths={G.graph['sample2id'][ctgchromname]})
                             pn=n
-                        n=(ctgname,pctgbegin,ctgend)
-                        G.add_node(n,seq=seq,offsets={ctgchromname:o+gapsize})
+                        n=(ctgname,ctgbegin,ctgend)
+                        G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
                         if pn!=None:
-                            G.add_edge(pn,n,event=event)
+                            G.add_edge(pn,n,event={G.graph['sample2id'][ctgchromname]:event},paths={G.graph['sample2id'][ctgchromname]})
                         pn=n
             
             else: # ordering contigs
@@ -388,15 +436,16 @@ def finish(args):
                 if gapsize<0 or args.fixedsize:
                     gapsize=args.gapsize
                 
-                logging.info("\'%s\' follows \'%s\' inserting gap of size: %d"%(ctgname[:20],pctgname[:20],gapsize))
-                finished.write("N"*gapsize)
+                if pctgname!=None:
+                    logging.info("\'%s\' follows \'%s\' inserting gap of size: %d"%(ctgname[:20],pctgname[:20],gapsize))
+                    finished.write("N"*gapsize)
                 
                 if args.outputgraph:
                     gapi+=1
                     n=(gapi)
-                    G.add_node(n,seq="N"*gapsize,offsets={ctgchromname:o})
+                    G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
                     if pn!=None:
-                        G.add_edge(pn,n,event='gap')
+                        G.add_edge(pn,n,event='contig break',paths={G.graph['sample2id'][ctgchromname]})
                     pn=n
                 
                 if revcomp:
@@ -409,12 +458,12 @@ def finish(args):
                 if args.outputgraph:
                     gapi+=1
                     n=(ctgname)
-                    G.add_node(n,seq=seq,offsets={ctgchromname:o+gapsize})
+                    G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
                     if pn!=None:
-                        G.add_edge(pn,n)
+                        G.add_edge(pn,n,event='contig break',paths={G.graph['sample2id'][ctgchromname]})
                     pn=n
                 
-                l=gapsize+len(contig2seq[ctgname])                
+                l=gapsize+len(contig2seq[ctgname])
                 totseqplaced+=contig2length[ctgname]
             
             if args.plot:
@@ -442,6 +491,7 @@ def finish(args):
             pctg=ctg
         
         finished.write("\n")
+        pathi+=1
         
         if args.split:
             finished.close()
@@ -461,7 +511,7 @@ def finish(args):
     if 'unchained' in ref2ctg:
         logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
         for name,start,end in ref2ctg['unchained']:
-            logging.info("%s (start=%d,end=%d,length=%d)"%(name,start,end,end-start))
+            logging.info("%s (start=%d,end=%d,length=%d,contig=%d)"%(name,start,end,end-start,contig2length[name]))
             unplaced.write(">%s[%d:%d]\n"%(name,start,end))
             unplaced.write("%s\n"%contig2seq[name][start:end])
             totsequnplaced+=end-start
@@ -469,7 +519,7 @@ def finish(args):
     for ctg in contig2seq:
         if ctg not in ctg2mums:
             logging.info("The following contig (with length %d) could not be placed, due to lack of mums: %s"%(contig2length[ctg],ctg))
-            unplaced.write(">%s (length=%d)\n"%(name,contig2length[ctg]))
+            unplaced.write(">%s (length=%d)\n"%(ctg,contig2length[ctg]))
             unplaced.write("%s\n"%contig2seq[ctg])
             totsequnplaced+=contig2length[ctg]
     
@@ -478,14 +528,17 @@ def finish(args):
         unplaced.close()
     
     if args.outputgraph:
-        write_gfa(G,None,outputfile=args.contigs[:args.contigs.rfind(".")])
+        write_gfa(G,None,outputfile=args.contigs[:args.contigs.rfind(".")],paths=True)
     
-    logging.info("%.2f%% of the assembly was placed with respect to the reference."% ( (1-(totsequnplaced/float(totseqplaced)))*100 ))
+    if totseqplaced==0:
+        logging.info("No sequence could be placed!")
+    else:
+        logging.info("%.2f%% of the assembly was placed with respect to the reference."% ( (1-(totsequnplaced/float(totseqplaced)))*100 ))
 
-
-def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000):#minchainlength=1500):
+def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000):
     
-    ref2ctg=dict()
+    ref2ctg={'unchained':set()}
+    ctg2ref=dict()
     
     for ctg in ctg2mums:
         logging.debug("Determining best chain(s) for: %s"%ctg)
@@ -494,7 +547,7 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
         for ref in ctg2mums[ctg]:
             logging.debug("Checking %s"%ref)
             mems=ctg2mums[ctg][ref]
-            candidatepaths=mempathsbothdirections(mems,contig2length[ctg],n=maxn,maxgapsize=maxgapsize,minchainsum=minchainsum)#minchainlength=minchainlength)
+            candidatepaths=mempathsbothdirections(mems,contig2length[ctg],n=maxn,maxgapsize=maxgapsize,minchainsum=minchainsum)
             
             for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
                 if len(path)>0:
@@ -574,9 +627,14 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
             assert(offset<=ctgstart) #should not be any overlap on the contig anymore
             
             if ref in ref2ctg:
-                ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i))
+                ref2ctg[ref].append((ctg,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i))
             else:
-                ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i)]
+                ref2ctg[ref]=[(ctg,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i)]
+            
+            if ctg in ctg2ref:
+                ctg2ref[ctg].append((ref,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i))
+            else:
+                ctg2ref[ctg]=[(ref,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],i)]
             
             if revcomp==1:
                 ctgstart,ctgend=ctgend,ctgstart
@@ -595,26 +653,14 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
                 ref2ctg['unchained'].add((ctg,offset,contig2length[ctg]))
             else:
                 ref2ctg['unchained']={(ctg,offset,contig2length[ctg])}
-
-        #paths should now contain the segmentation of the contig into non-overlapping chains.
-        #print "Segmentation of",ctg.split()[0],"with length",contig2length[ctg]
-        #plt.plot((0,contig2length[ctg]),(0.1,0.1),'-')
-        #for i in xrange(len(paths)):
-        #    score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=paths[i]
-        #    if revcomp:
-        #        ctgstart,ctgend=ctgend,ctgstart
-        #    print ctgstart,ctgend,ref.split()[0],refstart,refend,refend-refstart,score
-        #    plt.plot((ctgstart,ctgend),(i+1.1,i+1.1),'-')
-        #plt.title(ctg)
-        #plt.ylim(0,len(paths)+5)
-        #plt.show()
-        
-    return ref2ctg
+    
+    return ref2ctg,ctg2ref
 
 
 def contigstorefence(ctg2mums,contig2length,maxn=15000):
     
-    ref2ctg=dict()
+    ref2ctg={'unplaced':[]}
+    ctg2ref=dict()
 
     for ctg in ctg2mums:
         logging.debug("Determining best chain for: %s"%ctg)
@@ -640,7 +686,7 @@ def contigstorefence(ctg2mums,contig2length,maxn=15000):
                 ctgend=rpath[0][1]
                 logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
                 paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
-
+        
         if len(paths)==0:
             if 'unplaced' in ref2ctg:
                 ref2ctg['unplaced'].append(ctg)
@@ -651,12 +697,18 @@ def contigstorefence(ctg2mums,contig2length,maxn=15000):
         paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score in descending order, best first
         
         score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=paths[0] #just take the best path
+        
         if ref in ref2ctg:
-            ref2ctg[ref].append((ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0))
+            ref2ctg[ref].append((ctg,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0))
         else:
-            ref2ctg[ref]=[(ctg,revcomp,chain,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0)]
+            ref2ctg[ref]=[(ctg,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0)]
+
+        if ctg in ctg2ref:
+            ctg2ref[ctg].append((ref,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0))
+        else:
+            ctg2ref[ctg]=[(ref,revcomp,score,refstart,refend,ctgstart,ctgend,contig2length[ctg],0)]
     
-    return ref2ctg
+    return ref2ctg,ctg2ref
 
 def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainsum=1000):#,minchainlength=1500):
     ctg2mums=dict()
@@ -950,22 +1002,21 @@ def filtercontainedmums(mems):
     return mems
 
 def bestctgpath(ctgs):
+    start=(0,0,0,0,0,0,0,0,0)
     
-    start=(0,0,[],0,0,0,0,0,0,0)
-    
-    link=dict() #key is combination of ctgname and orientation, which should be unique for each chromosome
-    score=dict({():0})
+    link=dict() 
+    score=dict({start:0})
     
     processed=[]
     active=[start]
     maxscore=0
-    
+     
     for ctg in ctgs:
-        ctgname,revcomp,path,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
+        ctgname,revcomp,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
         
         remove=[]
         for pctg in processed:
-            pctgname,prevcomp,ppath,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength,pci=pctg
+            pctgname,prevcomp,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength,pci=pctg
 
             if prefend<refend: #may overlap, may not be contained
                 active.append(pctg)
@@ -974,31 +1025,31 @@ def bestctgpath(ctgs):
         for r in remove:
             processed.remove(r)
         
-        best=None
-        w=None
+        best=start
+        w=0
 
         for actg in active:
             #calculate score of connecting to active point
-            actgname,arevcomp,apath,ascore,arefbegin,arefend,actgbegin,actgend,actglength,aci=actg
+            actgname,arevcomp,ascore,arefbegin,arefend,actgbegin,actgend,actglength,aci=actg
             
-            if w==None:
-                w=score[tuple(actg[2])]+cscore
-                best=actg
+            if arefend>refend:
+                continue
+
+            if arefend>refbegin:
+                penalty=arefend-refbegin #penalize by the amount of overlap
+                assert(penalty>0)
             else:
-                if arefend>refbegin:
-                    penalty=abs(arefend-refbegin) #penalize by the amount of overlap
-                else:
-                    penalty=0
-                
-                tmpw=score[tuple(actg[2])]+cscore-penalty
-                if tmpw>w:
-                    w=tmpw
-                    best=actg
+                penalty=0
+            
+            tmpw=score[actg]+cscore-penalty
+            if tmpw>w:
+                w=tmpw
+                best=actg
         
         assert(best!=None)
         
-        link[tuple(path)]=best
-        score[tuple(path)]=w
+        link[ctg]=best
+        score[ctg]=w
         
         if w>maxscore:
             maxscore=w
@@ -1011,7 +1062,8 @@ def bestctgpath(ctgs):
     path=[]
     while end[0]!=start[0]:
         path.append(end)
-        end=link[tuple(end[2])]
+        #end=link[tuple(end[2])]
+        end=link[end]
     
     return path[::-1]
 
@@ -1157,34 +1209,34 @@ def bestmempathwithinversions(mems,n=15000):
                     if amem[1] >= mem[1]: #may overlap, but mem may not be contained
                         p1=(mem[0], mem[1]+mem[2])
                         p2=(amem[0]+amem[2], amem[1])
-                        penalty=sumofpairs(p1,p2)
-                        tmpw=score[amem]+mem[2]-penalty
+                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
+                        tmpw=score[tuple(amem)]+mem[2]-penalty
                 else: #active mem has regular orientation mem from reverse complement
                     if mem[1]+mem[2] >= amem[1]+amem[2]:
-                        p1=tuple([mem[0]])#, mem[1]+mem[2])
-                        p2=tuple([amem[0]])#, amem[1]+amem[2])
-                        penalty=sumofpairs(p1,p2)   #need different penalty here! *********
-                        tmpw=score[amem]+mem[2]-penalty
+                        p1=tuple([mem[0]])
+                        p2=tuple([amem[0]])
+                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])
+                        tmpw=score[tuple(amem)]+mem[2]-penalty
             else: #mem on regular orientation
                 if amem[4]==1: #active mem from reverse complement
                     if amem[1] <= mem[1]: #then it has to be 'above' mem
-                        p1=tuple([mem[0]])#, mem[1])
-                        p2=tuple([amem[0]+amem[2]])#, amem[1])
-                        penalty=sumofpairs(p1,p2)   #need different penalty here! ********
-                        tmpw=score[amem]+mem[2]-penalty
+                        p1=tuple([mem[0]])
+                        p2=tuple([amem[0]+amem[2]])
+                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])
+                        tmpw=score[tuple(amem)]+mem[2]-penalty
                 else: #mem and amem on same regular orientation
                     if amem[1]+amem[2] <= mem[1]+mem[2]: #may overlap, but mem may not be contained
                         p1=(mem[0], mem[1])
                         p2=(amem[0]+amem[2], amem[1]+amem[2])
-                        penalty=sumofpairs(p1,p2)
-                        tmpw=score[amem]+mem[2]-penalty
+                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
+                        tmpw=score[tuple(amem)]+mem[2]-penalty
             
             if tmpw>w:
                 w=tmpw
                 best=amem
-            
-        link[mem]=best
-        score[mem]=w
+        
+        link[tuple(mem)]=best
+        score[tuple(mem)]=w
         
         if w>maxscore:
             maxscore=w
@@ -1197,10 +1249,10 @@ def bestmempathwithinversions(mems,n=15000):
     path=[]
     while end!=start:
         path.append(end)
-        if score[end]<minscore:
-            minscore=score[end]
+        if score[tuple(end)]<minscore:
+            minscore=score[tuple(end)]
             start=end
-        end=link[end]
+        end=link[tuple(end)]
     
     #from matplotlib import pyplot as plt
     
@@ -1213,8 +1265,7 @@ def bestmempathwithinversions(mems,n=15000):
     
     return path,maxscore
 
-def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000):#minchainlength=1500):
-
+def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000):
     nmums=len(mems)
     if nmums>n: #take only n largest mems
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
