@@ -27,6 +27,13 @@ def chain_cmd(args):
     
     G=nx.DiGraph()
     G.graph['samples']=idx.samples
+    G.graph['sample2id']=dict()
+    G.graph['id2sample']=dict()
+
+    for sid,sample in enumerate(G.graph['samples']):
+        G.graph['sample2id'][sample]=sid
+        G.graph['id2sample'][sid]=sample
+    
     k=len(idx.samples)
     
     T=idx.T
@@ -130,12 +137,14 @@ def chain_cmd(args):
             G.node[node]['seq']=T[node[0]:node[0]+data['l']]
             for c in node:
                 intv=list(tree[c])[0]
-                G.node[node]['offsets'][intv[2]]=c-intv[0]
+                #G.node[node]['offsets'][intv[2]]=c-intv[0]
+                G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=c-intv[0]
         else:
             if 'l' in data:
                 G.node[node]['seq']=T[node:node+data['l']]
             intv=list(tree[node])[0]
-            G.node[node]['offsets'][intv[2]]=node-intv[0]
+            #G.node[node]['offsets'][intv[2]]=node-intv[0]
+            G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=node-intv[0]
         
         if 'aligned' in data:
             if data['aligned']==1:

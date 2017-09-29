@@ -373,50 +373,6 @@ def prune_nodes(G,T):
                                     mergenodes(group,mark=True)
                                     converged=False
 
-def align_seq(s1,s2,minlength=1,minscore=None,minn=2,sa64=False):
-    global t,G,reference,o
-
-    t=IntervalTree()
-    
-    if sa64:
-        idx=reveallib64.index()
-    else:
-        idx=reveallib.index()
-    
-    G=nx.DiGraph()
-    G.graph['samples']=[]
-    reference=None
-    o=0
-    
-    idx.addsample("s1")
-    intv=idx.addsequence(s1.upper())
-    Intv=Interval(intv[0],intv[1])
-    t.add(Intv)
-    G.add_node(Intv,offsets={"s1":0},aligned=0)
-
-    idx.addsample("s2")
-    intv=idx.addsequence(s2.upper())
-    Intv=Interval(intv[0],intv[1])
-    t.add(Intv)
-    G.add_node(Intv,offsets={"s2":0},aligned=0)
-    
-    schemes.ts=t
-    schemes.minlength=minlength
-    schemes.minscore=minscore
-    schemes.minn=minn
-
-    idx.construct()
-    
-    idx.align(None,graphalign)
-    
-    alignedbases=0
-    totbases=min([idx.n-idx.nsep[0],idx.nsep[0]])
-    for node,data in G.nodes(data=True):
-        if data['aligned']!=0:
-            alignedbases+=(node.end-node.begin)
-    
-    return alignedbases/float(totbases)
-
 def align_cmd(args):
     if len(args.inputfiles)<=1:
         logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
@@ -472,8 +428,8 @@ def align_cmd(args):
     logging.info("Alignment graph written to: %s"%graph)
     
     if args.mumplot:
-        if len(G.graph['samples']==2):
-            plotgraph(sg,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+        if len(G.graph['samples'])==2:
+            plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
         else:
             logging.info("Unable to make plot for graphs with more than 2 paths.")
     

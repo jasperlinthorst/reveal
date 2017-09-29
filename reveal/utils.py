@@ -90,7 +90,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     except:
         logging.error("Install matplotlib to generate mumplot.")
         return
-     
+
     plt.xlabel(s1)
     plt.ylabel(s2)
     plt.title("REVEAL "+" ".join(sys.argv[1:]))
@@ -99,6 +99,10 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     
     minx=None
     miny=None
+
+    #map names to ids
+    s1=G.graph['sample2id'][s1]
+    s2=G.graph['sample2id'][s2]
 
     for node,data in G.nodes(data=True):
         if 'seq' in data:
@@ -152,7 +156,170 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         plt.savefig("%s_%s.png"%(s1[:s1.rfind('.')],s2[:s2.rfind('.')]))
 
 
+
+
+
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False):
+
+    f=open(gfafile,'r')
+    sep=";"
+    nmapping={} #temp mapping object for nodeids in gfa file
+    edges=[] #tmp list for edges
+    paths=[]
+    
+    i=0
+    gnodeid=graph.number_of_nodes()+1
+    
+    if 'samples' not in graph.graph:
+        graph.graph['samples']=list()
+    
+    if 'id2sample' not in graph.graph:
+        graph.graph['id2sample']=dict()
+    
+    if 'sample2id' not in graph.graph:
+        graph.graph['sample2id']=dict()
+    else:
+        i=len(graph.graph['sample2id'])
+        assert(i not in graph.graph['id2sample'])
+    
+    for line in f:
+    
+        if line.startswith('H'):
+            pass
+        
+        elif line.startswith('S'):
+            s=line.strip().split('\t')
+            nodeid=int(s[1])
+            if graph.has_node(gnodeid):
+                logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
+                sys.exit(1)
+            
+            if index!=None:
+                if revcomp:
+                    intv=index.addsequence(rc(s[2]).upper())
+                else:
+                    intv=index.addsequence(s[2].upper())
+                intv=Interval(intv[0],intv[1])
+                tree.add(intv)
+                graph.add_node(intv,aligned=0,offsets={})
+                nmapping[nodeid]=intv
+            else:
+                if revcomp:
+                    graph.add_node(gnodeid,seq=rc(s[2].upper()),aligned=0,offsets={})
+                else:
+                    graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets={})
+                nmapping[nodeid]=gnodeid
+                gnodeid+=1
+        
+        elif line.startswith('L'):
+            edges.append(line)
+        
+        elif line.startswith('P'): #traverse paths to add offset values
+            paths.append(line)
+    
+    for line in edges:
+        e=line.strip().split("\t")
+        assert(not graph.has_edge(nmapping[int(e[1])],nmapping[int(e[3])]))
+        assert(not graph.has_edge(nmapping[int(e[3])],nmapping[int(e[1])]))
+        tags=dict()
+        tags['ofrom']=e[2]
+        tags['oto']=e[4]
+        tags['cigar']=e[5]
+        if '*' in e: #there are additional tags parse them
+            for tag in e[7:]:
+                key,ttype,value=tag.split(':')
+                tags[key.lower()]=value
+        tags['paths']=set()
+        graph.add_edge(nmapping[int(e[1])],nmapping[int(e[3])],**tags)
+    
+    for line in paths:
+        cols=line.rstrip().split("\t")
+        sample=cols[1]
+        
+        if sample in graph.graph['samples']:
+            logging.fatal("ERROR: Graph already contains path for: %s"%sample)
+            sys.exit(1)
+        
+        graph.graph['samples'].append(sample)
+        
+        if sample in graph.graph['sample2id']:
+            logging.fatal("ERROR: Graph already contains path for: %s"%sample)
+            sys.exit(1)
+        
+        sid=len(graph.graph['sample2id'])
+        
+        if sid in graph.graph['id2sample']:
+            logging.fatal("ERROR: Id %d already linked to a path in the graph."%sid)
+            sys.exit(1)
+        
+        graph.graph['sample2id'][sample]=sid
+        graph.graph['id2sample'][sid]=sample
+        
+        o=0
+        path=[nid[:-1] for nid in cols[2].split(',')]
+        for pi,gfn in enumerate(path):
+            node=nmapping[int(gfn)]
+            graph.node[node]['offsets'][sid]=o
+            if 'seq' in graph.node[node]:
+                o+=len(graph.node[node]['seq'])
+            elif isinstance(node,Interval):
+                o+=node[1]-node[0]
+            else:
+                logging.warn("Node %s has unknown sequence content."%node)
+            if pi==0:
+                pnode=node
+                continue
+            else:
+                graph[pnode][node]['paths'].add(sid)
+            pnode=node
+    
+    if revcomp:
+        genome2length=dict()
+        #relabel the offsets, determine the length of all genomes in the graph, then l-pos
+        for sample in graph.graph['samples']:
+            maxp=0
+            for node,data in graph.nodes(data=True):
+                if graph.graph['sample2id'][sample] in data['offsets']:
+                    if data['offsets'][graph.graph['sample2id'][sample]]+ (node[1]-node[0]) >maxp:
+                        maxp=data['offsets'][graph.graph['sample2id'][sample]]+(node[1]-node[0])
+            genome2length[sample]=maxp
+        
+        for sample in graph.graph['samples']:
+            for node,data in graph.nodes(data=True):
+                if graph.graph['sample2id'][sample] in data['offsets']:
+                    graph.node[node]['offsets'][graph.graph['sample2id'][sample]]=genome2length[sample]-(graph.node[node]['offsets'][graph.graph['sample2id'][sample]]+(node[1]-node[0]))
+        
+        graph.reverse(copy=False)
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False):
     f=open(gfafile,'r')
     sep=";"
     mapping={} #temp mapping object for nodeids in gfa file
@@ -367,7 +534,7 @@ def write_fasta(G,T,outputfile="reference.fasta"):
                 logging.warn("No sequence for node: %s"%nodename)
     f.close()
 
-def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=True, remap=True):
+def _write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=True, remap=True):
     
     if not outputfile.endswith(".gfa"):
         outputfile+=".gfa"
@@ -473,6 +640,65 @@ def write_gfa(G,T,outputfile="reference.gfa", nometa=False, paths=True, remap=Tr
                 f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
     
     f.close()
+
+
+def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=True):
+    
+    if not outputfile.endswith(".gfa"):
+        outputfile+=".gfa"
+    
+    f=open(outputfile,'wb')
+    sep=';'
+    f.write('H\tVN:Z:1.0\tCL:Z:%s\n'%" ".join(sys.argv))
+    
+    sample2id=dict()
+    sample2id=G.graph['sample2id']
+
+    mapping={}
+    
+    for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
+        mapping[node]=i+1 #one-based for vg
+    
+    for i,node in enumerate(nx.topological_sort(G)):
+        if isinstance(node,str):
+            if node=='start' or node=='end':
+                continue
+        
+        i+=1
+        data=G.node[node]
+        seq=""
+
+        if 'seq' in data:
+            f.write('S\t'+str(mapping[node])+'\t'+data['seq'].upper())
+            seq=data['seq']
+        else:
+            if isinstance(node,Interval):
+                seq=T[node.begin:node.end].upper()
+                f.write('S\t'+str(mapping[node])+'\t'+seq)
+            elif isinstance(node,tuple):
+                seq=T[node[0]:node[0]+G.node[node]['l']].upper()
+                f.write('S\t'+str(mapping[node])+'\t'+seq)
+            else:
+                f.write('S\t'+str(mapping[node])+'\t')
+        
+        f.write("\n")
+        
+        for to in G[node]:
+            d=G[node][to]
+            f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t0M\n")
+     
+    for sample in G.graph['samples']:
+        path=[]
+        for node in nx.topological_sort(G):
+            if sample2id[sample] in G.node[node]['offsets']:
+                i=mapping[node]
+                path.append(str(i)+"+")
+        
+        if len(path)>0:
+            f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
+    
+    f.close()
+
 
 def write_gml(G,T,outputfile="reference",partition=True,hwm=4000):
     G=G.copy()

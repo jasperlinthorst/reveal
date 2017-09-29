@@ -78,8 +78,8 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
             aobjs.append((sample,seq))
         
         if cumsum>maxlen:
-            print "Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink)
-            return G
+            logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
+            sys.exit(1)
     
     schemes.wpen=wpen
     schemes.wscore=wscore

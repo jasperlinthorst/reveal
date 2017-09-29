@@ -170,7 +170,7 @@ def bubbles_cmd(args):
                 else:
                     allcomplexnodes+=b.nodes
 
-    if not args.separate:
+    if args.exportcomplex and not args.separate:
         sg=G.subgraph(allcomplexnodes)
         if args.gml:
             write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
