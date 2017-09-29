@@ -142,8 +142,7 @@ def bubbles(G):
             #logging.warn("Invalid bubble detected between node %s and node %s."%pair)
             continue
 
-        #yield pair,bubblenodes,size,ordD
-        yield Bubble(G,pair[0],pair[1],bubblenodes,ordD)#,size,ordD
+        yield Bubble(G,pair[0],pair[1],bubblenodes,ordD)
 
 def bubbles_cmd(args):
     if len(args.graph)<1:
