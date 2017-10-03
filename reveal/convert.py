@@ -6,7 +6,8 @@ import os
 
 def convert(args):
     for graph in args.graphs:
-        g=nx.DiGraph()
+        #g=nx.DiGraph()
+        g=nx.MultiDiGraph()
         g.graph['samples']=[]
         g.graph['sample2id']=dict()
         if graph.endswith(".gfa"): #gfa to gml/gfa

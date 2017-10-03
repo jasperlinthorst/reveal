@@ -42,10 +42,10 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     
     assert(source in G)
     assert(sink in G)
-    #sourcesamples=set(G.node[source]['offsets'].keys())
-    #sinksamples=set(G.node[sink]['offsets'].keys())
-    sourcesamples=set([G.graph['id2sample'][sid] for sid in G.node[source]['offsets'].keys()])
-    sinksamples=set([G.graph['id2sample'][sid] for sid in G.node[sink]['offsets'].keys()])
+    sourcesamples=set(G.node[source]['offsets'].keys())
+    sinksamples=set(G.node[sink]['offsets'].keys())
+    #sourcesamples=set([G.graph['id2sample'][sid] for sid in G.node[source]['offsets'].keys()])
+    #sinksamples=set([G.graph['id2sample'][sid] for sid in G.node[sink]['offsets'].keys()])
     
     if sourcesamples!=sinksamples:
         logging.error("Specify proper source/sink pair.")
@@ -67,15 +67,17 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     cumsum=0
     
     #extract all paths
-    for sample in sourcesamples.intersection(sinksamples): #should be equal..
+    for sid in sourcesamples.intersection(sinksamples): #should be equal..
         #TODO: can also be that input was an assembly graph! What to do...
-        for i,seq in enumerate(extract(sg,sample)): #has to be just one component
-            pass
-        
-        assert(i==0)
+        seq=extract(sg,G.graph['id2sample'][sid])
+        #for i,seq in enumerate(extract(sg,sample)): #has to be just one component
+        #    print i,sample
+        #    pass
+        #assert(i==0)
+
         cumsum+=len(seq)
         if len(seq)>0:
-            aobjs.append((sample,seq))
+            aobjs.append((G.graph['id2sample'][sid],seq))
         
         if cumsum>maxlen:
             logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
@@ -85,8 +87,13 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     schemes.wscore=wscore
     schemes.exp=exp
     schemes.pcutoff=pcutoff
-    ng,idx=align(aobjs,global_align=False,minscore=minscore,minlength=minlength,minn=minn,sa64=sa64)
+
+    ng,idx=align(aobjs,minscore=minscore,minlength=minlength,minn=minn,sa64=sa64)
     T=idx.T
+    
+    for sample in G.graph['samples']:
+        assert(G.graph['sample2id'][sample]==ng.graph['sample2id'][sample])
+
     prune_nodes(ng,T)
     
     seq2node(ng,T)
@@ -94,16 +101,18 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
     startnodes=set()
     endnodes=set()
     
-    for node,data in ng.nodes(data=True): 
-        if len(ng.predecessors(node))==0:
+    for node,data in ng.nodes(data=True):
+
+        if len(ng.predecessors(node))==0: #TODO: this is not correct, this can go wrong when realignment introduces an indel on the first/last bit
             startnodes.add(nn)
+
         if len(ng.successors(node))==0:
             endnodes.add(nn)
+
         corrected=dict()
-        for sample in data['offsets']:
-            sid=G.graph['sample2id'][ng.graph['id2sample'][sample]]
-            #corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sample]
-            corrected[sample]=data['offsets'][sample]+G.node[source]['offsets'][sid]
+        for sid in data['offsets']:
+            corrected[sid]=data['offsets'][sid]+G.node[source]['offsets'][sid]
+
         ng.node[node]['offsets']=corrected
         mapping[node]=nn
         nn+=1
@@ -118,16 +127,16 @@ def realign_bubble(G,source,sink,minscore=0,minlength=20,minn=2,maxsize=100,maxl
         G.remove_node(node)
     for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph, except for source and sink, update those with seq attribute
         G.add_node(node,data)
-    for edge in ng.edges():
+    for edge in ng.edges(data=True):
         G.add_edge(*edge)
     
     #reconnect nodes
     for p in pre:
         for start in startnodes:
-            G.add_edge(p,start)
+            G.add_edge(p,start,ofrom='+',oto='+',paths=set(G.node[p]['offsets'].keys()).intersection(G.node[start]['offsets'].keys()) ) #TODO: same here, with a complex bubble this WILL go wrong, needs refactoring!
     for s in suc:
         for end in endnodes:
-            G.add_edge(end,s)
+            G.add_edge(end,s,ofrom='+',oto='+',paths=set(G.node[s]['offsets'].keys()).intersection(G.node[end]['offsets'].keys()) )
     
     return G
 

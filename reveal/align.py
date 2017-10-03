@@ -44,21 +44,23 @@ def breaknode(node,pos,l):
         G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
-        G.add_edge(pn,mn,paths=paths)
+        G.add_edge(pn,mn,paths=paths.copy(),ofrom='+',oto='+')
         t.add(pn)
         other.add(pn)
     else:
         pn=mn
+
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
         G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
-        G.add_edge(mn,sn,paths=paths)
+        G.add_edge(mn,sn,paths=paths.copy(),ofrom='+',oto='+')
         t.add(sn)
         other.add(sn)
     else:
         sn=mn
+
     G.remove_node(node)                     #update Graph
     t.remove(node)                          #update intervaltree
     for fro,to,d in in_edges:
@@ -77,6 +79,7 @@ def breaknode(node,pos,l):
 
 def mergenodes(mns,mark=True):
     logging.debug("Merging nodes %s"%str(mns))
+
     global o
     ri=0
     if reference!=None:
@@ -89,29 +92,29 @@ def mergenodes(mns,mark=True):
             refnode=mns[ri]
     else:
         refnode=mns[ri]
-    
+
+    #merge the offset dictionaries
     newoffsets=dict()
     for node in mns:
         d=G.node[node]
-        for sample in d['offsets']:
-            if sample in newoffsets:
+        for sampleid in d['offsets']:
+            if sampleid in newoffsets:
                 logging.warn("WARNING: merging nodes that originate from the same sample: %s in %s."%(sample,str(newoffsets.keys())))
             #assert(sample not in newoffsets)
-            newoffsets[sample]=d['offsets'][sample]
+            newoffsets[sampleid]=d['offsets'][sampleid]
     
     G.node[refnode]['offsets']=newoffsets
     assert(len(G.node[refnode]['offsets'])==len(newoffsets))
-    
+
     if mark:
         o+=1 #increment counter, to be able to keep track of when nodes were aligned 
         G.node[refnode]['aligned']=o
     
     tmp=mns.pop(ri)
     assert(tmp==refnode)
-    
+
     for mn in mns: #leave the first node, merge the rest
         for e0,e1,d in G.in_edges(mn,data=True):
-            assert(not G.has_edge(refnode,e0))
             if G.has_edge(e0,refnode):
                 for p in d['paths']:
                     G[e0][refnode]['paths'].add(p)
@@ -119,12 +122,12 @@ def mergenodes(mns,mark=True):
                 G.add_edge(e0,refnode,**d)
 
         for e0,e1,d in G.out_edges(mn,data=True):
-            assert(not G.has_edge(e1,refnode))
             if G.has_edge(refnode,e1):
                 for p in d['paths']:
                     G[refnode][e1]['paths'].add(p)
             else:
                 G.add_edge(refnode,e1,**d)
+
         G.remove_node(mn)
     
     return refnode
@@ -289,54 +292,57 @@ def graphalign(l,index,n,score,sp,penalty):
     
     return leading,trailing,rest,merged,newleft,newright
 
-def prune(node,T,reverse=False):
-    seqs={}
-    pruned=[]
-    if reverse:
-        neis=G.predecessors(node)
-    else:
-        neis=G.successors(node)
-    for nei in neis:
-        if G.node[nei]['aligned']==0:
-            if 'seq' not in G.node[nei]:
-                seq=T[nei.begin:nei.end]
-            else:
-                seq=G.node[nei]['seq']
-            if seq in seqs:
-                seqs[seq].append(nei)
-            else:
-                seqs[seq]=[nei]
+# def prune(node,T,reverse=False):
+#     seqs={}
+#     pruned=[]
+#     if reverse:
+#         neis=G.predecessors(node)
+#     else:
+#         neis=G.successors(node)
+#     for nei in neis:
+#         if G.node[nei]['aligned']==0:
+#             if 'seq' not in G.node[nei]:
+#                 seq=T[nei.begin:nei.end]
+#             else:
+#                 seq=G.node[nei]['seq']
+#             if seq in seqs:
+#                 seqs[seq].append(nei)
+#             else:
+#                 seqs[seq]=[nei]
     
-    for key in seqs.keys():
-        group=seqs[key]
-        tmpgroup=list(group)
-        if len(group)>1:
-            sink=[]
-            merge=True
-            for v in group:
-                if reverse:
-                    if len(G.predecessors(v))>1:
-                        merge=False
-                        break
-                else:
-                    if len(G.successors(v))>1:
-                        merge=False
-                        break
-            if merge:
-                merged=mergenodes(group)
-                converged=False
-                pruned+=group
-    return pruned
+#     for key in seqs.keys():
+#         group=seqs[key]
+#         tmpgroup=list(group)
+#         if len(group)>1:
+#             sink=[]
+#             merge=True
+#             for v in group:
+#                 if reverse:
+#                     if len(G.predecessors(v))>1:
+#                         merge=False
+#                         break
+#                 else:
+#                     if len(G.successors(v))>1:
+#                         merge=False
+#                         break
+#             if merge:
+#                 merged=mergenodes(group)
+#                 converged=False
+#                 pruned+=group
+#     return pruned
 
 def prune_nodes(G,T):
     converged=False
+
     while not(converged):
         converged=True
+
         for node,data in G.nodes_iter(data=True):
             if node not in G:
                 continue
             
             for run in [0,1]:
+
                 if 'aligned' in data:
                     if data['aligned']!=0:
                         if run==0:
@@ -395,7 +401,7 @@ def align_cmd(args):
 
     if len(G.graph['samples'])>2:
         prune_nodes(G,T) #TODO: do this after every alignment step to reduce memory usage of graph
-    
+
     logging.info("Done.")
     
     alignedbases=0
@@ -488,6 +494,9 @@ def align_genomes(args):
             for name,seq in fasta_reader(sample):
                 sid=len(G.graph['samples'])
                 name=name.replace(":","").replace(";","")
+                if name in G.graph['samples']:
+                    logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
+                    sys.exit(1)
                 G.graph['samples'].append(name)
                 G.graph['sample2id'][name]=sid
                 G.graph['id2sample'][sid]=name
@@ -526,7 +535,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,global_align=False,targetsample=None,maxsamples=None,wpen=1,wscore=3,sa64=False):
+def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsample=None,maxsamples=None,wpen=1,wscore=3,sa64=False):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -582,19 +591,7 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,global_alig
                         t.add(Intv)
                         G.graph['samples'].append(os.path.basename(sample))
                         G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
-    
-    #connect all sequence at end and beginning
-    if global_align:
-        G.add_node('start',aligned=1)
-        G.add_node('end',aligned=1)
-        for node in G.nodes():
-            if not isinstance(node,Interval):
-                continue
-            if len(G.successors(node))==0:
-                G.add_edge(node,'end')
-            if len(G.predecessors(node))==0:
-                G.add_edge('start',node)
-    
+        
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! Not supported.")
         return

@@ -3,113 +3,6 @@ import reveallib64
 from utils import *
 from matplotlib import pyplot as plt
 
-def inversions(args):
-    
-    #obtain matches between ref and contigs
-    mums,ref2length,contig2length,contig2seq = getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength)
-    logging.debug("MUMS in normal orientation: %d"%len(mums))
-    
-    #obtain matches between ref and reverse complemented contigs
-    rcmums,_,_,_ = getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength)
-    logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
-    
-    #combine matches
-    mems=mums+rcmums
-
-    logging.debug("MUMS in both: %d"%len(mems))
-    
-    #relate mums to contigs
-    ctg2mums=mapmumstocontig(mems,filtercontained=args.filtercontained)
-    
-    if args.output==None:
-        pref=[]
-        for f in [os.path.basename(args.reference),os.path.basename(args.contigs)]:
-            bn=os.path.basename(f)
-            if '.' in bn:
-                pref.append(bn[:bn.find('.')])
-            else:
-                pref.append(bn)
-        args.output="_".join(pref)    
-    
-    #write finished assembly based on contigs or chains that map on each reference chromosome
-    if not args.split:
-        finished=open(args.output+".fasta",'w')
-    
-    excludeflank=True
-    
-    gap='N'*args.gapsize
-    
-    for ctg in ctg2mums:
-        bestscore=0
-        bestpath=[]
-        for ref in ctg2mums[ctg]:
-            logging.debug("Checking %s"%ref)
-            mems=ctg2mums[ctg][ref]
-            path,score=bestmempathwithinversions(mems)
-            if score>bestscore:
-                bestpath=path
-        
-        if len(bestpath)==0:
-            logging.warn("No alignment for: %s"%ctg)
-        
-        if args.plot:
-            from matplotlib import pyplot as plt
-            plt.clf()
-        
-        if args.split:
-            finished=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
-        
-        finished.write(">%s_%s\n"%(ref,os.path.basename(args.contigs)))
-        
-        path=bestpath
-        seq=contig2seq[ctg]
-        
-        seqoffset=0
-        pm=path[0]
-        d=pm[4]
-        
-        for m in path[1:][::-1]:
-            if args.plot:
-                if pm[4]==0:
-                    plt.plot((pm[0],pm[0]+pm[2]),((pm[1],pm[1]+pm[2])),'r-')
-                else:
-                    plt.plot((pm[0],pm[0]+pm[2]),((pm[1]+pm[2],pm[1])),'g-')
-            
-            if m[4]!=pm[4]:
-                print "Inversion event at:",pm[0]
-                if m[4]==1: #to reverse complement
-                    if args.plot:
-                        plt.axvline(x=pm[0]+pm[2],linewidth=1,color='b',linestyle='dashed')
-                    
-                    if args.plot:
-                        plt.axhline(y=pm[1]+pm[2],linewidth=1,color='b',linestyle='dashed')
-                    
-                    assert(pm[1]+pm[2]>seqoffset)
-                    finished.write(seq[seqoffset:pm[1]+pm[2]]+gap)
-                    seqoffset=pm[1]+pm[2]
-                    d=1
-                else: #from reverse complement
-                    if args.plot:
-                        plt.axvline(x=pm[0]+pm[2],linewidth=1,color='b',linestyle='dashed')
-                    
-                    if args.plot:
-                        plt.axhline(y=m[1],linewidth=1,color='b',linestyle='dashed')
-                    
-                    assert(m[1]>=seqoffset)
-                    finished.write(rc(seq[seqoffset:m[1]])+gap)
-                    seqoffset=m[1]
-                    d=0
-            pm=m
-        
-        finished.write(seq[seqoffset:])
-        finished.write("\n")
-        
-        if args.split:
-            finished.close()
-        
-        if args.plot:
-            plt.show()
-
 def finish(args):
     
     logging.debug("Extracting mums in normal orientation.")
@@ -131,7 +24,7 @@ def finish(args):
     
     logging.debug("Associating mums to contigs.")
     #relate mums to contigs
-    ctg2mums=mapmumstocontig(mems,filtercontained=args.filtercontained,maxgapsize=args.maxgapsize)    
+    ctg2mums=mapmumstocontig(mems,filtermums=args.filtermums,maxgapsize=args.maxgapsize)    
 
     logging.info("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
@@ -162,10 +55,11 @@ def finish(args):
     totsequnplaced=0
     totseqplaced=0
     
-    #TODO: consider what to do with multiple chromosomes in one file. Graph per chromosome probably best, so move this within loop
-    G=nx.DiGraph()
+    #G=nx.DiGraph()
+    G=nx.MultiDiGraph()
     G.graph['samples']=[]
     G.graph['sample2id']=dict()
+    G.graph['id2sample']=dict()
     
     gapi=0
     pathi=0
@@ -206,9 +100,8 @@ def finish(args):
                     unused.append((ctgname,ci))
         defref2ctg[ref]=ctgs
     
-    if args.order=="chains":
-        unused.sort(reverse=True)    
-        #remove unused chains from the ctg2ref mapping
+    if args.order=="chains": #remove unused chains from the ctg2ref mapping
+        unused.sort(reverse=True)
         for name,i in unused:
             del ctg2ref[name][i]
             uchains=[]
@@ -220,9 +113,8 @@ def finish(args):
                 uchains.append(chain)
             ctg2ref[name]=uchains
         
-        keys=sorted(defref2ctg)
-        #update the index of the chains, so that we can detect consecutive chains again!
-        for ref in keys:
+        keys=sorted(defref2ctg) 
+        for ref in keys: #update the index of the chains, so that we can detect consecutive chains again
             if ref=='unchained' or ref=='unplaced':
                 defref2ctg[ref]=ref2ctg[ref]
                 continue
@@ -258,9 +150,7 @@ def finish(args):
             continue
         
         logging.info("Determining %s order for: %s"%(args.order,ref))
-        
-        #defref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
-        
+                
         ctgs=defref2ctg[ref]
         ctgs.sort(key=lambda c: c[3]) #sort by ref start position
         
@@ -277,15 +167,26 @@ def finish(args):
         yticklabels=[]
 
         ctgchromname=os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0] #name for the finished pseudomolecule
+        orgname=os.path.splitext(os.path.basename(args.contigs))[0]
+        
         G.graph['samples'].append(ctgchromname)
         G.graph['sample2id'][ctgchromname]=pathi
+        G.graph['id2sample'][pathi]=ctgchromname
+        
+        #add the original layout as an alternative path
+        G.graph['samples'].append(orgname)
+        G.graph['sample2id'][orgname]=pathi+1
+        G.graph['id2sample'][pathi+1]=orgname
         
         finished.write(">%s (finished using %s)\n"%(ctgchromname,ref))
         
         i=0
         o=0
         pctg=(None,ctgs[0][1],0,0,0,0,0,0,0)
-         
+        
+        refpath=[] #path that describes the 'transformed' genome
+        orgpath=[] #path that describes the 'original' genome
+        
         for ctg in ctgs:
             
             ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
@@ -408,17 +309,27 @@ def finish(args):
                     if event==None: #consecutive chains
                         G.node[pn]['seq']+=seq
                     else: #non-consecutive chains: different contig or structural variant
+                        
                         if gapsize>0: #add a gap node
-                            gapi+=1
-                            n=(gapi)
-                            G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
-                            if pn!=None:
-                                G.add_edge(pn,n,event={G.graph['sample2id'][ctgchromname]:event},paths={G.graph['sample2id'][ctgchromname]})
-                            pn=n
-                        n=(ctgname,ctgbegin,ctgend)
-                        G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
+                            #gapi+=1
+                            #n=(gapi)
+                            #G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
+                            #if pn!=None:
+                            #    G.add_edge(pn,n,ofrom="+",oto="+")
+                            #pn=n
+                            gapseq="N"*gapsize
+                        else:
+                            gapseq=""
+                        
+                        n=(ctgname,ctgbegin,ctgend,revcomp)
+                        
+                        #G.add_node(n,seq=gapseq+seq,offsets={G.graph['sample2id'][ctgchromname]:o+len(gapseq)})
+                        G.add_node(n,seq=gapseq+seq,offsets={G.graph['sample2id'][ctgchromname]:o})
+
+                        refpath.append(n)
+                        
                         if pn!=None:
-                            G.add_edge(pn,n,event={G.graph['sample2id'][ctgchromname]:event},paths={G.graph['sample2id'][ctgchromname]})
+                            G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
                         pn=n
             
             else: # ordering contigs
@@ -440,14 +351,6 @@ def finish(args):
                     logging.info("\'%s\' follows \'%s\' inserting gap of size: %d"%(ctgname[:20],pctgname[:20],gapsize))
                     finished.write("N"*gapsize)
                 
-                if args.outputgraph:
-                    gapi+=1
-                    n=(gapi)
-                    G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
-                    if pn!=None:
-                        G.add_edge(pn,n,event='contig break',paths={G.graph['sample2id'][ctgchromname]})
-                    pn=n
-                
                 if revcomp:
                     seq=rc(contig2seq[ctgname])
                     finished.write(seq) #write the entire contig
@@ -456,11 +359,18 @@ def finish(args):
                     finished.write(seq)
                 
                 if args.outputgraph:
+
                     gapi+=1
-                    n=(ctgname)
+                    n=(gapi)
+                    G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
+                    if pn!=None:
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
+                    pn=n
+
+                    n=(ctgname,0,ctg2length[ctgname],revcomp)
                     G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
                     if pn!=None:
-                        G.add_edge(pn,n,event='contig break',paths={G.graph['sample2id'][ctgchromname]})
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
                     pn=n
                 
                 l=gapsize+len(contig2seq[ctgname])
@@ -491,7 +401,27 @@ def finish(args):
             pctg=ctg
         
         finished.write("\n")
-        pathi+=1
+        pathi+=2
+        
+        print "refpath"
+
+        for node in refpath:
+            print node
+
+        orgpath=sorted(refpath)
+        
+        print "orgpath"
+
+        for node in orgpath:
+            print node
+        
+        i=1
+        for node in orgpath[1:]: #add the original genome layout to the graph
+            if orgpath[i-1][0]==node[0]: #within contig, add edge
+                G.add_edge(orgpath[i-1],node,ofrom="+" if orgpath[i-1][3]==0 else '-',oto="+" if node[3]==0 else '-',paths={orgname}) #flip orientation
+                G.node[orgpath[i-1]]['offsets'][orgname]=orgpath[i-1][1]
+                G.node[node]['offsets'][orgname]=node[1]
+            i+=1
         
         if args.split:
             finished.close()
@@ -656,7 +586,6 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
     
     return ref2ctg,ctg2ref
 
-
 def contigstorefence(ctg2mums,contig2length,maxn=15000):
     
     ref2ctg={'unplaced':[]}
@@ -710,7 +639,7 @@ def contigstorefence(ctg2mums,contig2length,maxn=15000):
     
     return ref2ctg,ctg2ref
 
-def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainsum=1000):#,minchainlength=1500):
+def mapmumstocontig(mems,filtermums=True,maxgapsize=1500,minchainsum=1000):#,minchainlength=1500):
     ctg2mums=dict()
     logging.debug("Mapping %d mums to contigs."%len(mems))
     for mem in mems:
@@ -728,7 +657,7 @@ def mapmumstocontig(mems,filtercontained=True,maxgapsize=1500,minchainsum=1000):
         else:
             ctg2mums[ctg]=dict({refchrom : [[refstart,ctgstart,l,n,o]]})
     
-    if filtercontained:
+    if filtermums:
         for ctg in ctg2mums:
             for ref in ctg2mums[ctg]:
                 #ctg2mums[ctg][ref]=filtercontainedmums(ctg2mums[ctg][ref])
@@ -745,8 +674,9 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
     else:
         idx=reveallib.index()
     
-    G=nx.DiGraph()
-    G.graph['samples']=[]
+    G=nx.DiGraph() #dummy for now
+    #G=nx.MultiDiGraph()
+    #G.graph['samples']=[]
     t=IntervalTree()
     
     reffile=os.path.basename(reference)
@@ -757,13 +687,13 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
     if reference.endswith(".gfa"):
         read_gfa(reference,idx,t,G)
     else:
-        G.graph['samples'].append(reffile)
+        #G.graph['samples'].append(reffile)
         for name,seq in fasta_reader(reference):
             ref2length[name]=len(seq)
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,offsets={reffile:0})
+            #G.add_node(intv,offsets={reffile:0})
     
     contig2length=dict()
     contig2seq=dict()
@@ -772,7 +702,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
     if query.endswith(".gfa"):
         read_gfa(query,idx,t,G,revcomp=revcomp)
     else:
-        G.graph['samples'].append(ctgfile)
+        #G.graph['samples'].append(ctgfile)
         for name,seq in fasta_reader(query):
             contig2length[name]=len(seq)
 
@@ -786,7 +716,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
             
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            G.add_node(intv,offsets={ctgfile:0})
+            #G.add_node(intv,offsets={ctgfile:0})
     
     idx.construct()
     
@@ -804,7 +734,6 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
             mums.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0))
     
     return mums,ref2length,contig2length,contig2seq
-
 
 def filtercontainedmumsboth(mems):
     #filter mems before trying to form chains
@@ -967,7 +896,6 @@ def filtermumsrange(mems,maxgapsize=1500,minchainsum=1000):#minchainlength=1500)
     
     return mems
 
-
 def filtercontainedmums(mems):
     #filter mems before trying to form chains
 
@@ -1066,7 +994,6 @@ def bestctgpath(ctgs):
         end=link[end]
     
     return path[::-1]
-
 
 def bestmempath(mems,ctglength,n=15000,revcomp=False):
     

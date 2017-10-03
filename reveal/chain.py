@@ -122,35 +122,24 @@ def chain_cmd(args):
     tot=0
     totn=0
     for node,data in G.nodes(data=True):
-        #validation
-        #if isinstance(node,tuple):
-        #    x=[]
-        #    for p in node:
-        #        x.append(T[p:p+data['l']])
-        #    p=x[0]
-        #    for s in x[1:]:
-        #        assert(p==s)        
-        
         G.node[node]['offsets']=dict()
         
         if isinstance(node,tuple):
             G.node[node]['seq']=T[node[0]:node[0]+data['l']]
             for c in node:
                 intv=list(tree[c])[0]
-                #G.node[node]['offsets'][intv[2]]=c-intv[0]
                 G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=c-intv[0]
         else:
             if 'l' in data:
                 G.node[node]['seq']=T[node:node+data['l']]
             intv=list(tree[node])[0]
-            #G.node[node]['offsets'][intv[2]]=node-intv[0]
             G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=node-intv[0]
         
         if 'aligned' in data:
             if data['aligned']==1:
                 tot+=data['l']
                 totn+=1
-    
+
     print "Aligned",tot,"bases in",totn,"nodes. Nodes total:",G.number_of_nodes(),"Edges total:",G.number_of_edges()
     
     if args.mumplot:
@@ -166,6 +155,24 @@ def chain_cmd(args):
                 pref.append(bn)
         args.output="_".join(pref)
     
+
+    #add paths annotation to edges
+    for sample in G.graph['samples']:
+        sid=G.graph['sample2id'][sample]
+        sg=[]
+        for node,data in G.nodes(data=True):
+            if sid in data['offsets']:
+                sg.append(node)
+        subgraph=G.subgraph(sg)
+        topsort=nx.topological_sort(subgraph)
+        pnode=topsort[0]
+        for node in topsort[1:]:
+            if 'paths' in G[pnode][node]:
+                G[pnode][node]['paths'].add(sid)
+            else:
+                G[pnode][node]['paths']={sid}
+            pnode=node
+
     write_gfa(G,T,nometa=args.nometa,outputfile=args.output+'.gfa',paths=args.paths)
     
     #G.graph['samples']=str(G.graph['samples'])
