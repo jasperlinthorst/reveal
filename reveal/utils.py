@@ -236,6 +236,11 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         cols=line.rstrip().split("\t")
         sample=cols[1]
         
+        if type(graph)==nx.DiGraph:
+            logging.debug("DiGraph as input, so exclude *-paths.")
+            if sample.startswith("*"):
+                continue
+
         if sample in graph.graph['samples']:
             logging.fatal("ERROR: Graph already contains path for: %s"%sample)
             sys.exit(1)
@@ -290,6 +295,19 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             pnode=node
             porientation=orientation
     
+    #remove nodes and edges that are not associated to any path
+    remove=[]
+    for n1,n2,d in graph.edges_iter(data=True):
+        if d['paths']==set():
+            remove.append((n1,n2))
+    graph.remove_edges_from(remove)
+
+    remove=[]
+    for n,d in graph.nodes_iter(data=True):
+        if graph.node[n]['offsets']=={}:
+            remove.append(n)
+    graph.remove_nodes_from(remove)
+
     if revcomp:
         genome2length=dict()
         #relabel the offsets, determine the length of all genomes in the graph, then l-pos
@@ -350,17 +368,17 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     
     if type(G)==nx.DiGraph:
         iterator=nx.topological_sort(G)
+        logging.debug("Writing gfa in topological order (%d)."%len(iterator))
     elif type(G)==nx.MultiDiGraph:
-        iterator=G.nodes_iter()
+        iterator=G.nodes()
+        logging.debug("Writing gfa in random order (%d)."%len(iterator))
     else:
         logging.fatal("Unsupported graph type: %s"%type(G))
         sys.exit(1)
 
-    #for i,node in enumerate(nx.topological_sort(G)): #iterate once to get a mapping of ids to intervals
     for i,node in enumerate(iterator): #iterate once to get a mapping of ids to intervals
         mapping[node]=i+1 #one-based for vg
 
-    #for i,node in enumerate(nx.topological_sort(G)):
     for i,node in enumerate(iterator):
         i+=1
         data=G.node[node]
@@ -393,11 +411,17 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     
     #write paths
     for sample in G.graph['samples']:
+        logging.info("Writing path: %s"%sample)
+        #if sample.startswith("*"):
+        #    print "skip..."
+        #    continue
         sid=G.graph['sample2id'][sample]
+
         subgraph=[]
         for e1,e2,d in G.edges(data=True):
             if sid in d['paths']:
                 subgraph.append((e1,e2,d))
+
         path=[]
         if len(subgraph)>0:
             sg=nx.DiGraph(subgraph)
@@ -409,12 +433,12 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 if n==nodepath[-1]:
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                 pn=n
-
         else: #There's just a single node, strictly not a path..
             for node,data in G.nodes_iter(data=True):
                 if sid in data['offsets']:
                     path.append("%s+"%mapping[node])
             assert(len(path)==1)
+
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
     
     f.close()

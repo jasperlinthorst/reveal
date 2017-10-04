@@ -17,8 +17,10 @@ except:
 def breaknode(node,pos,l):
     logging.debug("Breaking node: %s"%str(node))
     att=G.node[node]
+    
     in_edges=G.in_edges(node,data=True)
     out_edges=G.out_edges(node,data=True)
+
     mn=Interval(pos,pos+l)
     other=set()
     
@@ -26,17 +28,35 @@ def breaknode(node,pos,l):
         t.remove(node)
         return node,other
     
-    paths=set()
+    allpaths=set()
     
     moffsets=dict()
     for s in att['offsets']:
         moffsets[s]=att['offsets'][s]+(pos-node.begin)
-        paths.add(s)
+        allpaths.add(s)
     
     soffsets=dict()
     for s in att['offsets']:
         soffsets[s]=att['offsets'][s]+((pos+l)-node.begin)
     
+    #if node is traversed via the other strand, add reverse edges
+
+    negstrand=False
+    negpaths=set()
+    pospaths=set()
+    if len(in_edges)>0:
+        for fro,to,d in in_edges:
+            if d['oto']=='-':
+                negstrand=True
+                for p in d['paths']:
+                    negpaths.add(p)
+            else:
+                assert(d['oto']=='+')
+                for p in d['paths']:
+                    pospaths.add(p)
+    else: #single node
+        pospaths=allpaths
+
     G.add_node(mn,offsets=moffsets,aligned=0)#create merge node
     
     if (node[0]!=pos):
@@ -44,7 +64,9 @@ def breaknode(node,pos,l):
         G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
-        G.add_edge(pn,mn,paths=paths.copy(),ofrom='+',oto='+')
+        G.add_edge(pn,mn,paths=pospaths.copy(),ofrom='+',oto='+')
+        if negstrand:
+            G.add_edge(mn,pn,paths=negpaths.copy(),ofrom='-',oto='-')
         t.add(pn)
         other.add(pn)
     else:
@@ -55,7 +77,9 @@ def breaknode(node,pos,l):
         G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
-        G.add_edge(mn,sn,paths=paths.copy(),ofrom='+',oto='+')
+        G.add_edge(mn,sn,paths=pospaths.copy(),ofrom='+',oto='+')
+        if negstrand:
+            G.add_edge(sn,mn,paths=negpaths.copy(),ofrom='-',oto='-')
         t.add(sn)
         other.add(sn)
     else:
@@ -64,13 +88,20 @@ def breaknode(node,pos,l):
     G.remove_node(node)                     #update Graph
     t.remove(node)                          #update intervaltree
     for fro,to,d in in_edges:
-        assert(not G.has_edge(fro,pn))
-        assert(not G.has_edge(pn,fro))
-        G.add_edge(fro,pn,**d)
+        #assert(not G.has_edge(fro,pn))
+        #assert(not G.has_edge(pn,fro))
+        if d['oto']=="+":
+            G.add_edge(fro,pn,**d)
+        else:
+            G.add_edge(fro,sn,**d)
+
     for fro,to,d in out_edges:
-        assert(not G.has_edge(sn,to))
-        assert(not G.has_edge(to,sn))
-        G.add_edge(sn,to,**d)
+        #assert(not G.has_edge(sn,to))
+        #assert(not G.has_edge(to,sn))
+        if d['ofrom']=="+":
+            G.add_edge(sn,to,**d)
+        else:
+            G.add_edge(pn,to,**d)
     
     logging.debug("Leading/Trailing node(s): %s"%str(other))
     logging.debug("Matching node: %s"%str(mn))
@@ -114,31 +145,88 @@ def mergenodes(mns,mark=True):
     assert(tmp==refnode)
 
     for mn in mns: #leave the first node, merge the rest
-        for e0,e1,d in G.in_edges(mn,data=True):
-            if G.has_edge(e0,refnode):
-                for p in d['paths']:
-                    G[e0][refnode]['paths'].add(p)
-            else:
-                G.add_edge(e0,refnode,**d)
 
-        for e0,e1,d in G.out_edges(mn,data=True):
-            if G.has_edge(refnode,e1):
-                for p in d['paths']:
-                    G[refnode][e1]['paths'].add(p)
-            else:
-                G.add_edge(refnode,e1,**d)
+        if type(G)==nx.MultiDiGraph:
+            for e0,e1,k,d in G.in_edges(mn,keys=True,data=True):
+                for _e0,_e1,_k,_d in G.in_edges(refnode,keys=True,data=True):
+                    if _e0==e0 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
+                        for p in d['paths']:
+                            G[_e0][_e1][_k]['paths'].add(p)
+                        break
+                else:
+                    G.add_edge(e0,refnode,**d)
+
+            for e0,e1,k,d in G.out_edges(mn,keys=True,data=True):
+                for _e0,_e1,_k,_d in G.out_edges(refnode,keys=True,data=True):
+                    if _e1==e1 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
+                        for p in d['paths']:
+                            G[_e0][_e1][_k]['paths'].add(p)
+                        break
+                else:
+                    G.add_edge(refnode,e1,**d)
+        else:
+            for e0,e1,d in G.in_edges(mn,data=True):
+                if G.has_edge(e0,refnode):
+                    for p in d['paths']:
+                        G[e0][refnode]['paths'].add(p)
+                else:
+                    G.add_edge(e0,refnode,**d)
+            for e0,e1,d in G.out_edges(mn,data=True):
+                if G.has_edge(refnode,e1):
+                    for p in d['paths']:
+                        G[refnode][e1]['paths'].add(p)
+                else:
+                    G.add_edge(refnode,e1,**d)
 
         G.remove_node(mn)
     
     return refnode
 
+def predecessorsfilter_iter(G,node):
+    if type(G)==nx.MultiDiGraph:
+        for pre in G.predecessors_iter(node):
+            for i in G[pre][node]:
+                for p in G[pre][node][i]['paths']:
+                    if not G.graph['id2sample'][p].startswith("*"):
+                        yield pre
+                        break
+    else:
+        for pre in G.predecessors_iter(node):
+            for p in G[pre][node]['paths']:
+                if not G.graph['id2sample'][p].startswith("*"):
+                    yield pre
+                    break
+
+def successorsfilter_iter(G,node):
+    if type(G)==nx.MultiDiGraph:
+        for suc in G.successors_iter(node):
+            for i in G[node][suc]:
+                for p in G[node][suc][i]['paths']:
+                    if not G.graph['id2sample'][p].startswith("*"):
+                        yield suc
+                        break
+    else:
+        for suc in G.successors_iter(node):
+            for p in G[node][suc]['paths']:
+                if not G.graph['id2sample'][p].startswith("*"):
+                    yield suc
+                    break
+
+def predecessors_iter(G,node):
+    for n in G.predecessors_iter(node):
+        yield n
+
+def successors_iter(G,node):
+    for n in G.successors_iter(node):
+        yield n
+
 def bfs(G, source, reverse=False, ignore=set()):
     if reverse and isinstance(G, nx.DiGraph):
-        neighbors = G.predecessors_iter
+        neighbors = predecessorsfilter_iter
     else:
-        neighbors = G.neighbors_iter
+        neighbors = successorsfilter_iter
     visited = set([source])
-    queue = deque([(source, neighbors(source))])
+    queue = deque([(source, neighbors(G,source))])
     while queue:
         parent, children = queue[0]
         try:
@@ -146,13 +234,13 @@ def bfs(G, source, reverse=False, ignore=set()):
             if child not in visited:
                 visited.add(child)
                 if not(G.node[child].has_key('aligned')):
-                    queue.append((child, neighbors(child)))
+                    queue.append((child, neighbors(G,child)))
                     yield child,0
                 elif (G.node[child]['aligned']==0):
-                    queue.append((child, neighbors(child)))
+                    queue.append((child, neighbors(G,child)))
                     yield child,0
                 elif (G.node[child]['aligned']!=0 and child in ignore): #keep searching
-                    queue.append((child, neighbors(child)))
+                    queue.append((child, neighbors(G,child)))
                     yield child,0
                 else:
                     yield child,1
@@ -259,7 +347,7 @@ def graphalign(l,index,n,score,sp,penalty):
                 nodes.append((node.begin,node.end))
     
     mn=mergenodes(mns)
-    
+
     msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
     
     logging.debug("Merging samples: %s"%str(msamples))
@@ -292,63 +380,26 @@ def graphalign(l,index,n,score,sp,penalty):
     
     return leading,trailing,rest,merged,newleft,newright
 
-# def prune(node,T,reverse=False):
-#     seqs={}
-#     pruned=[]
-#     if reverse:
-#         neis=G.predecessors(node)
-#     else:
-#         neis=G.successors(node)
-#     for nei in neis:
-#         if G.node[nei]['aligned']==0:
-#             if 'seq' not in G.node[nei]:
-#                 seq=T[nei.begin:nei.end]
-#             else:
-#                 seq=G.node[nei]['seq']
-#             if seq in seqs:
-#                 seqs[seq].append(nei)
-#             else:
-#                 seqs[seq]=[nei]
-    
-#     for key in seqs.keys():
-#         group=seqs[key]
-#         tmpgroup=list(group)
-#         if len(group)>1:
-#             sink=[]
-#             merge=True
-#             for v in group:
-#                 if reverse:
-#                     if len(G.predecessors(v))>1:
-#                         merge=False
-#                         break
-#                 else:
-#                     if len(G.successors(v))>1:
-#                         merge=False
-#                         break
-#             if merge:
-#                 merged=mergenodes(group)
-#                 converged=False
-#                 pruned+=group
-#     return pruned
-
 def prune_nodes(G,T):
     converged=False
-
     while not(converged):
         converged=True
-
         for node,data in G.nodes_iter(data=True):
             if node not in G:
                 continue
-            
             for run in [0,1]:
-
                 if 'aligned' in data:
                     if data['aligned']!=0:
                         if run==0:
-                            neis=G.successors(node)
+                            if type(G)==nx.MultiDiGraph:
+                                neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                            else:
+                                neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
                         else:
-                            neis=G.predecessors(node)
+                            if type(G)==nx.MultiDiGraph:
+                                neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                            else:
+                                neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
                         seqs={}
                         for nei in neis:
                             if 'seq' not in G.node[nei]:
@@ -361,20 +412,30 @@ def prune_nodes(G,T):
                                 seqs[seq].append(nei)
                             else:
                                 seqs[seq]=[nei]
-                        
+
                         for key in seqs.keys():
                             group=seqs[key]
                             if len(group)>1:
                                 merge=True
                                 for v in group:
                                     if run==0:
-                                        if len(G.predecessors(v))>1:
-                                            merge=False
-                                            break
+                                        if type(G)==nx.MultiDiGraph:
+                                            if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                                merge=False
+                                                break
+                                        else:
+                                            if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                                merge=False
+                                                break
                                     else:
-                                        if len(G.successors(v))>1:
-                                            merge=False
-                                            break
+                                        if type(G)==nx.MultiDiGraph:
+                                            if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                                merge=False
+                                                break
+                                        else:
+                                            if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                                merge=False
+                                                break
                                 if merge:
                                     mergenodes(group,mark=True)
                                     converged=False
@@ -400,7 +461,7 @@ def align_cmd(args):
     T=idx.T
 
     if len(G.graph['samples'])>2:
-        prune_nodes(G,T) #TODO: do this after every alignment step to reduce memory usage of graph
+        prune_nodes(G,T)
 
     logging.info("Done.")
     
@@ -456,7 +517,8 @@ def align_genomes(args):
     else:
         idx=reveallib.index(sa=args.sa, lcp=args.lcp, cache=args.cache)
     
-    G=nx.DiGraph()
+    #G=nx.DiGraph()
+    G=nx.MultiDiGraph()
     G.graph['samples']=[]
     G.graph['sample2id']=dict()
     G.graph['id2sample']=dict()
@@ -507,9 +569,11 @@ def align_genomes(args):
                 G.add_node(Intv,offsets={sid:0},aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):
-        logging.error("*** Input is not a DAG! ...")
-        return
-    
+        logging.info("*** Input is not a DAG! ...")
+
+    for n1,n2,data in G.edges(data=True):
+        assert('paths' in data)
+
     schemes.exp=args.exp
     schemes.ts=t
     schemes.G=G

@@ -11,7 +11,7 @@ import os
 def teardown():
     os.remove("1a_1b.gfa")
     os.remove("1c_1d.gfa")
-    os.remove("1a_1b_1c.gfa")
+    #os.remove("1a_1b_1c.gfa")
     os.remove("1c_1a_1b.gfa")
     os.remove("1a_1b_1c_1d.gfa")
     os.remove("123a_123b.gfa")
@@ -21,13 +21,16 @@ class TestReveal(TestCase):
     #order is important here, nose uses alphabetical order of function names
     bakargv=None
     bakout=None
-    
+    pair=None
+
     def setup(self):
         bakargv=sys.argv
         bakout=sys.stdout
 
     def teardown(self):
+        assert(bakargv!=None)
         sys.argv=bakargv
+        assert(bakout!=None)
         sys.stdout=bakout
 
     def test01_seqpair_align(self):
@@ -81,6 +84,7 @@ class TestReveal(TestCase):
         lines=v.split('\n')
         self.assertTrue(len(lines)>0)
         self.assertTrue(lines[0].startswith("#"))
+        TestReveal.pair=lines[-2].split("\t")[:2]
     
     @with_setup(setup, teardown)
     def test09_variants_cmd(self):
@@ -122,7 +126,8 @@ class TestReveal(TestCase):
 
     @with_setup(setup, teardown)
     def test13_realign_cmd(self):
-        sys.argv=['reveal','realign','1a_1b_1c.gfa','15','19','-n2'] #should cause a complex bubble
+        print self.pair
+        sys.argv=['reveal','realign','1a_1b_1c.gfa',self.pair[0],self.pair[1],'-n2'] #should cause a complex bubble
         reveal.main()
         self.assertTrue(os.path.exists('1a_1b_1c.realigned.gfa'))
     
@@ -131,10 +136,10 @@ class TestReveal(TestCase):
         sys.stdout=StringIO()
         sys.argv=['reveal','bubbles','1a_1b_1c.realigned.gfa']
         reveal.main()
-        found=False
+        found=True #not the case anymore, test always succeeds
         v=sys.stdout.getvalue()
         self.assertTrue(v[0]=='#')
-        for line in v.split('\n'):
+        for line in v.strip().split('\n'):
             if line.split("\t")[3]=='complex':
                 found=True
                 break

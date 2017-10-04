@@ -167,7 +167,7 @@ def finish(args):
         yticklabels=[]
 
         ctgchromname=os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0] #name for the finished pseudomolecule
-        orgname=os.path.splitext(os.path.basename(args.contigs))[0]
+        orgname="*"+os.path.splitext(os.path.basename(args.contigs))[0] #orgpaths are prefixed with an asterisk, they are ignored in the align module
         
         G.graph['samples'].append(ctgchromname)
         G.graph['sample2id'][ctgchromname]=pathi
@@ -329,7 +329,7 @@ def finish(args):
                         refpath.append(n)
                         
                         if pn!=None:
-                            G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
+                            G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
                         pn=n
             
             else: # ordering contigs
@@ -364,13 +364,13 @@ def finish(args):
                     n=(gapi)
                     G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
                     if pn!=None:
-                        G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
                     pn=n
 
                     n=(ctgname,0,ctg2length[ctgname],revcomp)
                     G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
                     if pn!=None:
-                        G.add_edge(pn,n,ofrom="+",oto="+",paths={ctgchromname})
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
                     pn=n
                 
                 l=gapsize+len(contig2seq[ctgname])
@@ -418,7 +418,7 @@ def finish(args):
         i=1
         for node in orgpath[1:]: #add the original genome layout to the graph
             if orgpath[i-1][0]==node[0]: #within contig, add edge
-                G.add_edge(orgpath[i-1],node,ofrom="+" if orgpath[i-1][3]==0 else '-',oto="+" if node[3]==0 else '-',paths={orgname}) #flip orientation
+                G.add_edge(orgpath[i-1],node,ofrom="+" if orgpath[i-1][3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['sample2id'][orgname]}) #flip orientation
                 G.node[orgpath[i-1]]['offsets'][orgname]=orgpath[i-1][1]
                 G.node[node]['offsets'][orgname]=node[1]
             i+=1

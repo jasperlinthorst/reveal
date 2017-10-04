@@ -155,7 +155,6 @@ def chain_cmd(args):
                 pref.append(bn)
         args.output="_".join(pref)
     
-
     #add paths annotation to edges
     for sample in G.graph['samples']:
         sid=G.graph['sample2id'][sample]
