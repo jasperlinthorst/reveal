@@ -32,17 +32,22 @@ Libdivsufsort should now be installed into your default installation directory (
 2 - Build and install REVEAL  
 If libdivsufsort is installed, REVEAL can be installed by executing the following command:
 
+**python setup.py test install**
+
+To install without executing the unit tests:
+
 **python setup.py install**
+
 
 ##RUN
 
-To validate whether everything is correctly installed you can run a test alignment from the directory in which this readme is placed, by executing the following command:  
+To validate whether everything is correctly installed you can run a test alignment from the tests directory, e.g. by executing the following command:
 
-**reveal align tests/1a.fa tests/1b.fa**  
+**reveal align tests/1a.fa tests/1b.fa**
 
 If everything is correctly installed, a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)).
 
-Important parameters to consider when running a (multi) alignment are -m, -c and -n. See subcommand help.
+Important parameters to consider when running a (multi) alignment are -m and -n. See subcommand help.
 
 In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
@@ -63,6 +68,20 @@ or progressively align a sequence to an existing gfa graph:
 or align two graphs:
 
 **reveal align 1a_1b.gfa 1c_1d.gfa**
+
+With REVEAL a global alignment between chromosome length assemblies are assumed. To address the issues that follow from draft assemblies, a 'finish' subcommand is supplied that orders and orients contigs/scaffolds with respect to a reference genome and produces pseudo molecules for the draft assembly.
+
+**reveal finish reference.fasta draft.fasta**
+
+To address large events (like translocations, inversions, but also misassemblies) that prevent a colinear alignment between two genomes, the following command, can be used to transform a structurally rearranged (draft) genome such that it conforms to the layout of the reference sequence.
+
+**reveal finish --order=chains reference.fasta draft.fasta**
+
+Have a look at the various parameters, especially: --maxgapsize, --minchainsum, --maxn and -m.
+
+To obtain a graph-based representation that encodes the original as well as the 'transformed' genome as separate paths through a graph, use the --outputgraph option. Note that these graphs may contain cycles, but can still be used in subsequent alignments using REVEAL. Paths in the graph prefixed with an asterisk (\*) correspond to the original (non-transformed) input genomes, which are ignored by REVEAL during graph traversal and mainly function as a way to record structural events in a multi-genome alignment. By default, only the contigs in which a structural rearrangements was detected are output as a \*-path in order to save space.
+
+**reveal finish --order=chains reference.fasta draft.fasta --outputgraph**
 
 To extract variants from a graph run:
 

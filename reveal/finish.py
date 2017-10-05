@@ -134,8 +134,8 @@ def finish(args):
         pn=None
         
         if args.split:
-            finished=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
-            unplaced=open(args.output+"_"+ref.replace(" ","").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
+            finished=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
+            unplaced=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
         
         if ref=='unplaced':
             logging.info("The following %d contigs could not be placed anywhere on the reference sequence."%len(ref2ctg[ref]))
@@ -165,19 +165,27 @@ def finish(args):
         
         yticks=[]
         yticklabels=[]
+        base=os.path.splitext(os.path.basename(args.contigs))[0]
+        ctgchromname=base+"_"+ref #name for the finished pseudomolecule
+        ctgchromnameorg="*"+base+"_"+ref
 
-        ctgchromname=os.path.splitext(os.path.basename(args.contigs))[0]+"_"+ref.split()[0] #name for the finished pseudomolecule
-        orgname="*"+os.path.splitext(os.path.basename(args.contigs))[0] #orgpaths are prefixed with an asterisk, they are ignored in the align module
-        
+        refid=len(G.graph['samples'])
+        G.graph['sample2id'][ctgchromname]=refid
+        G.graph['id2sample'][refid]=ctgchromname
         G.graph['samples'].append(ctgchromname)
-        G.graph['sample2id'][ctgchromname]=pathi
-        G.graph['id2sample'][pathi]=ctgchromname
-        
-        #add the original layout as an alternative path
-        G.graph['samples'].append(orgname)
-        G.graph['sample2id'][orgname]=pathi+1
-        G.graph['id2sample'][pathi+1]=orgname
-        
+
+        #orgid=len(G.graph['samples'])
+        #G.graph['sample2id'][ctgchromnameorg]=orgid
+        #G.graph['id2sample'][orgid]=ctgchromnameorg
+        #G.graph['samples'].append(ctgchromnameorg)
+
+        for ctg in ctgs:
+            p="*"+base+"_"+ctg[0] #prefix with asterisk so they're recognisable
+            if p not in G.graph['sample2id']:
+                G.graph['sample2id'][p]=len(G.graph['samples'])
+                G.graph['id2sample'][len(G.graph['samples'])]=p
+                G.graph['samples'].append(p)
+
         finished.write(">%s (finished using %s)\n"%(ctgchromname,ref))
         
         i=0
@@ -198,7 +206,7 @@ def finish(args):
             
             if prevcomp:
                 pctgbegin,pctgend=pctgend,pctgbegin
-            
+
             alength=ctgend-ctgbegin
             
             assert(alength>0)
@@ -324,12 +332,12 @@ def finish(args):
                         n=(ctgname,ctgbegin,ctgend,revcomp)
                         
                         #G.add_node(n,seq=gapseq+seq,offsets={G.graph['sample2id'][ctgchromname]:o+len(gapseq)})
-                        G.add_node(n,seq=gapseq+seq,offsets={G.graph['sample2id'][ctgchromname]:o})
+                        G.add_node(n,seq=gapseq+seq,offsets={refid:o,G.graph['sample2id']["*"+base+"_"+n[0]]:n[1]})
 
                         refpath.append(n)
                         
                         if pn!=None:
-                            G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
+                            G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                         pn=n
             
             else: # ordering contigs
@@ -362,15 +370,16 @@ def finish(args):
 
                     gapi+=1
                     n=(gapi)
-                    G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
+                    G.add_node(n,seq="N"*gapsize,offsets={refid:o})
                     if pn!=None:
-                        G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                     pn=n
 
                     n=(ctgname,0,ctg2length[ctgname],revcomp)
-                    G.add_node(n,seq=seq,offsets={G.graph['sample2id'][ctgchromname]:o+gapsize})
+                    G.add_node(n,seq=seq,offsets={refid:o+gapsize,G.graph['sample2id']["*"+base+"_"+n[0]]:n[1]})
+                    
                     if pn!=None:
-                        G.add_edge(pn,n,ofrom="+",oto="+",paths={G.graph['sample2id'][ctgchromname]})
+                        G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                     pn=n
                 
                 l=gapsize+len(contig2seq[ctgname])
@@ -402,26 +411,15 @@ def finish(args):
         
         finished.write("\n")
         pathi+=2
-        
-        print "refpath"
 
-        for node in refpath:
-            print node
-
-        orgpath=sorted(refpath)
-        
-        print "orgpath"
-
-        for node in orgpath:
-            print node
-        
-        i=1
-        for node in orgpath[1:]: #add the original genome layout to the graph
-            if orgpath[i-1][0]==node[0]: #within contig, add edge
-                G.add_edge(orgpath[i-1],node,ofrom="+" if orgpath[i-1][3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['sample2id'][orgname]}) #flip orientation
-                G.node[orgpath[i-1]]['offsets'][orgname]=orgpath[i-1][1]
-                G.node[node]['offsets'][orgname]=node[1]
-            i+=1
+        #orgpath=sorted(refpath) #sort by contig name and start position, such that chains from the same contig are consecutive
+        #i=1
+        #for node in orgpath[i:]: #add the original genome layout to the graph
+        #    if orgpath[i-1][0]==node[0]: #within contig, add edge
+        #        G.add_edge(orgpath[i-1],node,ofrom="+" if orgpath[i-1][3]==0 else '-',oto="+" if node[3]==0 else '-',paths={orgid}) #flip orientation
+        #        G.node[orgpath[i-1]]['offsets'][orgid]=orgpath[i-1][1]
+        #        G.node[node]['offsets'][orgid]=node[1]
+        #    i+=1
         
         if args.split:
             finished.close()
@@ -438,6 +436,20 @@ def finish(args):
             else:
                 plt.savefig(args.output+"_"+ref.split()[0]+".png")
     
+    if args.outputgraph:
+        ctgswithevents=set()
+        if args.order=="chains":#reconnect the chains based on their layout in the draft assembly
+            sortednodes=sorted(G.nodes()) #sort by contigname, then start position within the contig
+            pnode=sortednodes[0]
+            for node in sortednodes[1:]:
+                if pnode[0]==node[0]:
+                    G.add_edge(pnode,node,ofrom="+" if pnode[3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['sample2id']["*"+base+"_"+pnode[0]]})
+                    ctgswithevents.add("*"+base+"_"+pnode[0])
+                pnode=node
+
+        if not args.allcontigs:
+            G.graph['samples']=[sample for sample in G.graph['samples'] if sample in ctgswithevents or not sample.startswith("*")]
+
     if 'unchained' in ref2ctg:
         logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
         for name,start,end in ref2ctg['unchained']:
@@ -458,7 +470,7 @@ def finish(args):
         unplaced.close()
     
     if args.outputgraph:
-        write_gfa(G,None,outputfile=args.contigs[:args.contigs.rfind(".")],paths=True)
+        write_gfa(G,None,outputfile=os.path.splitext(os.path.basename(args.contigs))[0],paths=True)
     
     if totseqplaced==0:
         logging.info("No sequence could be placed!")
@@ -693,7 +705,6 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            #G.add_node(intv,offsets={reffile:0})
     
     contig2length=dict()
     contig2seq=dict()
@@ -716,7 +727,6 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
             
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
-            #G.add_node(intv,offsets={ctgfile:0})
     
     idx.construct()
     

@@ -473,11 +473,10 @@ def align_cmd(args):
         totbases=idx.n-T.count('$') #TODO: inefficient, need a count of the number of nodes before the alignment
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)*len(data['offsets'])
+                alignedbases+=(node.end-node.begin)*len([k for k in data['offsets'] if not G.graph['id2sample'][k].startswith("*")])
                 alignednodes+=1
     else: #assume seq to graph
         totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
-        
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
                 l=node.end-node.begin

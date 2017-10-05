@@ -11,7 +11,7 @@ def fasta_reader(fn,truncN=False,toupper=True):
             if line.startswith(">"):
                 if seq!="":
                     yield name,seq
-                name=line.rstrip().replace(">","")
+                name=line.rstrip().replace(">","").replace("\t","")
                 seq=""
             else:
                 if truncN:
@@ -156,7 +156,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         plt.savefig("%s_%s.png"%(s1[:s1.rfind('.')],s2[:s2.rfind('.')]))
 
 
-def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False):
+def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=True):
 
     f=open(gfafile,'r')
     sep=";"
@@ -190,9 +190,11 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         elif line.startswith('S'):
             s=line.strip().split('\t')
             nodeid=int(s[1])
-            if graph.has_node(gnodeid):
-                logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
-                sys.exit(1)
+
+            if remap:
+                if graph.has_node(gnodeid):
+                    logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
+                    sys.exit(1)
             
             if index!=None:
                 if revcomp:
@@ -204,12 +206,17 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 graph.add_node(intv,aligned=0,offsets={})
                 nmapping[nodeid]=intv
             else:
-                if revcomp:
-                    graph.add_node(gnodeid,seq=rc(s[2].upper()),aligned=0,offsets={})
+                if remap:
+                    nmapping[nodeid]=gnodeid
+                    gnodeid+=1
                 else:
-                    graph.add_node(gnodeid,seq=s[2].upper(),aligned=0,offsets={})
-                nmapping[nodeid]=gnodeid
-                gnodeid+=1
+                    nmapping[nodeid]=nodeid
+
+                if revcomp:
+                    graph.add_node(nmapping[nodeid],seq=rc(s[2].upper()),aligned=0,offsets={})
+                else:
+                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})
+                
         
         elif line.startswith('L'):
             edges.append(line)
@@ -232,6 +239,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         tags['paths']=set()
         graph.add_edge(nmapping[int(e[1])],nmapping[int(e[3])],**tags)
     
+    if len(paths)==0:
+        logging.fatal("No paths defined in GFA, exit.")
+        sys.exit(1)
+
     for line in paths:
         cols=line.rstrip().split("\t")
         sample=cols[1]
@@ -298,13 +309,13 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     #remove nodes and edges that are not associated to any path
     remove=[]
     for n1,n2,d in graph.edges_iter(data=True):
-        if d['paths']==set():
+        if d['paths']==set(): #edge that is not traversed by any of the paths
             remove.append((n1,n2))
     graph.remove_edges_from(remove)
 
     remove=[]
     for n,d in graph.nodes_iter(data=True):
-        if graph.node[n]['offsets']=={}:
+        if graph.node[n]['offsets']=={}: #edge that is not traversed by any of the paths
             remove.append(n)
     graph.remove_nodes_from(remove)
 
@@ -416,7 +427,6 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         #    print "skip..."
         #    continue
         sid=G.graph['sample2id'][sample]
-
         subgraph=[]
         for e1,e2,d in G.edges(data=True):
             if sid in d['paths']:
@@ -436,7 +446,8 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         else: #There's just a single node, strictly not a path..
             for node,data in G.nodes_iter(data=True):
                 if sid in data['offsets']:
-                    path.append("%s+"%mapping[node])
+                    path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
+
             assert(len(path)==1)
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")

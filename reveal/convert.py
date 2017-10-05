@@ -10,6 +10,7 @@ def convert(args):
         g=nx.MultiDiGraph()
         g.graph['samples']=[]
         g.graph['sample2id']=dict()
+        g.graph['id2sample']=dict()
         if graph.endswith(".gfa"): #gfa to gml/gfa
             utils.read_gfa(graph,None,None,g,minsamples=args.minsamples,
                                  maxsamples=args.maxsamples,
@@ -26,6 +27,7 @@ def convert(args):
             for name,seq in utils.fasta_reader(graph):
                 g.graph['samples'].append(os.path.basename(graph))
                 g.graph['sample2id'][os.path.basename(graph)]=0
+                g.graph['id2sample'][0]=os.path.basename(graph)
                 g.add_node(i,offsets={0:0},seq=seq)
                 i+=1
             filename=graph[:graph.rfind(".")]+".gfa"
