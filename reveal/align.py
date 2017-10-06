@@ -80,7 +80,7 @@ def breaknode(node,pos,l):
         G.add_edge(mn,sn,paths=pospaths.copy(),ofrom='+',oto='+')
         if negstrand:
             G.add_edge(sn,mn,paths=negpaths.copy(),ofrom='-',oto='-')
-        t.add(sn)
+        t.add(sn) #Interval(582755552, 582755549)
         other.add(sn)
     else:
         sn=mn
@@ -221,7 +221,7 @@ def successors_iter(G,node):
         yield n
 
 def bfs(G, source, reverse=False, ignore=set()):
-    if reverse and isinstance(G, nx.DiGraph):
+    if reverse:
         neighbors = predecessorsfilter_iter
     else:
         neighbors = successorsfilter_iter
@@ -327,7 +327,7 @@ def graphalign(l,index,n,score,sp,penalty):
                 return
     
     if l<schemes.minlength:
-        logging.debug("Reject MUM, too short (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
+        logging.debug("Reject MUM, too short (minlength=%d) (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(schemes.minlength,l,n,score,penalty,sp,index.n))
         return
     
     logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,isize))
@@ -338,7 +338,9 @@ def graphalign(l,index,n,score,sp,penalty):
     for i,pos in enumerate(sp):
         old=t[pos].pop()
         assert(old.end-old.begin>=l)
+
         mn,other=breaknode(old,pos,l)
+        
         mns.append(mn)
         if isinstance(old,Interval):
             nodes.remove((old.begin,old.end))
@@ -501,7 +503,6 @@ def align_cmd(args):
     
     #plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
 
-    
 def align_genomes(args):
     logging.info("Loading input...")
     #global variables to simplify callbacks from c extension
@@ -547,6 +548,7 @@ def align_genomes(args):
                 read_gfa(sample,idx,t,G)
             
             if len(G.graph['samples'])==0: #if not from reveal, might not have a header
+                logging.info("No paths detected in GFA, assume one path per node.")
                 G.graph['samples'].append(os.path.basename(sample))
 
             logging.info("Done.")
@@ -581,20 +583,14 @@ def align_genomes(args):
     
     logging.info("Done.")
     
-    if len(args.inputfiles)>2:
-        logging.info("Constructing multi-alignment...")
+    if len(args.inputfiles)==2 and not graph:
+        logging.info("Constructing pairwise-alignment...")
+        idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
+    else:
+        logging.info("Constructing graph-based multi-alignment...")
         schemes.wscore=args.wscore
         schemes.wpen=args.wpen
-        idx.align(schemes.multimumpicker,graphalign,threads=args.threads)
-    else:
-        if graph:
-            logging.info("Constructing graph-alignment...")
-            schemes.wscore=args.wscore
-            schemes.wpen=args.wpen
-            idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
-        else:
-            logging.info("Constructing pairwise-alignment...")
-            idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
     
     return G,idx
 
@@ -665,7 +661,7 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsampl
     idx.construct()
     
     if len(aobjs)>2:
-        idx.align(schemes.multimumpicker,graphalign,threads=threads)
+        idx.align(schemes.graphmumpicker,graphalign,threads=threads)
     else:
         if graph:
             idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)

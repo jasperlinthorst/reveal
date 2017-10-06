@@ -215,8 +215,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 if revcomp:
                     graph.add_node(nmapping[nodeid],seq=rc(s[2].upper()),aligned=0,offsets={})
                 else:
-                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})
-                
+                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})        
         
         elif line.startswith('L'):
             edges.append(line)
@@ -300,6 +299,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     for i in graph[pnode][node]:
                         if graph[pnode][node][i]['oto']==orientation and graph[pnode][node][i]['ofrom']==porientation:
                             graph[pnode][node][i]['paths'].add(sid)
+                            break
+                    else:
+                        logging.fatal("Edge missing for path %s between %s (%s) and %s (%s)"%(sample,pnode,porientation,node,orientation))
+                        sys.exit(1)
                 else:
                     graph[pnode][node]['paths'].add(sid)
 

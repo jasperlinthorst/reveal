@@ -647,14 +647,14 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                     if (u==1){
                         if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                             int x;
-                            PyObject *sp=PyList_New(n);
+                            PyObject *sp=PyTuple_New(n);
                             for (x=0;x<n;x++) {
 #ifdef SA64
                                 PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
                                 PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                                PyList_SET_ITEM(sp, x, v);
+                                PyTuple_SET_ITEM(sp, x, v);
                             }
 
                             PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
@@ -666,14 +666,14 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                     } else {
                         if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
                             int x;
-                            PyObject *sp=PyList_New(n);
+                            PyObject *sp=PyTuple_New(n);
                             for (x=0;x<n;x++) {
 #ifdef SA64
                                 PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
                                 PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                                PyList_SET_ITEM(sp, x, v);
+                                PyTuple_SET_ITEM(sp, x, v);
                             }
 
                             PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
@@ -728,14 +728,15 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                 if (u==1) {
                     if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                         int x;
-                        PyObject *sp=PyList_New(n);
+                        
+                        PyObject *sp=PyTuple_New(n);
                         for (x=0;x<n;x++) {
 #ifdef SA64
                             PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
                             PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                            PyList_SET_ITEM(sp, x, v);
+                            PyTuple_SET_ITEM(sp, x, v);
                         }
 
                         PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
@@ -747,14 +748,14 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                 } else {
                     if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
                         int x;
-                        PyObject *sp=PyList_New(n);
+                        PyObject *sp=PyTuple_New(n);
                         for (x=0;x<n;x++) {
 #ifdef SA64
                             PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
 #else
                             PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
 #endif
-                            PyList_SET_ITEM(sp, x, v);
+                            PyTuple_SET_ITEM(sp, x, v);
                         }
 
                         PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
@@ -1053,7 +1054,8 @@ void *aligner(void *arg) {
 #endif
 
                 for (i=0; i<mmum.n; i++){
-                    PyObject * pos=PyList_GetItem(sp,i);
+                    //PyObject * pos=PyList_GetItem(sp,i);
+                    PyObject * pos=PyTuple_GetItem(sp,i);
                     
                     if (pos==NULL){
                         fprintf(stderr,"**** invalid results from mumpicker\n");

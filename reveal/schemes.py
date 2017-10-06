@@ -10,108 +10,111 @@ import networkx as nx
 import sys
 import math
 import logging
+import utils
 
-def multimumpicker(multimums,idx):
+# def multimumpicker(multimums,idx):
 
-    idxn=idx.nsamples
-    if idxn==0:
-        return None
+#     idxn=idx.nsamples
+#     if idxn==0:
+#         return None
     
-    if minn==None:
-        lminn=idxn
-    else:
-        lminn=minn
+#     if minn==None:
+#         lminn=idxn
+#     else:
+#         lminn=minn
     
+#     try:
+#         logging.debug("Selecting best out of %d MUMs in multimumpicker (wpen=%s, wscore=%s, exp=%s, minn=%s ,samples=%s)."%(len(multimums),wpen,wscore,exp,lminn,idxn))
+#         bestmum=None
+        
+#         for multimum in multimums:
+#             l,n,sp=multimum
+#             if l<minlength:
+#                 continue
+#             if n<lminn:
+#                 continue
+#             if bestmum!=None:
+#                 if n<bestmum[2]:
+#                     continue
+#                 if n==bestmum[2] and l<=bestmum[0]:
+#                     continue
+            
+#             if idx.depth==0: #no other anchors yet, dont penalize first anchor
+#                 if exp==None:
+#                     score=int(wscore*(l*(n**n)))
+#                 else:
+#                     score=int(wscore*(l*(n**exp)))
+#                 penalty=0
+#             else:
+                
+#                 if wpen>0:
+#                     ds=[start-ts[start].pop()[0] for start in sp]
+#                     ads=sum(ds)/n
+#                     de=[ts[start].pop()[1]-(start+l) for start in sp]
+#                     ade=sum(de)/n
+#                     spenalty=sum([abs(p-ads) for p in ds])
+#                     epenalty=sum([abs(p-ade) for p in de])
+#                     penalty=min([spenalty,epenalty])
+#                     penalty=int((wpen*penalty)**(.5))
+#                 else:
+#                     penalty=0
+                
+#                 if exp==None:
+#                     score=int(wscore*(l*(n**n)))
+#                 else:
+#                     score=int(wscore*(l*(n**exp)))
+                
+#                 if minscore!=None:
+#                     if penalty>score:
+#                         score=minscore
+#                     else:
+#                         score=score-penalty
+            
+#             if minscore!=None:
+#                 if score<minscore:
+#                     continue
+            
+#             if isinstance(sp,tuple):
+#                 sp=list(sp)
+            
+#             if bestmum!=None:
+#                 if score>bestmum[3]:
+#                     bestmum=(l,idx,n,score,sp,penalty)
+#             else:
+#                 bestmum=(l,idx,n,score,sp,penalty)
+        
+#         if bestmum!=None:
+#             if bestmum[3] > sys.maxint:
+#                 bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
+#             if bestmum[2]!=idxn:
+#                 logging.debug("Branching of group of %d samples out of %s based on match of length %d."%(bestmum[2],idxn,bestmum[0]))
+        
+#         logging.debug("Selected %s"%str(bestmum))
+        
+#         return bestmum
+#     except Exception as e:
+#         print "MULTIMUMPICKER ERROR", e, sys.exc_info()[0]
+#         return None
+
+def graphmumpicker(mums,idx):
     try:
-        logging.debug("Selecting best out of %d MUMs in multimumpicker (wpen=%s, wscore=%s, exp=%s, minn=%s ,samples=%s)."%(len(multimums),wpen,wscore,exp,lminn,idxn))
-        bestmum=None
+        idxn=idx.nsamples
+        if idxn==0:
+            return None
         
-        for multimum in multimums:
-            l,n,sp=multimum
-            if l<minlength:
-                continue
-            if n<lminn:
-                continue
-            if bestmum!=None:
-                if n<bestmum[2]:
-                    continue
-                if n==bestmum[2] and l<=bestmum[0]:
-                    continue
-            
-            if idx.depth==0: #no other anchors yet, dont penalize first anchor
-                if exp==None:
-                    score=int(wscore*(l*(n**n)))
-                else:
-                    score=int(wscore*(l*(n**exp)))
-                penalty=0
-            else:
-                
-                if wpen>0:
-                    ds=[start-ts[start].pop()[0] for start in sp]
-                    ads=sum(ds)/n
-                    de=[ts[start].pop()[1]-(start+l) for start in sp]
-                    ade=sum(de)/n
-                    spenalty=sum([abs(p-ads) for p in ds])
-                    epenalty=sum([abs(p-ade) for p in de])
-                    penalty=min([spenalty,epenalty])
-                    penalty=int((wpen*penalty)**(.5))
-                else:
-                    penalty=0
-                
-                if exp==None:
-                    score=int(wscore*(l*(n**n)))
-                else:
-                    score=int(wscore*(l*(n**exp)))
-                
-                if minscore!=None:
-                    if penalty>score:
-                        score=minscore
-                    else:
-                        score=score-penalty
-            
-            if minscore!=None:
-                if score<minscore:
-                    continue
-            
-            if isinstance(sp,tuple):
-                sp=list(sp)
-            
-            if bestmum!=None:
-                if score>bestmum[3]:
-                    bestmum=(l,idx,n,score,sp,penalty)
-            else:
-                bestmum=(l,idx,n,score,sp,penalty)
+        if minn==None:
+            lminn=idxn
+        else:
+            lminn=minn
         
-        if bestmum!=None:
-            if bestmum[3] > sys.maxint:
-                bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
-            if bestmum[2]!=idxn:
-                logging.debug("Branching of group of %d samples out of %s based on match of length %d."%(bestmum[2],idxn,bestmum[0]))
-        
-        logging.debug("Selected %s"%str(bestmum))
-        
-        return bestmum
-    except Exception as e:
-        print "MULTIMUMPICKER ERROR", e, sys.exc_info()[0]
-        return None
-
-def graphmumpicker(mums,idx,penalize=True):
-    idxn=idx.nsamples
-    if idxn==0:
-        return None
-     
-    if minn==None:
-        lminn=idxn
-    else:
-        lminn=minn
-    
-    try:
         logging.debug("Selecting best out of %d MUMs in graphmumpicker (score weight: %d and penalty weight: %d)."%(len(mums),wscore,wpen))
-        if not penalize:
-            logging.debug("Not penalizing MUMs.")
+        logging.debug("Selection criteria:")
+        if minscore!=None:
+            logging.debug("minscore=%d"%minscore)
+        logging.debug("minn=%d"%lminn)
+        logging.debug("minlength=%d"%minlength)
         
         bestmum=None
-        bestn=2
         bestscore=None
         nleft=None
         nright=None
@@ -130,76 +133,67 @@ def graphmumpicker(mums,idx,penalize=True):
             rightoffsets=G.node[idx.right]['offsets']
         
         for mum in mums:
-            l,n,sp=mum
+            l,mmn,sp=mum
             
             if l<minlength:
                 continue
             
-            n1=iter(ts[sp[0]]).next()
-            n2=iter(ts[sp[1]]).next()
-            n1data=G.node[n1]
-            n2data=G.node[n2]
-            n1samples=set(n1data['offsets'].keys())
-            n2samples=set(n2data['offsets'].keys())
-            n=len(n1samples)+len(n2samples) #make sure we intersect only the paths that we're following
-            
-            if n<lminn:
+            if mmn<lminn:
                 continue
-            
-            if bestmum!=None:
-                if n<bestn:
-                    continue
-                if n==bestn and l<=bestmum[0]:
-                    continue
-            
-            if penalize:
-                spenalty=None
-                epenalty=None
-                
-                if nleft!=None:
-                    n1distfromlmapoints=dict()
-                    for sample in n1samples:
-                        n1distfromlmapoints[sample]=(n1data['offsets'][sample]+(sp[0]-n1[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
-                    n2distfromlmapoints=dict()
-                    for sample in n2samples:
-                        n2distfromlmapoints[sample]=(n2data['offsets'][sample]+(sp[1]-n2[0]))-(nleft['offsets'][sample]+(nlefttup[1]-nlefttup[0]))
-                    spenalty=mindist(n1distfromlmapoints.values(),n2distfromlmapoints.values())
-                    
-                if nright!=None:
-                    n1distfromrmapoints=dict()
-                    for sample in n1samples:
-                        n1distfromrmapoints[sample]=nright['offsets'][sample] - ( n1data['offsets'][sample] + (sp[0]-n1[0]) + l )
-                    n2distfromrmapoints=dict()
-                    for sample in n2samples:
-                        n2distfromrmapoints[sample]=nright['offsets'][sample] - ( n2data['offsets'][sample] + (sp[1]-n2[0]) + l )
-                    epenalty=mindist(n1distfromrmapoints.values(),n2distfromrmapoints.values())
 
-                if epenalty==None and spenalty==None:
-                    penalty=0
-                elif epenalty==None:
-                    penalty=spenalty
-                elif spenalty==None:
-                    penalty=epenalty
-                else:
-                    penalty=min([spenalty,epenalty]) #TODO: calculate indel penalty based on distances from graph
-            else:
-                penalty=0
+            n=0
+            qlpoint=dict()
+            qrpoint=dict()
+            for pos in sp:
+                node=iter(ts[pos]).next()
+                ndata=G.node[node]
+                nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2sample'][o].startswith("*")])
+                n+=len(nsamples)
+                rel=node[0]-pos
+                for k in ndata['offsets']:
+                    v=ndata['offsets'][k]+rel
+                    qlpoint[k]=v
+                    qrpoint[k]=v+l
+
+            rlpoint=dict()
+            lpenalty=0
+            if nleft!=None:
+                for k in qlpoint:
+                    rlpoint[k]=nleft['offsets'][k]+(nlefttup[1]-nlefttup[0])
+                qp=[]
+                for k in sorted(qlpoint):
+                    qp.append(qlpoint[k])
+                rp=[]
+                for k in sorted(qlpoint):
+                    rp.append(rlpoint[k])
+                lpenalty=utils.sumofpairs(rp,qp)
+
+            rrpoint=dict()
+            rpenalty=0
+            if nright!=None:
+                for k in qrpoint:
+                    rrpoint[k]=nright['offsets'][k]
+                qp=[]
+                for k in sorted(qrpoint):
+                    qp.append(qrpoint[k])
+                rp=[]
+                for k in sorted(qrpoint):
+                    rp.append(rrpoint[k])
+                rpenalty=utils.sumofpairs(qp,rp)
+
+            penalty=lpenalty+rpenalty
             
             score=(wscore*(l*(n**n)))-((wpen*penalty)**(.5))
-            
-            if trace:
-                print l, penalty, score
             
             if minscore!=None:
                 if score<minscore:
                     continue
             
-            bestmum=(l,idx,2,score,[sp[0],sp[1]],penalty)
-            
-            bestn=n
-            
-            if trace:
-                print bestmum
+            if bestmum==None:
+                bestmum=(l,idx,mmn,score,sp,penalty)
+            else:
+                if bestmum[3]<score:
+                    bestmum=(l,idx,mmn,score,sp,penalty)
         
         if bestmum!=None:
             if bestmum[3] > sys.maxint: #cap score, so we dont have problems with overflows in c
@@ -211,39 +205,39 @@ def graphmumpicker(mums,idx,penalize=True):
         print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
         return None 
 
-def mindist(x,y):
-    x=sorted(list(set(x)))
-    y=sorted(list(set(y)))
-    i=0
-    j=0
-    mind=abs(x[i]-y[j])
-    while True:
-        if i<len(x)-1:
-            xdif=abs(x[i+1] - y[j])
-        else:
-            xdif=abs(x[i] - y[j])
+# def mindist(x,y):
+#     x=sorted(list(set(x)))
+#     y=sorted(list(set(y)))
+#     i=0
+#     j=0
+#     mind=abs(x[i]-y[j])
+#     while True:
+#         if i<len(x)-1:
+#             xdif=abs(x[i+1] - y[j])
+#         else:
+#             xdif=abs(x[i] - y[j])
 
-        if j<len(y)-1:
-            ydif=abs(x[i] - y[j+1])
-        else:
-            ydif=abs(x[i] - y[j])
+#         if j<len(y)-1:
+#             ydif=abs(x[i] - y[j+1])
+#         else:
+#             ydif=abs(x[i] - y[j])
         
-        if xdif < ydif:
-            if xdif<mind:
-                mind=xdif
-            i+=1
-            if i==len(x):
-                break
-        else:
-            if ydif<mind:
-                mind=ydif
-            j+=1
-            if j==len(y):
-                break
+#         if xdif < ydif:
+#             if xdif<mind:
+#                 mind=xdif
+#             i+=1
+#             if i==len(x):
+#                 break
+#         else:
+#             if ydif<mind:
+#                 mind=ydif
+#             j+=1
+#             if j==len(y):
+#                 break
         
-        if mind==0:
-            break
-    return mind
+#         if mind==0:
+#             break
+#     return mind
 
 def printSA(index,maxline=100,start=0,end=200):
     sa=index.SA
