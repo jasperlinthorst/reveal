@@ -68,10 +68,10 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
         if (index->LCP[i]<minl){
             continue;
         }
-	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+	if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
 	    continue;
 	}
-	if (index->SA[i]<index->SA[i-1]) {
+	if ((index->SA[i])<(index->SA[i-1])) {
 	    aStart=index->SA[i];
 	    bStart=index->SA[i-1];
 	} else {
