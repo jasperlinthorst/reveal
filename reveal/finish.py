@@ -54,7 +54,8 @@ def finish(args):
     
     totsequnplaced=0
     totseqplaced=0
-    
+    totseq=sum(contig2length.values())
+
     #G=nx.DiGraph()
     G=nx.MultiDiGraph()
     G.graph['samples']=[]
@@ -73,15 +74,15 @@ def finish(args):
             defref2ctg[ref]=ref2ctg[ref]
             continue
         
-        ref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
+        #ref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
         ctgs=ref2ctg[ref]
-        nctgsin=len(ctgs)
+        #nctgsin=len(ctgs)
         
         b=set(ctgs)
-        ctgs=bestctgpath(ctgs) #layout contigs/chains with respect to reference
+        ctgs=bestctgpath(ref2ctg[ref]) #layout contigs/chains with respect to reference
         a=set(ctgs)
         
-        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),nctgsin,args.order,ref))
+        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),len(ref2ctg[ref]),args.order,ref))
         
         if len(b)-len(a)>0:
             logging.info("The following %d %s were placed on reference sequence %s but were not used in the layout:"%(len(b)-len(a),args.order,ref))
@@ -99,7 +100,7 @@ def finish(args):
                         ref2ctg['unchained'].add((ctgname,ctgend,ctgbegin))
                     unused.append((ctgname,ci))
         defref2ctg[ref]=ctgs
-    
+
     if args.order=="chains": #remove unused chains from the ctg2ref mapping
         unused.sort(reverse=True)
         for name,i in unused:
@@ -129,7 +130,6 @@ def finish(args):
                 defref2ctg[ref]=ctgs
      
     #build graph/fasta for the structural layout of the genome
-    #for ref in sorted(reindexdefref2ctg):
     for ref in sorted(defref2ctg):
         pn=None
         
@@ -198,7 +198,7 @@ def finish(args):
         for ctg in ctgs:
             
             ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
-            
+
             if revcomp:
                 ctgbegin,ctgend=ctgend,ctgbegin
             
@@ -475,7 +475,7 @@ def finish(args):
     if totseqplaced==0:
         logging.info("No sequence could be placed!")
     else:
-        logging.info("%.2f%% of the assembly was placed with respect to the reference."% ( (1-(totsequnplaced/float(totseqplaced)))*100 ))
+        logging.info("%.2f%% of the assembly was placed with respect to the reference."% ( (totseqplaced/float(totseq))*100 ))
 
 def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000):
     
@@ -940,6 +940,7 @@ def filtercontainedmums(mems):
     return mems
 
 def bestctgpath(ctgs):
+    ctgs.sort(key=lambda c: c[3])
     start=(0,0,0,0,0,0,0,0,0)
     
     link=dict() 
