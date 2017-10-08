@@ -182,7 +182,7 @@ def variants_cmd(args):
         return
     
     reference=args.reference
-    G=nx.DiGraph()
+    G=nx.DiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
     read_gfa(args.graph[0],None,"",G)
     complexbubblenodes=[]
     

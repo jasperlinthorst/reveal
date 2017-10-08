@@ -46,35 +46,25 @@ def fasta_writer(fn,name_seq,lw=100):
             for i in range( (len(seq)/lw)+(len(seq) % lw > 0)):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
-#TODO: make gap cost model optional
 def gapcost(pointa,pointb,model="sumofpairs"): #model is either sumofpairs or star
     assert(len(pointa)==len(pointb))
-    p=0
     
-    if model=="star":
-        pass
-    else: #model is sumofpairs
+    if model=="star-avg":
+        return abs(sum([pointa[i]-pointb[i] for i in range(len(pointa))]))/len(pointa)
+    elif model=="star-med":
+        return sorted([abs(pointa[i]-pointb[i]) for i in range(len(pointa))])[len(pointa)/2]
+    elif model=="sumofpairs":
+        p=0
         if len(pointa)==1:
             return abs(pointa[0]-pointb[0])
-        
         D=[pointa[i]-pointb[i] for i in range(len(pointa))]
-
-        for i in range(len(D)):
+        for i in range(len(D)): #all pairwise distances
             for j in range(i+1,len(D)):
                 p+=abs(D[i]-D[j])
-    
-    return p
-
-def sumofpairs(pointa,pointb):
-    #assert(len(pointa)==len(pointb))
-    if len(pointa)==1:
-        return abs(pointa[0]-pointb[0])
-    D=[pointa[i]-pointb[i] for i in range(len(pointa))]
-    p=0
-    for i in range(len(D)):
-        for j in range(i+1,len(D)):
-            p+=abs(D[i]-D[j])
-    return p
+        return p
+    else:
+        logging.warn("Uknown penalty model: %s."%model)
+        return 0
 
 def rc(seq):
     d = {'A':'T','C':'G','G':'C','T':'A','N':'N','a':'t','c':'g',\

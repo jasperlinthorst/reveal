@@ -528,8 +528,10 @@ def align_genomes(args):
     schemes.minlength=args.minlength
     schemes.minscore=args.minscore
     schemes.minn=args.minn
+    schemes.gcmodel=args.gcmodel
     schemes.wscore=args.wscore
     schemes.wpen=args.wpen
+
     
     graph=False
     

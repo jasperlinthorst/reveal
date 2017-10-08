@@ -118,7 +118,7 @@ def stats(gfafile):
         for point,length in chain[1:]:
             for i in range(len(point)):
                 assert(point[i]>=ppoint[i])
-            p=sumofpairs(ppoint,point)
+            p=gapcost(ppoint,point)
             ppoint=tuple([c+length for c in point])
             chainpenalty+=p
         

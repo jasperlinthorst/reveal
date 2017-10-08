@@ -3,18 +3,27 @@ import reveallib64
 from utils import *
 from matplotlib import pyplot as plt
 
+
+import threading
+from multiprocessing.pool import Pool
+
+
 def finish(args):
     
-    logging.debug("Extracting mums in normal orientation.")
-    #obtain matches between ref and contigs
-    mums,ref2length,contig2length,contig2seq = getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength)
+    pool = Pool(processes=2 if args.nproc>=2 else 1)
+    logging.debug("Extracting mums.")
+    async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength}) # tuple of args for foo
+    async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength}) # tuple of args for foo
+    pool.close()
+    pool.join()
+
+    # do some other stuff in the main process
+    mums,ref2length,contig2length,contig2seq = async_result1.get()
     logging.debug("MUMS in normal orientation: %d"%len(mums))
-    
-    logging.debug("Extracting mums in reverse complemented normal orientation.")
-    #obtain matches between ref and reverse complemented contigs
-    rcmums,_,_,_ = getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength)
+
+    rcmums,_,_,_ = async_result2.get()
     logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
-    
+
     #combine matches
     mems=mums+rcmums
     
@@ -29,9 +38,9 @@ def finish(args):
     logging.info("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
     if args.order=='chains':
-        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum)
+        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
     else:
-        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn)
+        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn,nproc=args.nproc)
     
     if args.output==None:
         pref=[]
@@ -68,21 +77,27 @@ def finish(args):
     defref2ctg=dict()
     unused=[]
     
-    #filter out the chains that cant be layed out on the reference
+    pool = Pool(processes=4) #TODO: make argument
+
+    #multi-process contig-path computation
     for ref in ref2ctg:
         if ref=='unchained' or ref=='unplaced':
             defref2ctg[ref]=ref2ctg[ref]
             continue
+        defref2ctg[ref]=pool.apply_async(bestctgpath, (ref2ctg[ref],))
+
+    #retrieve multi-process results
+    for ref in ref2ctg:
+        if ref=='unchained' or ref=='unplaced':
+            continue
         
-        #ref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
-        ctgs=ref2ctg[ref]
-        #nctgsin=len(ctgs)
+        b=set(ref2ctg[ref])
+
+        defref2ctg[ref]=defref2ctg[ref].get()
         
-        b=set(ctgs)
-        ctgs=bestctgpath(ref2ctg[ref]) #layout contigs/chains with respect to reference
-        a=set(ctgs)
+        a=set(defref2ctg[ref])
         
-        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),len(ref2ctg[ref]),args.order,ref))
+        logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(a),len(b),args.order,ref))
         
         if len(b)-len(a)>0:
             logging.info("The following %d %s were placed on reference sequence %s but were not used in the layout:"%(len(b)-len(a),args.order,ref))
@@ -99,7 +114,42 @@ def finish(args):
                         logging.info("Unused: (%s,%s,%s) (length=%d)"%(ctgname,ctgbegin,ctgend,ctgbegin-ctgend))
                         ref2ctg['unchained'].add((ctgname,ctgend,ctgbegin))
                     unused.append((ctgname,ci))
-        defref2ctg[ref]=ctgs
+
+
+    # #filter out the chains that cant be layed out on the reference
+    # for ref in ref2ctg:
+    #     if ref=='unchained' or ref=='unplaced':
+    #         defref2ctg[ref]=ref2ctg[ref]
+    #         continue
+        
+    #     #ref2ctg[ref].sort(key=lambda c: c[3]) #sort by ref start position
+    #     ctgs=ref2ctg[ref]
+    #     #nctgsin=len(ctgs)
+        
+    #     b=set(ctgs)
+    #     ctgs=bestctgpath(ref2ctg[ref]) #layout contigs/chains with respect to reference
+    #     a=set(ctgs)
+        
+    #     logging.debug("Selected %d out of %d %s to layout assembly with respect to %s."%(len(ctgs),len(ref2ctg[ref]),args.order,ref))
+        
+    #     if len(b)-len(a)>0:
+    #         logging.info("The following %d %s were placed on reference sequence %s but were not used in the layout:"%(len(b)-len(a),args.order,ref))
+    #         if args.order=='contigs':
+    #             for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
+    #                 logging.info("Unused: %s (length=%d)"%(ctgname,contig2length[ctgname]))
+    #                 ref2ctg['unplaced'].append(ctgname)
+    #         else:
+    #             for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
+    #                 if ctgbegin<ctgend:
+    #                     logging.info("Unused: (%s,%s,%s) (length=%d)"%(ctgname,ctgbegin,ctgend,ctgend-ctgbegin))
+    #                     ref2ctg['unchained'].add((ctgname,ctgbegin,ctgend))
+    #                 else:
+    #                     logging.info("Unused: (%s,%s,%s) (length=%d)"%(ctgname,ctgbegin,ctgend,ctgbegin-ctgend))
+    #                     ref2ctg['unchained'].add((ctgname,ctgend,ctgbegin))
+    #                 unused.append((ctgname,ci))
+    #     defref2ctg[ref]=ctgs
+
+
 
     if args.order=="chains": #remove unused chains from the ctg2ref mapping
         unused.sort(reverse=True)
@@ -256,7 +306,11 @@ def finish(args):
                             if args.outputgraph:
                                 G.node[pn]['seq']=G.node[pn]['seq']+rc(contig2seq[ctgname][ctgend:pctgbegin])
                             
-                            totseqplaced+=ctgend-ctgbegin
+                            assert(pctgbegin-ctgend>=0)
+
+                            totseqplaced+=pctgbegin-ctgend
+                            #totseqplaced+=ctgend-ctgbegin
+
                             gapsize=pctgbegin-ctgend #update gapsize so offset calculation is still correct
                         else:
                             assert(pctgend<=ctgbegin)
@@ -269,7 +323,11 @@ def finish(args):
                             if args.outputgraph:
                                 G.node[pn]['seq']=G.node[pn]['seq']+contig2seq[ctgname][pctgend:ctgbegin]
                             
-                            totseqplaced+=pctgend-ctgbegin
+                            assert(ctgbegin-pctgend>=0)
+                            
+                            totseqplaced+=ctgbegin-pctgend
+                            #totseqplaced+=pctgend-ctgbegin
+
                             gapsize=ctgbegin-pctgend
                     gap=False
                 else:
@@ -310,6 +368,7 @@ def finish(args):
                     seq=contig2seq[ctgname][ctgbegin:ctgend]
                 
                 finished.write(seq)
+                assert(ctgend-ctgbegin>=0)
                 totseqplaced+=ctgend-ctgbegin
                 assert(alength==ctgend-ctgbegin)
                 
@@ -375,7 +434,7 @@ def finish(args):
                         G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                     pn=n
 
-                    n=(ctgname,0,ctg2length[ctgname],revcomp)
+                    n=(ctgname,0,contig2length[ctgname],revcomp)
                     G.add_node(n,seq=seq,offsets={refid:o+gapsize,G.graph['sample2id']["*"+base+"_"+n[0]]:n[1]})
                     
                     if pn!=None:
@@ -383,6 +442,8 @@ def finish(args):
                     pn=n
                 
                 l=gapsize+len(contig2seq[ctgname])
+
+                assert(contig2length[ctgname]>=0)
                 totseqplaced+=contig2length[ctgname]
             
             if args.plot:
@@ -439,13 +500,14 @@ def finish(args):
     if args.outputgraph:
         ctgswithevents=set()
         if args.order=="chains":#reconnect the chains based on their layout in the draft assembly
-            sortednodes=sorted(G.nodes()) #sort by contigname, then start position within the contig
-            pnode=sortednodes[0]
-            for node in sortednodes[1:]:
-                if pnode[0]==node[0]:
-                    G.add_edge(pnode,node,ofrom="+" if pnode[3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['sample2id']["*"+base+"_"+pnode[0]]})
-                    ctgswithevents.add("*"+base+"_"+pnode[0])
-                pnode=node
+            if G.number_of_nodes()>1:
+                sortednodes=sorted(G.nodes()) #sort by contigname, then start position within the contig
+                pnode=sortednodes[0]
+                for node in sortednodes[1:]:
+                    if pnode[0]==node[0]:
+                        G.add_edge(pnode,node,ofrom="+" if pnode[3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['sample2id']["*"+base+"_"+pnode[0]]})
+                        ctgswithevents.add("*"+base+"_"+pnode[0])
+                    pnode=node
 
         if not args.allcontigs:
             G.graph['samples']=[sample for sample in G.graph['samples'] if sample in ctgswithevents or not sample.startswith("*")]
@@ -475,25 +537,109 @@ def finish(args):
     if totseqplaced==0:
         logging.info("No sequence could be placed!")
     else:
-        logging.info("%.2f%% of the assembly was placed with respect to the reference."% ( (totseqplaced/float(totseq))*100 ))
+        logging.info("%.2f%% (%d out of %d) of the assembly was placed with respect to the reference."% ( (totseqplaced/float(totseq))*100, totseqplaced, totseq ))
 
-def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000):
+
+def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000):
+
+    logging.debug("Determining best chain(s) for: %s"%ctg)
+    paths=[]
+
+    results=[]
+    for ref in mums:
+        mems=mums[ref]
+
+        candidatepaths=mempathsbothdirections(mems,contiglength,n=maxn,maxgapsize=maxgapsize,minchainsum=minchainsum)
+        for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
+            if len(path)>0:
+                paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
+
+    for r in results:
+        candidatepaths=r.get()
+        for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
+           if len(path)>0:
+               paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
+    
+    if len(paths)==0:
+        return paths
+    
+    nrefchroms=len(set([p[5] for p in paths]))
+    
+    logging.debug("Found a total of %d chains that map to %d different reference chromosomes."%(len(paths),nrefchroms))
+     
+    paths=sorted(paths,key=lambda c: c[0],reverse=True) #sort chains by alignment score
+    
+    selectedpaths=[]
+    #take n-best paths that dont overlap
+    it=IntervalTree()
+    for path in paths:
+        score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
+        
+        logging.debug("Path: ctg:%d:%d - ref:%d:%d (%d) with score %d"%(ctgstart,ctgend,refstart,refend,revcomp,score))
+        
+        if revcomp:
+            ctgend,ctgstart=ctgstart,ctgend
+        
+        s=it[ctgstart:ctgend]
+        
+        if s==set():
+            it[ctgstart:ctgend]=path
+            selectedpaths.append(path)
+        else:
+            for start,end,v in s:
+                if start<=ctgstart and end>=ctgend: #allow overlap, not containment
+                    #print "contained path (score=%d)"%score,ctgstart,ctgend,"in",start,end
+                    break
+            else:
+                #update boundaries such that path does not overlap other paths
+                bctgstart=ctgstart
+                bctgend=ctgend
+                assert(ctgstart<ctgend)
+                
+                for start,end,v in s:
+                    assert(start<end)
+                    if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
+                        ctgend=ctgstart
+                        break
+                    if ctgstart<=start: #left overlap, update ctgend
+                        ctgend=start
+                    if ctgend>=end:
+                        ctgstart=end
+                
+                assert(bctgstart!=ctgstart or bctgend!=ctgend) #one of the two has to have been updated
+                
+                assert(ctgend>=ctgstart)
+                if ctgend!=ctgstart:
+                    #update path
+                    if revcomp:
+                        path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p) #note that the reference domain is not updated
+                    else:
+                        path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
+
+                    it[ctgstart:ctgend]=path
+                    selectedpaths.append(path)
+    
+    paths=sorted(selectedpaths,key=lambda c: c[1] if c[6] else c[2]) #sort by endposition on contig
+
+    return paths
+
+def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000, nproc=1):
     
     ref2ctg={'unchained':set()}
     ctg2ref=dict()
     
+    pool=Pool(processes=nproc)
+
+    results=dict()
+    for ctg in ctg2mums:
+        results[ctg]=pool.apply_async(decompose_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
+
+    pool.close()
+    pool.join()
+
     for ctg in ctg2mums:
         logging.debug("Determining best chain(s) for: %s"%ctg)
-        paths=[]
-        
-        for ref in ctg2mums[ctg]:
-            logging.debug("Checking %s"%ref)
-            mems=ctg2mums[ctg][ref]
-            candidatepaths=mempathsbothdirections(mems,contig2length[ctg],n=maxn,maxgapsize=maxgapsize,minchainsum=minchainsum)
-            
-            for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
-                if len(path)>0:
-                    paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
+        paths=results[ctg].get()
         
         if len(paths)==0:
             logging.info("No valid chains found for contig: %s"%ctg)
@@ -503,68 +649,9 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
                 ref2ctg['unchained']={(ctg,0,contig2length[ctg])}
             continue
         
-        nrefchroms=len(set([p[5] for p in paths]))
-        
-        logging.debug("Found a total of %d chains that map to %d different reference chromosomes."%(len(paths),nrefchroms))
-         
-        paths=sorted(paths,key=lambda c: c[0],reverse=True) #sort chains by alignment score
-        
-        selectedpaths=[]
-        #take n-best paths that dont overlap
-        it=IntervalTree()
-        for path in paths:
-            score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
-            
-            logging.debug("Path: ctg:%d:%d - ref:%d:%d (%d) with score %d"%(ctgstart,ctgend,refstart,refend,revcomp,score))
-            
-            if revcomp:
-                ctgend,ctgstart=ctgstart,ctgend
-            
-            s=it[ctgstart:ctgend]
-            
-            if s==set():
-                it[ctgstart:ctgend]=path
-                selectedpaths.append(path)
-            else:
-                for start,end,v in s:
-                    if start<=ctgstart and end>=ctgend: #allow overlap, not containment
-                        #print "contained path (score=%d)"%score,ctgstart,ctgend,"in",start,end
-                        break
-                else:
-                    #update boundaries such that path does not overlap other paths
-                    bctgstart=ctgstart
-                    bctgend=ctgend
-                    assert(ctgstart<ctgend)
-                    
-                    for start,end,v in s:
-                        assert(start<end)
-                        if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
-                            ctgend=ctgstart
-                            break
-                        if ctgstart<=start: #left overlap, update ctgend
-                            ctgend=start
-                        if ctgend>=end:
-                            ctgstart=end
-                    
-                    assert(bctgstart!=ctgstart or bctgend!=ctgend) #one of the two has to have been updated
-                    
-                    assert(ctgend>=ctgstart)
-                    if ctgend!=ctgstart:
-                        #update path
-                        if revcomp:
-                            path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p) #note that the reference domain is not updated
-                        else:
-                            path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
-
-                        it[ctgstart:ctgend]=path
-                        selectedpaths.append(path)
-        
-        paths=sorted(selectedpaths,key=lambda c: c[1] if c[6] else c[2]) #sort by endposition on contig
-        
         offset=0
         for i,path in enumerate(paths):
             score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
-            #logging.info("%d -> ctg:%d:%d - ref:%d:%d - %d"%(i,ctgstart,ctgend,refstart,refend,revcomp))
             
             assert(offset<=ctgstart) #should not be any overlap on the contig anymore
             
@@ -595,38 +682,75 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
                 ref2ctg['unchained'].add((ctg,offset,contig2length[ctg]))
             else:
                 ref2ctg['unchained']={(ctg,offset,contig2length[ctg])}
-    
+
     return ref2ctg,ctg2ref
 
-def contigstorefence(ctg2mums,contig2length,maxn=15000):
+
+
+def map_contig(ctg,mums,contiglength,maxn=15000):
+    logging.debug("Determining best chain for: %s"%ctg)
+    paths=[]
+    for ref in mums:
+        logging.debug("Checking %s"%ref)
+        path,score=bestmempath(mums[ref],contiglength,n=maxn,revcomp=False)
+        rpath,rscore=bestmempath(mums[ref],contiglength,n=maxn,revcomp=True)
+        if score>rscore:
+            refstart=path[-1][0]
+            refend=path[0][0]+path[0][2]
+            ctgstart=path[-1][1]
+            ctgend=path[0][1]+path[0][2]
+            logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
+            paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
+        elif rscore>0:
+            refstart=rpath[-1][0]
+            refend=rpath[0][0]+rpath[0][2]
+            ctgstart=(rpath[-1][1]+rpath[-1][2])
+            ctgend=rpath[0][1]
+            logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
+            paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
+    return paths
+
+
+def contigstorefence(ctg2mums,contig2length,maxn=15000,nproc=1):
     
     ref2ctg={'unplaced':[]}
     ctg2ref=dict()
 
+    pool=Pool(processes=nproc)
+
+    results=dict()
     for ctg in ctg2mums:
-        logging.debug("Determining best chain for: %s"%ctg)
-        paths=[]
+        results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxn':maxn})
+
+    pool.close()
+    pool.join()
+
+    for ctg in ctg2mums:
+        paths=results[ctg].get()
+
+        # logging.debug("Determining best chain for: %s"%ctg)
+        # paths=[]
         
-        for ref in ctg2mums[ctg]:
-            logging.debug("Checking %s"%ref)
-            mems=ctg2mums[ctg][ref]
-            path,score=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=False)
-            rpath,rscore=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=True)
+        # for ref in ctg2mums[ctg]:
+        #     logging.debug("Checking %s"%ref)
+        #     mems=ctg2mums[ctg][ref]
+        #     path,score=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=False)
+        #     rpath,rscore=bestmempath(mems,contig2length[ctg],n=maxn,revcomp=True)
             
-            if score>rscore:
-                refstart=path[-1][0]
-                refend=path[0][0]+path[0][2]
-                ctgstart=path[-1][1]
-                ctgend=path[0][1]+path[0][2]
-                logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
-                paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
-            elif rscore>0:
-                refstart=rpath[-1][0]
-                refend=rpath[0][0]+rpath[0][2]
-                ctgstart=(rpath[-1][1]+rpath[-1][2])
-                ctgend=rpath[0][1]
-                logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
-                paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
+        #     if score>rscore:
+        #         refstart=path[-1][0]
+        #         refend=path[0][0]+path[0][2]
+        #         ctgstart=path[-1][1]
+        #         ctgend=path[0][1]+path[0][2]
+        #         logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
+        #         paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
+        #     elif rscore>0:
+        #         refstart=rpath[-1][0]
+        #         refend=rpath[0][0]+rpath[0][2]
+        #         ctgstart=(rpath[-1][1]+rpath[-1][2])
+        #         ctgend=rpath[0][1]
+        #         logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
+        #         paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
         
         if len(paths)==0:
             if 'unplaced' in ref2ctg:
@@ -1147,26 +1271,26 @@ def bestmempathwithinversions(mems,n=15000):
                     if amem[1] >= mem[1]: #may overlap, but mem may not be contained
                         p1=(mem[0], mem[1]+mem[2])
                         p2=(amem[0]+amem[2], amem[1])
-                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
+                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
                         tmpw=score[tuple(amem)]+mem[2]-penalty
                 else: #active mem has regular orientation mem from reverse complement
                     if mem[1]+mem[2] >= amem[1]+amem[2]:
                         p1=tuple([mem[0]])
                         p2=tuple([amem[0]])
-                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])
+                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])
                         tmpw=score[tuple(amem)]+mem[2]-penalty
             else: #mem on regular orientation
                 if amem[4]==1: #active mem from reverse complement
                     if amem[1] <= mem[1]: #then it has to be 'above' mem
                         p1=tuple([mem[0]])
                         p2=tuple([amem[0]+amem[2]])
-                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])
+                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])
                         tmpw=score[tuple(amem)]+mem[2]-penalty
                 else: #mem and amem on same regular orientation
                     if amem[1]+amem[2] <= mem[1]+mem[2]: #may overlap, but mem may not be contained
                         p1=(mem[0], mem[1])
                         p2=(amem[0]+amem[2], amem[1]+amem[2])
-                        penalty=sumofpairs(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
+                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
                         tmpw=score[tuple(amem)]+mem[2]-penalty
             
             if tmpw>w:
@@ -1271,7 +1395,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
                 if mem[4]==1:
                     p1=(mem[0], mem[1]+mem[2])
                     p2=(amem[0]+amem[2], amem[1])
-                    penalty=sumofpairs(p1,p2)
+                    penalty=gapcost(p1,p2)
                     tmpw=score[tuple(amem)]+mem[2]-penalty
                     if tmpw>w:
                         w=tmpw
@@ -1279,7 +1403,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
                 else:
                     p1=(amem[0]+amem[2], amem[1]+amem[2])
                     p2=(mem[0], mem[1])
-                    penalty=sumofpairs(p1,p2)
+                    penalty=gapcost(p1,p2)
                     tmpw=score[tuple(amem)]+mem[2]-penalty
                     if tmpw>w:
                         w=tmpw
