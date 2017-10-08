@@ -15,7 +15,7 @@ extern RevealIndex **index_queue;
 extern int maxqsize,qsize,qstart,aw,nmums,err_flag,die;
 
 /* pops an index of the queue */
-RevealIndex* pop_index() {
+RevealIndex* pop_index(void) {
     //fprintf(stderr,"qend=%d qstart=%d qsize=%d\n",qsize,qstart,qsize-qstart);
     //if(qsize > qstart) { FIFO
     if(qsize > 0) { //LIFO
@@ -128,7 +128,7 @@ PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
         if (index->LCP[i]<minl){
             continue;
         }
-	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat within same genome
+	if ((index->SA[i]>index->nsep[0]) == (index->SA[i-1]>index->nsep[0])) { //repeat within same genome
 	    continue;
 	}
 	if (index->SA[i]<index->SA[i-1]) {
@@ -201,7 +201,7 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     
     PyObject *mums=PyList_New(0);
     for (i=1;i<index->n;i++){
-	if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+	if ((index->SA[i]>index->nsep[0]) == (index->SA[i-1]>index->nsep[0])){ //repeat
 	    continue;
 	}
 	if (index->SA[i]<index->SA[i-1]) {
@@ -290,7 +290,7 @@ int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     mum->n=2;
     for (i=1;i<index->n;i++){
         if (index->LCP[i]>mum->l){
-            if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+            if ((index->SA[i]>index->nsep[0]) == (index->SA[i-1]>index->nsep[0])) { //repeat
                continue;
             }
             if (index->SA[i]<index->SA[i-1]) {
@@ -378,7 +378,7 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
     for (i=1;i<index->n;i++){
         
         if ((index->LCP[i]*2*w_score) > mum->score){
-            if (index->SA[i]>index->nsep[0] == index->SA[i-1]>index->nsep[0]){ //repeat
+            if ((index->SA[i]>index->nsep[0]) == (index->SA[i-1]>index->nsep[0])) { //repeat
                continue;
             }
             if (index->SA[i]<index->SA[i-1]) {
@@ -465,7 +465,6 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
     lcp_t j=0,la,lb;
     int *flag_so=calloc(index->nsamples, sizeof(int));
     int flag_maximal=0;
-    int flag_unique=0;
     int flag_lcp;
     int x;
     
@@ -473,7 +472,6 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
         if (index->LCP[i]>mum->l && (i==index->n-1 || index->LCP[i+1]<index->LCP[i])){
             int so;
             flag_maximal=0;
-            flag_unique=0;
             flag_lcp=index->LCP[i];
             int n=0;
             for (j=0;j<(index->nsamples-1);j++){ //scan back n places in SA
@@ -526,7 +524,6 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
                     la=index->LCP[i+1];
                 }
                 if (flag_lcp>lb && flag_lcp>la){
-                    flag_unique=1;
                     mum->l=flag_lcp;
                     mum->n=n;
                     for (x=0;x<n;x++){
@@ -616,9 +613,9 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
         fprintf(stderr,"No valid index object.\n");
         return NULL;
     }
-    RevealIndex * main = (RevealIndex *) index->main;
+    RevealIndex * mainidx = (RevealIndex *) index->main;
     int maxdepth=1000;
-    int *flag_so=calloc(main->nsamples,sizeof *flag_so);
+    int *flag_so=calloc(mainidx->nsamples,sizeof *flag_so);
     lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
     lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
     lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
@@ -643,7 +640,7 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             int n=(i_ub-i_lb)+1;
             
             if (i_lcp>=minl){
-                if (n<=main->nsamples){
+                if (n<=mainidx->nsamples){
                     if (u==1){
                         if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                             int x;
@@ -724,7 +721,7 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
         
         int n=(i_ub-i_lb)+1;
         if (i_lcp>=minl){
-            if (n<=main->nsamples){
+            if (n<=mainidx->nsamples){
                 if (u==1) {
                     if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                         int x;

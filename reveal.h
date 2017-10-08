@@ -36,7 +36,7 @@ typedef struct
     PyObject * right;
 } RevealIndex;
 
-RevealIndex* newIndex();
+RevealIndex* newIndex(void);
 
 typedef struct
 {
