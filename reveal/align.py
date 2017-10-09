@@ -490,7 +490,7 @@ def align_cmd(args):
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
     else:
-        write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa', paths=args.paths)
+        write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
     logging.info("Done.")
     logging.info("Alignment graph written to: %s"%graph)

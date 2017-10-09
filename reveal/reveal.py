@@ -60,7 +60,7 @@ def main():
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     parser_aln.add_argument("-p", dest="pcutoff", type=float, default=None, help="If, the probability of observing a MUM of the observed length by random change becomes larger than this cutoff the alignment is stopped.")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
-    parser_aln.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact match.")
+    parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
     parser_aln.add_argument("-c", dest="minscore", type=int, default=None, help="Min score of an exact match, exact maches are scored by their length and penalized by the indel they create with respect to previously accepted exact matches.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=None, help="Only align graph on exact matches that occur in at least this many samples (if not set, equal to total number of genomes in the (sub)index).")
     parser_aln.add_argument("-e", dest="exp", type=int, default=None, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes (by default equals the number of genomes that are aligned).")
@@ -81,7 +81,6 @@ def main():
     parser_aln.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_aln.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_aln.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
-    parser_aln.add_argument("--nopaths", dest="paths", action="store_false", default=True, help="Dont' output paths in GFA.")
     parser_aln.set_defaults(func=align.align_cmd)
     
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')
@@ -128,7 +127,7 @@ def main():
     parser_finish.add_argument("--order", dest="order", default="contigs", choices=["contigs","chains"], help="Determine the order for either contigs or chains. With \'chains\' large scale rearrangements within contigs can be undone in order to obtain colinear genomes.")
     parser_finish.add_argument("--maxgapsize", dest="maxgapsize", type=int, default=1500, help="Maxgapsize between MUMs before breaking chain.")
     parser_finish.add_argument("--maxn", dest="maxn", type=int, default=100000000, help="Max number of MUMs to consider for chaining.")
-    #parser_finish.add_argument("--minchainlength", dest="minchainlength", type=int, default=1500,help="Minimal length of a chain on the reference before its reported.")
+    parser_finish.add_argument("--cutn", dest="cutn", type=int, default=1000, help="Cut contigs at N-stretches longer than this value, to force re-estimation of gapsizes (set to 0, to switch off).")
     parser_finish.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000,help="Minimal sum of the length of the MUMs in a chain before its reported.")
     parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
     parser_finish.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
@@ -195,7 +194,7 @@ def main():
     
     parser_chain.add_argument('fastas', nargs='*', help='Fasta files specifying sequences to be (multi-)aligned into a graph.')
     parser_chain.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
-    parser_chain.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of an exact (multi-)match to consider for chaining.")
+    parser_chain.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact (multi-)match to consider for chaining.")
     parser_chain.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
     parser_chain.add_argument("-a", dest="maxmums", type=int, default=5000, help="Number of largest mums to use for chaining.")
     parser_chain.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
@@ -203,7 +202,6 @@ def main():
     parser_chain.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_chain.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     parser_chain.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
-    parser_chain.add_argument("--nopaths", dest="paths", action="store_false", default=True, help="Don't output paths in GFA.")    
     parser_chain.set_defaults(func=chain.chain_cmd)
     
     parser_stats.add_argument('gfa', nargs=1, help='GFA file for which statistics should be calculated.')

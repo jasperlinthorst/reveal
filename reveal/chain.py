@@ -45,6 +45,7 @@ def chain_cmd(args):
     G.add_node(iend,l=0)
     G.add_edge(istart,iend)
     idc=range(idx.nsamples)
+
     stack=[(idx,idc,istart,iend,startcoords,0,False)]
     
     while len(stack)!=0:
@@ -172,15 +173,7 @@ def chain_cmd(args):
                 G[pnode][node]['paths']={sid}
             pnode=node
 
-    write_gfa(G,T,nometa=args.nometa,outputfile=args.output+'.gfa',paths=args.paths)
-    
-    #G.graph['samples']=str(G.graph['samples'])
-    #for node,data in G.nodes(data=True):
-    #    for attrib in data:
-    #        t=type(data[attrib])
-    #        if t==tuple or t==dict or t==list or t==set:
-    #            G.node[node][attrib]=str(data[attrib])
-    #nx.write_graphml(G,"chaingraph.graphml")
+    write_gfa(G,T,nometa=args.nometa,outputfile=args.output+'.gfa')
 
 def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
     if merge:
@@ -216,9 +209,13 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     k=idx.nsamples
     
     if k>2:
+        logging.debug("Extracting mmums of length %d."%minlength)
         mums=idx.getmultimums(minlength=minlength,uniq=uniq)
+        logging.debug("Extracted %d mums."%len(mums))
     else:
+        logging.debug("Extracting mums of length %d."%minlength)
         mums=idx.getmums(minlength)
+        logging.debug("Extracted %d mums."%len(mums))
     
     points=[]
     G=nx.DiGraph()
@@ -263,6 +260,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
         bestpenalty=0
         for v in range_search(tree,p1,t):
             l=G.node[v]['l']
+
             for i,d in enumerate(v): #no overlapping mums
                 if d+l>t[i]:
                     break
@@ -271,6 +269,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
                     penalty=0
                 else:
                     penalty=gapcost(v,t,model=gcmodel)
+
                 score=G.node[v]['score']-penalty
                 if score>bestscore:
                     bestscore=score

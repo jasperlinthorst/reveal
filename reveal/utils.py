@@ -4,13 +4,17 @@ from intervaltree import Interval, IntervalTree
 import sys
 import os
 
-def fasta_reader(fn,truncN=False,toupper=True):
+def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
+    gapseq=""
+    sub=0
+    ntract=0
     with open(fn,'r') as ff:
         for line in ff:
             if line.startswith(">"):
                 if seq!="":
                     yield name,seq
+                    sub=0
                 name=line.rstrip().replace(">","").replace("\t","")
                 seq=""
             else:
@@ -28,13 +32,34 @@ def fasta_reader(fn,truncN=False,toupper=True):
                                 seq+=base.upper()
                             else:
                                 seq+=base
+                elif cutN>0:
+                    for base in line.rstrip():
+                        if base.upper()=='N':
+                            gapseq+='N'
+                        else:
+                            if len(gapseq)<cutN:
+                                seq+=gapseq
+                                gapseq=""
+                            else:
+                                if seq!="":
+                                    yield name+"_"+str(sub),seq
+                                    seq=""
+                                    sub+=1
+                                gapseq=""
+                            if toupper:
+                                seq+=base.upper()
+                            else:
+                                seq+=base
                 else:
                     if toupper:
                         seq+=line.upper().rstrip()
                     else:
                         seq+=line.rstrip()
         if seq!="":
-            yield name,seq
+            if cutN>0:
+                yield name+"_"+str(sub),seq
+            else:
+                yield name,seq
 
 def fasta_writer(fn,name_seq,lw=100):
     seq=""

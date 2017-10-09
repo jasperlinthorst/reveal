@@ -9,13 +9,13 @@ def finish(args):
     logging.debug("Extracting mums.")
 
     pool = Pool(processes=2 if args.nproc>=2 else 1)
-    async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength}) # tuple of args for foo
-    async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength}) # tuple of args for foo
+    async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
+    async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
     pool.close()
     pool.join()
-    
+
     logging.debug("Done.")
-    
+
     # do some other stuff in the main process
     mums,ref2length,contig2length,contig2seq = async_result1.get()
     logging.debug("MUMS in normal orientation: %d"%len(mums))
@@ -243,6 +243,8 @@ def finish(args):
             #logging.info("Estimated gap size between %s and %s is %d (%d,%d)."%(pctgname[0:10],ctgname[0:10],gapsize,a,b))
             
             if gapsize<0 or args.fixedsize:
+                if gapsize<0:
+                    logging.info("Chains for contigs %s and %s overlap by %d bases."%(pctgname,ctgname,abs(gapsize)))
                 gapsize=args.gapsize
             
             logging.debug("%d (index on ctg: %d->%d) - Order %s (revcomp=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d)"%(i,pci,ci,args.order,revcomp,refbegin,refend,ctgbegin,ctgend))
@@ -297,7 +299,8 @@ def finish(args):
 
                             gapsize=ctgbegin-pctgend
                     gap=False
-                else:
+
+                else: #sorting entire contigs
                     
                     if pctgname==None and ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)): #first chain of the chromosome
                         event='contig break'
@@ -365,15 +368,41 @@ def finish(args):
                         if pn!=None:
                             G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                         pn=n
+
+                if args.plot:
+                    
+                    if gap:
+                        ax.add_patch(
+                            patches.Rectangle(
+                                (0, o), #bottom left
+                                ref2length[ref], #width
+                                gapsize, #height
+                                alpha=.25
+                            )
+                        )
+                    
+                    if revcomp:
+                        ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
+                        ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'g-')
+                    else:
+                        ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
+                        ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'r-')
             
             else: # ordering contigs
                 gap=True
                 
-                a=pctgbegin
-                assert(a>=0)
-                b=pctglength-pctgend
-                assert(b>=0)
-                gapsize=gapsize-a-b
+                assert((pctglength-pctgend)>=0)
+
+                a_prefend=prefend+(pctglength-pctgend) #calculate overshoot
+                a_refbegin=refbegin-ctgbegin
+                gapsize=a_refbegin-a_prefend
+                alength=contig2length[ctgname]
+
+                #a=pctgbegin
+                #assert(a>=0)
+                #b=pctglength-pctgend
+                #assert(b>=0)
+                #gapsize=gapsize-a-b
                 
                 if gapsize==0: #perfect boundary, stil use one N to be able to distinguish the event
                     gapsize=1
@@ -408,29 +437,33 @@ def finish(args):
                         G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
                     pn=n
                 
-                l=gapsize+len(contig2seq[ctgname])
+                #l=gapsize+len(contig2seq[ctgname])
+                assert(len(seq)==contig2length[ctgname])
+                assert(gapsize>0)
+
+                l=gapsize+contig2length[ctgname]
 
                 assert(contig2length[ctgname]>=0)
                 totseqplaced+=contig2length[ctgname]
             
-            if args.plot:
-                
-                if gap:
-                    ax.add_patch(
-                        patches.Rectangle(
-                            (0, o), #bottom left
-                            ref2length[ref], #width
-                            gapsize, #height
-                            alpha=.25
+                if args.plot:
+                    
+                    if gap:
+                        ax.add_patch(
+                            patches.Rectangle(
+                                (0, o), #bottom left
+                                ref2length[ref], #width
+                                gapsize, #height
+                                alpha=.25
+                            )
                         )
-                    )
-                
-                if revcomp:
-                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
-                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'g-')
-                else:
-                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'bx')
-                    ax.plot([refbegin,refend],[o+gapsize,o+alength+gapsize],'r-')
+                    
+                    if revcomp:
+                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'bx')
+                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'g-')
+                    else:
+                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'bx')
+                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'r-')
             i+=1
             o=o+l
             yticks.append(o)
@@ -643,30 +676,19 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
 
     return ref2ctg,ctg2ref
 
-def map_contig(ctg,mums,contiglength,maxn=15000):
+def map_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000):
     logging.debug("Determining best chain for: %s"%ctg)
     paths=[]
     for ref in mums:
         logging.debug("Checking %s"%ref)
-        path,score=bestmempath(mums[ref],contiglength,n=maxn,revcomp=False)
-        rpath,rscore=bestmempath(mums[ref],contiglength,n=maxn,revcomp=True)
-        if score>rscore:
-            refstart=path[-1][0]
-            refend=path[0][0]+path[0][2]
-            ctgstart=path[-1][1]
-            ctgend=path[0][1]+path[0][2]
-            logging.debug("%s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(path),score, refend-refstart,refstart,refend,ctgend-ctgstart,ctgstart,ctgend))
-            paths.append((score,ctgstart,ctgend,refstart,refend,ref,False,path))
-        elif rscore>0:
-            refstart=rpath[-1][0]
-            refend=rpath[0][0]+rpath[0][2]
-            ctgstart=(rpath[-1][1]+rpath[-1][2])
-            ctgend=rpath[0][1]
-            logging.debug("Reverse complement of %s maps to %s, with chain of %d matches, score of %d, reflength %d [%d:%d] and ctglength %d [%d:%d]"%(ctg,ref,len(rpath),rscore,refend-refstart,refstart,refend,ctgstart-ctgend,ctgstart,ctgend))
-            paths.append((rscore,ctgstart,ctgend,refstart,refend,ref,True,rpath))
+        mpaths=mempathsbothdirections(mums[ref],contiglength,n=maxn,all=False,maxgapsize=maxgapsize,minchainsum=minchainsum)
+        if len(mpaths)>0:
+            path,score,o,ctgstart,ctgend,refstart,refend=mpaths[0]
+            paths.append((score,ctgstart,ctgend,refstart,refend,ref,o,path))
+
     return paths
 
-def contigstorefence(ctg2mums,contig2length,maxn=15000,nproc=1):
+def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000,nproc=1):
     
     ref2ctg={'unplaced':[]}
     ctg2ref=dict()
@@ -675,7 +697,7 @@ def contigstorefence(ctg2mums,contig2length,maxn=15000,nproc=1):
 
     results=dict()
     for ctg in ctg2mums:
-        results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxn':maxn})
+        results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
 
     pool.close()
     pool.join()
@@ -735,7 +757,7 @@ def mapmumstocontig(mems,filtermums=True,maxgapsize=1500,minchainsum=1000):
     
     return ctg2mums
 
-def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
+def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000):
     if sa64:
         idx=reveallib64.index()
     else:
@@ -769,7 +791,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20):
         read_gfa(query,idx,t,G,revcomp=revcomp)
     else:
         #G.graph['samples'].append(ctgfile)
-        for name,seq in fasta_reader(query):
+        for name,seq in fasta_reader(query,cutN=cutN):
             contig2length[name]=len(seq)
 
             if revcomp:
@@ -1064,6 +1086,7 @@ def bestctgpath(ctgs):
 def bestmempath(mems,ctglength,n=15000,revcomp=False):
     
     if len(mems)>n: #take only n largest mems
+        logging.info("Too many mums (%d), taking the %d largest."%(len(mems),n))
         mems.sort(key=lambda mem: mem[2]) #sort by size
         mems=mems[:n]
     
@@ -1106,26 +1129,28 @@ def bestmempath(mems,ctglength,n=15000,revcomp=False):
         w=0
         
         #sort active by score decreasing
-        #active.sort(key=lambda x: score[x], reverse=True)
+        active.sort(key=lambda x: score[x], reverse=True)
         
         for amem in active:
-
-            #s=score[amem]
+            s=score[amem]+mem[2]
             #assert(s>=0)
-            #if w > s: #as input is sorted by score
-            #    break
+            if w > s: #as input is sorted by score
+                break
             
             #calculate score of connecting to active point
             if revcomp:
                 if amem[1] >= mem[1]+mem[2]:
                     penalty=abs( (amem[1]-(mem[1]+mem[2]) ) - (mem[0]-(amem[0]+amem[2])  ) )
+
                     tmpw=score[amem]+mem[2]-penalty
                     if tmpw>w:
                         w=tmpw
                         best=amem
             else:
                 if amem[1] <= mem[1]:
+
                     penalty=abs( ((amem[1]+amem[2])-mem[1]) - ((amem[0]+amem[2])-mem[0]) )
+
                     tmpw=score[amem]+mem[2]-penalty
                     if tmpw>w:
                         w=tmpw
@@ -1258,7 +1283,7 @@ def bestmempathwithinversions(mems,n=15000):
     
     return path,maxscore
 
-def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000):
+def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,all=True):
     nmums=len(mems)
     if nmums>n: #take only n largest mems
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
@@ -1367,8 +1392,9 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
             
             assert(refend>refstart)
             
-            #if refend-refstart>minchainlength:
-            
+            if not all: #just return first best path
+                return [(path,maxscore,o,ctgstart,ctgend,refstart,refend)]
+
             chainsum=sum([m[2] for m in path])
             if chainsum>=minchainsum:
                 paths.append((path,maxscore,o,ctgstart,ctgend,refstart,refend))
@@ -1376,10 +1402,6 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
             else:
                 logging.debug("Skipping path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d and sum %d (minchainsum=%d)."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart,chainsum,minchainsum))
                 return paths
-
-            #else:
-            #    logging.debug("Skipping path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d (minchainlength=%d)."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart,minchainlength))
-            #    return paths
             
             if o==1:
                 assert(ctgstart>ctgend)

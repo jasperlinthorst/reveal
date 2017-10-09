@@ -198,12 +198,8 @@ def variants_cmd(args):
         if args.reference in G.graph['sample2id']:
             args.reference=G.graph['sample2id'][args.reference]
         else:
-            logging.error("Unkown reference sequence: %s")
+            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['samples'])))
             sys.exit(1)
-    
-    if args.reference not in G.graph['samples']:
-        logging.fatal("Specified reference not available in graph, graph knows of: %s."%str(G.graph['samples']))
-        return
     
     if not args.fastaout:
         sys.stdout.write("#reference\tpos\tsource\tsink\ttype\tgenotypes")

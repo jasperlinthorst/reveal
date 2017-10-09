@@ -47,7 +47,7 @@ def plot(args):
         sample=args.fastas[0]
         idx.addsample(sample)
         refoffset=0
-        for name,seq in fasta_reader(sample,truncN=False):
+        for name,seq in fasta_reader(sample):
             pc=None
             gapsize=None
             for i,c in enumerate(seq):
@@ -67,7 +67,7 @@ def plot(args):
         sample=args.fastas[1]
         idx.addsample(sample)
         qryoffset=0
-        for name,seq in fasta_reader(sample,truncN=False):
+        for name,seq in fasta_reader(sample):
             pc=None
             gapsize=None
             for i,c in enumerate(seq):
@@ -108,14 +108,14 @@ def plot(args):
             
             sample=args.fastas[0]
             idx.addsample(sample)
-            for name,seq in fasta_reader(sample,truncN=False):
+            for name,seq in fasta_reader(sample):
                 idx.addsequence(seq.upper())
             
             sample=args.fastas[1]
             idx.addsample(sample)
 
             qryintvs=[]
-            for name,seq in fasta_reader(sample,truncN=False):
+            for name,seq in fasta_reader(sample):
                 intv=idx.addsequence(rc(seq.upper()))
                 qryintvs.append(intv)
             
