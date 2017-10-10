@@ -99,7 +99,7 @@ def graphmumpicker(mums,idx):
 
             penalty=lpenalty+rpenalty
             
-            score=(wscore*(l*(n**n)))-((wpen*penalty)**(.5))
+            score=(wscore*(l*(n**exp)))-(wpen*penalty)
             
             if minscore!=None:
                 if score<minscore:
