@@ -197,6 +197,10 @@ def main():
     parser_chain.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact (multi-)match to consider for chaining.")
     parser_chain.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
     parser_chain.add_argument("-a", dest="maxmums", type=int, default=5000, help="Number of largest mums to use for chaining.")
+    
+    parser_chain.add_argument("-e", dest="exp", type=int, default=1, help="Increase \'e\' to prefer shorter matches observed in more genomes, over larger matches in less genomes.")
+    parser_chain.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
+    parser_chain.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
     parser_chain.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
     parser_chain.add_argument("--recurse", dest="recurse", action="store_true", default=False, help="Use recursive approach to chain gaps.")
     parser_chain.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")

@@ -50,7 +50,7 @@ def chain_cmd(args):
     
     while len(stack)!=0:
         idx,idc,p1,p2,startcoords,depth,keepedge=stack.pop()
-        subg,pp1,pp2,nodepath=chain(idx,startcoords,args.minlength,depth,args.maxmums,recurse=args.recurse,uniq=True,gcmodel=args.gcmodel)
+        subg,pp1,pp2,nodepath=chain(idx,startcoords,args.minlength,depth,args.maxmums,recurse=args.recurse,uniq=True,gcmodel=args.gcmodel,exp=args.exp,wpen=args.wpen,wscore=args.wscore)
 
         if len(nodepath)==2: #no more chain, output variant sequence
             localstart=tuple([-1]+[sep for sep in idx.nsep])
@@ -205,7 +205,7 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
             G.add_edge(source,v)
             G.add_edge(v,sink)
 
-def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs"):
+def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=3,exp=1):
     k=idx.nsamples
     
     if k>2:
@@ -242,7 +242,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
             point[i]=offsets[i]+(point[i]-localoffsets[i]) #map positions back to toplevel T index
         point=tuple(point)
         points.append(point)
-        G.add_node(point,s=mum[0]*mum[1],l=mum[0])
+        G.add_node(point,s=wscore*(mum[0]*(mum[1]**exp)),l=mum[0])
     
     G.add_node(p1,s=0,l=0,score=0)
     G.add_node(p2,s=0,l=0,score=0)
@@ -270,12 +270,12 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
                 else:
                     penalty=gapcost(v,t,model=gcmodel)
 
-                score=G.node[v]['score']-penalty
+                score=G.node[v]['score']-(wpen*penalty)
                 if score>bestscore:
                     bestscore=score
                     bestpoint=v
                     bestpenalty=penalty
-        
+
         G.node[t]['score']=bestscore+G.node[t]['s']
         G.add_edge(bestpoint,t,p=bestpenalty)
     

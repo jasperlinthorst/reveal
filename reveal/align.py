@@ -587,11 +587,9 @@ def align_genomes(args):
     
     if len(args.inputfiles)==2 and not graph:
         logging.info("Constructing pairwise-alignment...")
-        idx.align(None,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
     else:
         logging.info("Constructing graph-based multi-alignment...")
-        schemes.wscore=args.wscore
-        schemes.wpen=args.wpen
         idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
     
     return G,idx

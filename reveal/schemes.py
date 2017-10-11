@@ -65,7 +65,7 @@ def graphmumpicker(mums,idx):
                 ndata=G.node[node]
                 nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2sample'][o].startswith("*")])
                 n+=len(nsamples)
-                rel=node[0]-pos
+                rel=pos-node[0]
                 for k in ndata['offsets']:
                     v=ndata['offsets'][k]+rel
                     qlpoint[k]=v
@@ -76,26 +76,26 @@ def graphmumpicker(mums,idx):
             if nleft!=None:
                 for k in qlpoint:
                     rlpoint[k]=nleft['offsets'][k]+(nlefttup[1]-nlefttup[0])
-                qp=[]
+                qlp=[]
                 for k in sorted(qlpoint):
-                    qp.append(qlpoint[k])
-                rp=[]
+                    qlp.append(qlpoint[k])
+                rlp=[]
                 for k in sorted(qlpoint):
-                    rp.append(rlpoint[k])
-                lpenalty=utils.gapcost(rp,qp,model=gcmodel)
+                    rlp.append(rlpoint[k])
+                lpenalty=utils.gapcost(rlp,qlp,model=gcmodel)
 
             rrpoint=dict()
             rpenalty=0
             if nright!=None:
                 for k in qrpoint:
                     rrpoint[k]=nright['offsets'][k]
-                qp=[]
+                qrp=[]
                 for k in sorted(qrpoint):
-                    qp.append(qrpoint[k])
-                rp=[]
+                    qrp.append(qrpoint[k])
+                rrp=[]
                 for k in sorted(qrpoint):
-                    rp.append(rrpoint[k])
-                rpenalty=utils.gapcost(qp,rp,model=gcmodel)
+                    rrp.append(rrpoint[k])
+                rpenalty=utils.gapcost(qrp,rrp,model=gcmodel)
 
             penalty=lpenalty+rpenalty
             
@@ -110,12 +110,13 @@ def graphmumpicker(mums,idx):
             else:
                 if bestmum[3]<score:
                     bestmum=(l,idx,mmn,score,sp,penalty)
-        
+
         if bestmum!=None:
             if bestmum[3] > sys.maxint: #cap score, so we dont have problems with overflows in c
                 bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
         
         logging.debug("Selected: %s\n"%str(bestmum))
+        
         return bestmum
     except Exception as e:
         print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
