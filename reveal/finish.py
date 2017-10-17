@@ -404,7 +404,7 @@ def finish(args):
                     a_refbegin=refbegin-(alength-ctgend)
                 else:
                     a_refbegin=refbegin-ctgbegin
-                
+
                 gapsize=a_refbegin-a_prefend
 
                 #a=pctgbegin
@@ -468,8 +468,8 @@ def finish(args):
                         )
                     
                     if revcomp:
-                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'bx')
-                        ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'g-')
+                        ax.plot([refbegin,refend],[o+gapsize+(alength-ctgend),o+(alength-ctgbegin)+gapsize],'bx')
+                        ax.plot([refbegin,refend],[o+gapsize+(alength-ctgend),o+(alength-ctgbegin)+gapsize],'g-')
                     else:
                         ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'bx')
                         ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'r-')
