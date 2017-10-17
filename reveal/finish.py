@@ -39,7 +39,7 @@ def finish(args):
     if args.order=='chains':
         ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
     else:
-        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn,nproc=args.nproc)
+        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
     
     if args.output==None:
         pref=[]
@@ -685,7 +685,6 @@ def map_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000
         if len(mpaths)>0:
             path,score,o,ctgstart,ctgend,refstart,refend=mpaths[0]
             paths.append((score,ctgstart,ctgend,refstart,refend,ref,o,path))
-
     return paths
 
 def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000,nproc=1):
@@ -704,7 +703,6 @@ def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,max
 
     for ctg in ctg2mums:
         paths=results[ctg].get()
-        
         if len(paths)==0:
             if 'unplaced' in ref2ctg:
                 ref2ctg['unplaced'].append(ctg)
@@ -1339,11 +1337,11 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
             
             if mem[4]==1:
                 frompoint=(mem[0]-maxgapsize, mem[1])
-                topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]+maxgapsize )
+                topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]+maxgapsize)
                 subactive=[pointtomem[p] for p in range_search(rcmemtree,frompoint,topoint)]
             else:
-                frompoint=(mem[0]-maxgapsize,mem[1]-maxgapsize)
-                topoint=(mem[0]+mem[2]-1,mem[1]+mem[2]-1)
+                frompoint=(mem[0]-maxgapsize, mem[1]-maxgapsize)
+                topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]-1)
                 subactive=[pointtomem[p] for p in range_search(memtree,frompoint,topoint)]
             
             for amem in subactive:
@@ -1393,6 +1391,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
             assert(refend>refstart)
             
             if not all: #just return first best path
+                logging.debug("Best path contains %d anchors (refstart=%d, refend=%d)."%(len(path),refstart,refend))
                 return [(path,maxscore,o,ctgstart,ctgend,refstart,refend)]
 
             chainsum=sum([m[2] for m in path])
