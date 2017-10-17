@@ -236,9 +236,9 @@ def finish(args):
             if refend<=prefend:
                 logging.error("Contained contig should not be in best contig path! %s with alignment length %d"%(ctgname,alength))
                 sys.exit(1)
-            
+
             gapsize=refbegin-prefend
-            
+
             logging.debug("coffset=%d, pctgend=%d, pctgbegin=%d, ctgbegin=%d, ctgend=%d, alength=%d"%(coffset,pctgend,pctgbegin,ctgbegin,ctgend,alength))
             #logging.info("Estimated gap size between %s and %s is %d (%d,%d)."%(pctgname[0:10],ctgname[0:10],gapsize,a,b))
             
@@ -247,7 +247,7 @@ def finish(args):
                     logging.info("Chains for contigs %s and %s overlap by %d bases."%(pctgname,ctgname,abs(gapsize)))
                 gapsize=args.gapsize
             
-            logging.debug("%d (index on ctg: %d->%d) - Order %s (revcomp=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d)"%(i,pci,ci,args.order,revcomp,refbegin,refend,ctgbegin,ctgend))
+            logging.debug("%d (index on ctg: %d->%d) - Order %s (revcomp=%d,prefstart=%d,prefend=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d,gapsize=%d)"%(i,pci,ci,args.order,revcomp,prefbegin,prefend,refbegin,refend,ctgbegin,ctgend,gapsize))
              
             if args.order=='chains':
                 event=None
@@ -393,10 +393,19 @@ def finish(args):
                 
                 assert((pctglength-pctgend)>=0)
 
-                a_prefend=prefend+(pctglength-pctgend) #calculate overshoot
-                a_refbegin=refbegin-ctgbegin
-                gapsize=a_refbegin-a_prefend
                 alength=contig2length[ctgname]
+
+                if prevcomp:
+                    a_prefend=prefend+pctgbegin
+                else:
+                    a_prefend=prefend+(pctglength-pctgend)
+                
+                if revcomp:
+                    a_refbegin=refbegin-(alength-ctgend)
+                else:
+                    a_refbegin=refbegin-ctgbegin
+                
+                gapsize=a_refbegin-a_prefend
 
                 #a=pctgbegin
                 #assert(a>=0)
