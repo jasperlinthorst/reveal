@@ -539,7 +539,6 @@ def finish(args):
     else:
         logging.info("%.2f%% (%d out of %d) of the assembly was placed with respect to the reference."% ( (totseqplaced/float(totseq))*100, totseqplaced, totseq ))
 
-
 def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000):
 
     logging.debug("Determining best chain(s) for: %s"%ctg)
@@ -1114,9 +1113,7 @@ def bestmempath(mems,ctglength,n=15000,revcomp=False):
     score=dict({init:0})
     
     active=[]
-    
     processed=[]
-
     start=init
     end=None
     maxscore=0

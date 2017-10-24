@@ -50,7 +50,7 @@ def chain_cmd(args):
     
     while len(stack)!=0:
         idx,idc,p1,p2,startcoords,depth,keepedge=stack.pop()
-        subg,pp1,pp2,nodepath=chain(idx,startcoords,args.minlength,depth,args.maxmums,recurse=args.recurse,uniq=True,gcmodel=args.gcmodel,exp=args.exp,wpen=args.wpen,wscore=args.wscore)
+        subg,pp1,pp2,nodepath=chain(idx,startcoords,args.minlength,depth,args.maxmums,recurse=args.recurse,uniq=True,gcmodel=args.gcmodel,wpen=args.wpen,wscore=args.wscore)
 
         if len(nodepath)==2: #no more chain, output variant sequence
             localstart=tuple([-1]+[sep for sep in idx.nsep])
@@ -205,12 +205,12 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
             G.add_edge(source,v)
             G.add_edge(v,sink)
 
-def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=3,exp=1):
+def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=3):
     k=idx.nsamples
     
     if k>2:
         logging.debug("Extracting mmums of length %d."%minlength)
-        mums=idx.getmultimums(minlength=minlength,uniq=uniq)
+        mums=idx.getmultimums(minlength=minlength,minn=k)
         logging.debug("Extracted %d mums."%len(mums))
     else:
         logging.debug("Extracting mums of length %d."%minlength)
@@ -237,12 +237,15 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     
     #add all nodes to the graph
     for mum in mums:
-        point=sorted(mum[2]) #TODO: reveallib should return coords in sorted order; also maybe add keyword to retrieve relative start positions of mums
+        # point=sorted(mum[2])
+        point=sorted(mum[2].values())
+
         for i,p in enumerate(point):
             point[i]=offsets[i]+(point[i]-localoffsets[i]) #map positions back to toplevel T index
+        
         point=tuple(point)
         points.append(point)
-        G.add_node(point,s=wscore*(mum[0]*(mum[1]**exp)),l=mum[0])
+        G.add_node(point,l=mum[0])
     
     G.add_node(p1,s=0,l=0,score=0)
     G.add_node(p2,s=0,l=0,score=0)
@@ -259,24 +262,24 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
         bestpoint=p1
         bestpenalty=0
         for v in range_search(tree,p1,t):
+            
             l=G.node[v]['l']
 
             for i,d in enumerate(v): #no overlapping mums
                 if d+l>t[i]:
                     break
             else:
-                if t==p2:
-                    penalty=0
-                else:
-                    penalty=gapcost(v,t,model=gcmodel)
-
-                score=G.node[v]['score']-(wpen*penalty)
+                # if t==p2:
+                #     penalty=0
+                # else:
+                penalty=gapcost(v,t,model=gcmodel)
+                score=G.node[v]['score']+(wscore*l)-(wpen*penalty)
                 if score>bestscore:
                     bestscore=score
                     bestpoint=v
                     bestpenalty=penalty
 
-        G.node[t]['score']=bestscore+G.node[t]['s']
+        G.node[t]['score']=bestscore
         G.add_edge(bestpoint,t,p=bestpenalty)
     
     bestpath=[]
@@ -286,6 +289,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
         bestpath.append(v)
         G.node[v]['aligned']=1
         v=G.predecessors(v)[0]
+
     bestpath.append(p1)
     
     #remove nodes that aren't part of the optimal path
@@ -297,7 +301,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     
     #remove nodes that are not contained in the bestpath
     G.remove_nodes_from(delete)
-
+    
     return G,p1,p2,bestpath[::-1]
 
 def insertSubgraph(G,start,end,subg,sstart,send,keepedge):

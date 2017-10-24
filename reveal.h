@@ -32,8 +32,10 @@ typedef struct
     PyObject * main; //main index
     PyObject * samples; //list of sample names that are contained in the index
     PyObject * nodes; //list of intervals in T that are associated with this index
-    PyObject * left;
-    PyObject * right;
+    PyObject * left_node;
+    PyObject * right_node;
+    // PyObject * left_mum;
+    // PyObject * right_mum;
 } RevealIndex;
 
 RevealIndex* newIndex(void);
@@ -45,6 +47,7 @@ typedef struct
     PyObject * graphalign; //callback that updates the interval tree and graph for the alignment
     int wpen;
     int wscore;
+    int minl;
 } RevealWorker;
 
 typedef struct
@@ -53,7 +56,6 @@ typedef struct
     saidx_t *sp; //array of starting positions
     //int *ni; //array of sample index to which sp corresponds
     int n;   //number of samples in which the exact match occurs
-    int u;   //whether the match is unique (1) or not (0)
     long long score; //can be negative
     unsigned long long penalty;
 } RevealMultiMUM;
@@ -63,7 +65,6 @@ int getbestmultimum(RevealIndex *index, RevealMultiMUM *mmum, int min_n);
 
 PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds);
-PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds);
 
 #endif

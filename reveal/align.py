@@ -61,6 +61,7 @@ def breaknode(node,pos,l):
     
     if (node[0]!=pos):
         pn=Interval(node[0],pos)
+        logging.debug("Creating prefix node: %s"%str(pn))
         G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
@@ -74,13 +75,14 @@ def breaknode(node,pos,l):
 
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
+        logging.debug("Creating suffix node: %s"%str(sn))
         G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
         G.add_edge(mn,sn,paths=pospaths.copy(),ofrom='+',oto='+')
         if negstrand:
             G.add_edge(sn,mn,paths=negpaths.copy(),ofrom='-',oto='-')
-        t.add(sn) #Interval(582755552, 582755549)
+        t.add(sn)
         other.add(sn)
     else:
         sn=mn
@@ -293,54 +295,22 @@ def segmentgraph(node,nodes):
     
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
-def graphalign(l,index,n,score,sp,penalty):
+def graphalign(index,mum):
     logging.debug("In graphalign.")
+
+    l,n,spd=mum
 
     nodes=index.nodes
     isize=index.n
-    
-    if len(nodes)==0:
-        logging.debug("Invalid set of nodes (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
-        return
-    
-    if l==0:
-        logging.debug("Invalid length (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
-        return
-
-    if schemes.minscore!=None:
-        if score<schemes.minscore:
-            if schemes.pcutoff!=None: #when too much deviation from diagonal, check validity of a match, by approximating a pvalue based on a uniform random distribution of bases, use threshold
-                asl=((isize/len(nodes))-l) #assume equal length sequence
-                if asl<0:
-                    asl=1
-                p=float((.25**(n-1))**l)
-                npos=(asl**n)
-                cp=(npos*(p*((1-p)**(npos-1))))# / ((1-p)**(npos))
-                logging.error("cp=%.4g -- p=%.4g (l=%d,score=%d,n=%d,samples=%d,npos=%d,asl=%d,indexsize=%d,cutoff=%.4g)"%(cp,p,l,score,n,len(nodes),npos,asl,isize,schemes.pcutoff))
-                if cp>schemes.pcutoff:
-                    logging.error("Reject MUM, pvalue=%.4g (l=%d,n=%d,samples=%d,indexsize=%d,cutoff=%.4g)"%(cp,l,n,len(nodes),isize,schemes.pcutoff))
-                    return
-                else:
-                    logging.error("Accept MUM, pvalue=%.4g (l=%d,n=%d,samples=%d,indexsize=%d,cutoff=%.4g)"%(cp,l,n,len(nodes),isize,schemes.pcutoff))
-            else:
-                logging.debug("Reject MUM, score too low (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,index.n))
-                return
-    
-    if l<schemes.minlength:
-        logging.debug("Reject MUM, too short (minlength=%d) (length=%d, samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(schemes.minlength,l,n,score,penalty,sp,index.n))
-        return
-    
-    logging.debug("Align graph to MUM of length %d (samples=%d, score=%d, penalty=%d, sp=%s, indexsize=%d)"%(l,n,score,penalty,sp,isize))
-    
+        
     mns=[]
     topop=[]
-    
-    for i,pos in enumerate(sp):
+    sp=spd.values()
+
+    for pos in sp:
         old=t[pos].pop()
         assert(old.end-old.begin>=l)
-
         mn,other=breaknode(old,pos,l)
-        
         mns.append(mn)
         if isinstance(old,Interval):
             nodes.remove((old.begin,old.end))
@@ -356,31 +326,28 @@ def graphalign(l,index,n,score,sp,penalty):
 
     intervals=segmentgraph(mn,nodes)
     
-    leading,trailing,rest, merged=intervals
+    leading,trailing,rest,merged=intervals
     
     logging.debug("Merged interval: %s"%str(merged))
     logging.debug("Number of leading intervals: %d"%len(leading))
     logging.debug("Number of trailing intervals: %d"%len(trailing))
     logging.debug("Number of parallel intervals: %d"%len(rest))
     logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
-    
-    #G.node[mn]['penalty']=penalty
-    #G.node[mn]['score']=score
-    
-    newleft=mn
-    newright=mn
-    
+        
+    newleftnode=mn
+    newrightnode=mn
+
     for intv in leading:
         if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the left
-            newright=index.right
+            newrightnode=index.rightnode
             break
     
     for intv in trailing:
         if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the right
-            newleft=index.left
+            newleftnode=index.leftnode
             break
     
-    return leading,trailing,rest,merged,newleft,newright
+    return leading,trailing,rest,merged,newleftnode,newrightnode
 
 def prune_nodes(G,T):
     converged=False
@@ -488,7 +455,7 @@ def align_cmd(args):
     logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
     logging.info("Writing graph...")
     if args.gml:
-        graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output)
+        graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=True)
     else:
         write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
@@ -522,16 +489,15 @@ def align_genomes(args):
     G.graph['samples']=[]
     G.graph['sample2id']=dict()
     G.graph['id2sample']=dict()
+    G.graph['id2end']=dict()
 
     o=0
-    schemes.pcutoff=args.pcutoff
     schemes.minlength=args.minlength
-    schemes.minscore=args.minscore
+    schemes.topn=args.topn
     schemes.minn=args.minn
     schemes.gcmodel=args.gcmodel
     schemes.wscore=args.wscore
     schemes.wpen=args.wpen
-
     
     graph=False
     
@@ -565,6 +531,7 @@ def align_genomes(args):
                 G.graph['samples'].append(name)
                 G.graph['sample2id'][name]=sid
                 G.graph['id2sample'][sid]=name
+                G.graph['id2end'][sid]=len(seq)
                 intv=idx.addsequence(seq.upper())
                 logging.debug("Adding interval: %s"%str(intv))
                 Intv=Interval(intv[0],intv[1])
@@ -577,7 +544,7 @@ def align_genomes(args):
     for n1,n2,data in G.edges(data=True):
         assert('paths' in data)
 
-    schemes.exp=args.exp
+    # schemes.exp=args.exp
     schemes.ts=t
     schemes.G=G
     logging.info("Constructing index...")
@@ -587,14 +554,14 @@ def align_genomes(args):
     
     if len(args.inputfiles)==2 and not graph:
         logging.info("Constructing pairwise-alignment...")
-        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength)
     else:
         logging.info("Constructing graph-based multi-alignment...")
-        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength)
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsample=None,maxsamples=None,wpen=1,wscore=3,sa64=False):
+def align(aobjs,ref=None,minlength=20,minn=2,threads=0,targetsample=None,maxsamples=None,topn=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -615,10 +582,14 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsampl
     G.graph['samples']=[]
     G.graph['sample2id']=dict()
     G.graph['id2sample']=dict()
+    G.graph['id2end']=dict()
     o=0
+    schemes.gcmodel=gcmodel
     schemes.minlength=minlength
-    schemes.minscore=minscore
     schemes.minn=minn
+    schemes.topn=topn
+    schemes.wpen=wpen
+    schemes.wscore=wscore
     graph=False
     
     for aobj in aobjs:
@@ -632,6 +603,7 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsampl
                 t.add(Intv)
                 G.graph['sample2id'][name]=len(G.graph['samples'])
                 G.graph['id2sample'][len(G.graph['samples'])]=name
+                G.graph['id2end'][len(G.graph['samples'])]=len(seq)
                 G.graph['samples'].append(name)
                 G.add_node(Intv,offsets={G.graph['sample2id'][name]:0},aligned=0)
         elif isinstance(aobj,str):
@@ -648,9 +620,12 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsampl
                     if intv[1]-intv[0]>0:
                         Intv=Interval(intv[0],intv[1])
                         t.add(Intv)
+                        G.graph['sample2id'][name]=len(G.graph['samples'])
+                        G.graph['id2sample'][len(G.graph['samples'])]=name
+                        G.graph['id2end'][len(G.graph['samples'])]=len(seq)
                         G.graph['samples'].append(os.path.basename(sample))
                         G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
-        
+    
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! Not supported.")
         return
@@ -660,13 +635,15 @@ def align(aobjs,ref=None,minlength=15,minscore=None,minn=2,threads=0,targetsampl
     
     idx.construct()
     
-    if len(aobjs)>2:
-        idx.align(schemes.graphmumpicker,graphalign,threads=threads)
-    else:
-        if graph:
-            idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
-        else:
-            idx.align(None,graphalign,threads=threads,wpen=wpen,wscore=wscore)
+    idx.align(schemes.graphmumpicker,graphalign,threads=threads)
+
+    # if len(aobjs)>2:
+    #     idx.align(schemes.graphmumpicker,graphalign,threads=threads)
+    # else:
+    #     if graph:
+    #         idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
+    #     else:
+    #         idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
     
     prune_nodes(G,idx.T)
 

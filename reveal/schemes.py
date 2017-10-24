@@ -12,122 +12,270 @@ import math
 import logging
 import utils
 
+def chain(mums,left,right,gcmodel="sumofpairs"):
+    if len(mums)==0:
+        return []
+    logging.debug("Number of anchors: %d",len(mums))
+    
+    #use one coordinate system for sorting
+    ref=mums[0][2].keys()[0]
+    logging.debug("Ref is %s"%ref)
+
+    mums.append(right)
+    mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
+
+    sp2mum=dict()
+    for mum in mums:
+        sp2mum[mum[2][ref]]=mum
+
+    #sps=[mum[2] for mum in mums]
+    #mumsptree=utils.kdtree(sps,2)
+    #eps=[tuple([sp+mum[0] for sp in mum[2]]) for mum in mums]
+    
+    #eps=[]
+    #for mum in mums:
+    #    t=[]
+    #    for sp in mum[2]:
+    #        t.append(sp+mum[0])
+    #    eps.append(tuple(t))
+    #mumeptree=utils.kdtree(eps,2)
+    
+    logging.debug("left: %s"%str(left))
+    logging.debug("right: %s"%str(right))
+
+    minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
+
+    logging.debug("Initial cost is: %d"%minscore)
+
+    start=left[2][ref]
+    end=right[2][ref]
+
+    link=dict()
+    score=dict({left[2][ref]:0})
+    
+    active=[left]
+    processed=[]
+    
+    for mum in mums:
+        #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
+        remove=[]
+        for pmum in processed:
+            pendpoint1=pmum[2][ref]+pmum[0]
+            if pendpoint1<=mum[2][ref]:
+                active.append(pmum)
+                remove.append(pmum)
+
+        for r in remove:
+            processed.remove(r)
+
+        #subset active points
+        #aeps=[ tuple([sp+mum[0] for sp in mum[2]]) for mum in active]
+        #amumeptree=utils.kdtree(aeps,2)
+        #active=[aep2mum[ep] for ep in utils.range_search(amumeptree,(0,0),[sp-1 for sp in mum[2]])]#.sort(key=lambda x: score[x], reverse=True) #subset active set!
+        
+        active.sort(key=lambda x: score[x[2][ref]], reverse=True) #sort active by score decreasing, kind of priority queue
+        
+        # subactive=[]
+        # for amum in active:
+        #     for psp,sp in zip(amum[2],mum[2]):
+        #         if psp+amum[0]>=sp:
+        #             break
+        #     else: #pmum does not overlap in any dimension
+        #         subactive.append(amum)
+        #subactive.sort(key=lambda x: score[x], reverse=True) #sort active by score decreasing, kind of priority queue
+
+        w=None
+
+        for amum in active:
+            s=score[amum[2][ref]]+(wscore*(mum[0]*mum[1]))
+
+            if w!=None:
+                if w > s: #as input is sorted by score
+                    break
+            
+            overlap=False
+            for crd in mum[2]:
+                if amum[2][crd]+amum[0]>mum[2][crd]:
+                    overlap=True
+                    break
+            if overlap:
+                continue
+
+            penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
+
+            assert(penalty>=0)
+
+            tmpw=score[amum[2][ref]]+(wscore*(mum[0]*mum[1]))-(wpen*penalty)
+
+            if tmpw>w or w==None:
+                w=tmpw
+                best=amum
+
+        link[mum[2][ref]]=best[2][ref]
+        score[mum[2][ref]]=w
+
+        processed.append(mum)
+
+    assert(score[end]>=minscore)
+
+    #backtrack
+    path=[]
+    while end!=start:
+        path.append(sp2mum[end])
+        end=link[end]
+
+    return path[1:]
+
+#determine a subset of genomes for which (length * n) is largest
+def segment(mums):
+    d=dict()
+    for mum in mums:
+        k=tuple(sorted(mum[2].keys()))
+        if k in d:
+            d[k].append(mum)
+        else:
+            d[k]=[mum]
+    best=0
+    for part in d:
+        z=sum([m[0] for m in d[part]])*len(part)
+        if z>best:
+            best=part
+    return d[best]
+
+def lookup(mum):
+    l,mmn,spd=mum
+    sp=spd.values()
+    n=0
+    qlpoint=dict()
+    qrpoint=dict()
+    for pos in sp:
+        node=iter(ts[pos]).next()
+        ndata=G.node[node]
+        nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2sample'][o].startswith("*")])
+        n+=len(nsamples)
+        rel=pos-node[0]
+        for k in nsamples:
+            v=ndata['offsets'][k]+rel
+            qlpoint[k]=v
+            qrpoint[k]=v+l
+    return (l,n,qlpoint)
+
+def maptooffsets(mums):
+    mapping=dict()
+    relmums=[]
+    for mum in mums:
+        relmum=lookup(mum)
+        relmums.append(relmum)
+        mapping[tuple(relmum[2].values())]=mum
+    return relmums,mapping
+
 def graphmumpicker(mums,idx):
     try:
-        idxn=idx.nsamples
-        if idxn==0:
-            return None
+        if len(mums)==0:
+            return
         
-        if minn==None:
-            lminn=idxn
+        logging.debug("Selecting input multimums for %d samples: %d"%(idx.nsamples, len(mums)))
+        mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
+
+        if len(mmums)==0:
+            logging.info("No MUMS that span all input genomes, segment genomes.")
+            mmums=segment(mums)
+            logging.info("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
+
+        if len(mmums)>topn:
+            logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),topn))
+            mmums.sort(key=lambda mum: mum[0]) #sort by size
+            mmums=mmums[-topn:] #cap to topn mums
+
+        logging.debug("Mapping indexed positions to relative postions within genomes.")
+        
+        relmums,mapping=maptooffsets(mmums)
+
+        logging.debug("Subset to max available number of samples in set")
+        relmums.sort(key=lambda m: m[1]) #sort by n
+        
+        relmums=[mum for mum in relmums if mum[2].keys()==relmums[-1][2].keys()] #subset to only those mums that apply to all genomes in the graph
+
+        if len(relmums)==0:
+            logging.debug("No MUMS that span all genomes that are in the graph, segment genomes.")
+            relmums=segment(relmums)
+            logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(relmums[0][2].keys(),len(relmums)))
+
+        logging.debug("Left with %d mums"%len(relmums))
+
+        if idx.leftnode!=None:
+            spd=dict()
+            for k in relmums[-1][2].keys():
+                spd[k]=G.node[idx.leftnode]['offsets'][k]+(idx.leftnode[1]-idx.leftnode[0])-1
+            left=(0,0,spd)
         else:
-            lminn=minn
+            spd=dict()
+            for sid in relmums[-1][2].keys():
+                spd[sid]=-1
+            left=(0,0,spd)
+
+        if idx.rightnode!=None:
+            spd=dict()
+            for k in relmums[-1][2].keys():
+                spd[k]=G.node[idx.rightnode]['offsets'][k]
+            right=(0,0,spd)
+        else:
+            spd=dict()
+            for sid in relmums[-1][2].keys():
+                spd[sid]=G.graph['id2end'][sid]
+            right=(0,0,spd)
+
+        logging.debug("Chaining %d mums"%len(mmums))
+
+        mums=chain(relmums,left,right,gcmodel=gcmodel)
         
-        logging.debug("Selecting best out of %d MUMs in graphmumpicker (gap-penalty model: %s, score weight: %d and penalty weight: %d)."%(len(mums),gcmodel,wscore,wpen))
-        logging.debug("Selection criteria:")
-        if minscore!=None:
-            logging.debug("minscore=%d"%minscore)
-        logging.debug("minn=%d"%lminn)
-        logging.debug("minlength=%d"%minlength)
-        
-        bestmum=None
-        bestscore=None
-        nleft=None
-        nright=None
-        trace=False
-        
-        if idx.left!=None:
-            nlefttup=idx.left
-            nleft=G.node[Interval(nlefttup[0],nlefttup[1])]
+        logging.debug("Selected chain of %d mums"%len(mums))
 
-        if idx.right!=None:
-            nrighttup=idx.right
-            nright=G.node[Interval(nrighttup[0],nrighttup[1])]
+        if len(mums)==0:
+            return
 
-        if idx.left!=None and idx.right!=None:
-            leftoffsets=G.node[idx.left]['offsets']
-            rightoffsets=G.node[idx.right]['offsets']
-        
-        for mum in mums:
-            l,mmn,sp=mum
-            
-            if l<minlength:
-                continue
-            
-            if mmn<lminn:
-                continue
+        mums.sort(key=lambda m: m[0]) #sort by size
 
-            n=0
-            qlpoint=dict()
-            qrpoint=dict()
-            for pos in sp:
-                node=iter(ts[pos]).next()
-                ndata=G.node[node]
-                nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2sample'][o].startswith("*")])
-                n+=len(nsamples)
-                rel=pos-node[0]
-                for k in ndata['offsets']:
-                    v=ndata['offsets'][k]+rel
-                    qlpoint[k]=v
-                    qrpoint[k]=v+l
+        logging.debug("Best MUM from chain: %s"%str(mums[-1]))
 
-            rlpoint=dict()
-            lpenalty=0
-            if nleft!=None:
-                for k in qlpoint:
-                    rlpoint[k]=nleft['offsets'][k]+(nlefttup[1]-nlefttup[0])
-                qlp=[]
-                for k in sorted(qlpoint):
-                    qlp.append(qlpoint[k])
-                rlp=[]
-                for k in sorted(qlpoint):
-                    rlp.append(rlpoint[k])
-                lpenalty=utils.gapcost(rlp,qlp,model=gcmodel)
+        #map mums[-1] back to index space
+        splitmum=mapping[tuple(mums[-1][2].values())]
 
-            rrpoint=dict()
-            rpenalty=0
-            if nright!=None:
-                for k in qrpoint:
-                    rrpoint[k]=nright['offsets'][k]
-                qrp=[]
-                for k in sorted(qrpoint):
-                    qrp.append(qrpoint[k])
-                rrp=[]
-                for k in sorted(qrpoint):
-                    rrp.append(rrpoint[k])
-                rpenalty=utils.gapcost(qrp,rrp,model=gcmodel)
+        logging.debug("Mapped back to index space: %s"%str(splitmum))
 
-            penalty=lpenalty+rpenalty
-            
-            score=(wscore*(l*(n**exp)))-(wpen*penalty)
-            
-            if minscore!=None:
-                if score<minscore:
-                    continue
-            
-            if bestmum==None:
-                bestmum=(l,idx,mmn,score,sp,penalty)
-            else:
-                if bestmum[3]<score:
-                    bestmum=(l,idx,mmn,score,sp,penalty)
-
-        if bestmum!=None:
-            if bestmum[3] > sys.maxint: #cap score, so we dont have problems with overflows in c
-                bestmum=(bestmum[0],bestmum[1],bestmum[2],sys.maxint,bestmum[4],bestmum[5])
-        
-        logging.debug("Selected: %s\n"%str(bestmum))
-        
-        return bestmum
+        return idx,splitmum
     except Exception as e:
         print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
-        return None 
+        return 1
 
-def printSA(index,maxline=100,start=0,end=200):
+def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
     lcp=index.LCP
     t=index.T
     #so=index.SO
-    print len(sa), len(lcp)
-    assert(len(sa)==len(lcp))
-    for s,l in zip(sa[start:end],lcp[start:end]):
-        print str(s).zfill(8), str(l).zfill(6), t[s:s+l].ljust(maxline) if lcp<=maxline else t[s:s+maxline].ljust(maxline)#, so[s]
+    if end==None:
+        end=len(sa)
+    with open(fn,'w') as f:
+        f.write("%d\t%d\n"%(len(sa), len(lcp)))
+        assert(len(sa)==len(lcp))
+        for i in xrange(len(sa)):
+            s=sa[i]
+            lcpi=lcp[i]
+
+            if i>0 and i<len(sa)-1:
+                l1=lcp[i]
+                l2=lcp[i+1]
+            elif i==len(sa)-1:
+                l1=max([lcp[i-1],lcp[i]])
+                l2=0
+            else:
+                l1=0
+                l2=lcp[i+1]
+
+            if i>=start and i<=end:
+                #f.write("%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+maxline].ljust(maxline) if l1<=maxline else t[s:s+maxline]+"..."+t[s+l1-40:s+l1].ljust(maxline) ) )
+                f.write("%s\t%s\t%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+40] ,t[s+l1-40:s+l1], t[s+l2-40:s+l2] ) )
+
+
+
+

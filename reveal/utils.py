@@ -194,8 +194,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         i=len(graph.graph['sample2id'])
         assert(i not in graph.graph['id2sample'])
     
-    if 'sample2path' not in graph.graph:
-        graph.graph['sample2path']=dict()
+    if 'id2end' not in graph.graph:
+        graph.graph['id2end']=dict()
 
     for line in f:
     
@@ -284,7 +284,6 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         
         graph.graph['sample2id'][sample]=sid
         graph.graph['id2sample'][sid]=sample
-        graph.graph['sample2path'][sample]=[]
 
         o=0
         path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
@@ -294,9 +293,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             
             node=nmapping[int(nid)]
 
-            graph.graph['sample2path'][sample].append((node,orientation))
+            # graph.graph['sample2path'][sample].append((node,orientation))
 
             graph.node[node]['offsets'][sid]=o
+
             if 'seq' in graph.node[node]:
                 o+=len(graph.node[node]['seq'])
             elif isinstance(node,Interval):
@@ -323,6 +323,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
             pnode=node
             porientation=orientation
+        
+        graph.graph['id2end'][sid]=o
     
     #remove nodes and edges that are not associated to any path
     remove=[]
@@ -441,9 +443,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     #write paths
     for sample in G.graph['samples']:
         logging.info("Writing path: %s"%sample)
-        #if sample.startswith("*"):
-        #    print "skip..."
-        #    continue
+
         sid=G.graph['sample2id'][sample]
         subgraph=[]
         for e1,e2,d in G.edges(data=True):
@@ -461,12 +461,14 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 if n==nodepath[-1]:
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                 pn=n
-        else: #There's just a single node, strictly not a path..
+        else: #Maybe just a single node, strictly not a path..
             for node,data in G.nodes_iter(data=True):
                 if sid in data['offsets']:
                     path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
 
-            assert(len(path)==1)
+            if len(path)==0: #not just a single node, sample not part of the graph, dont write path
+                continue
+
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
     
@@ -558,7 +560,7 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
     return outputfiles
 
 def kdtree(points, k, depth=0):
-    n=len(points)
+    n=len(points)    
     if n==0:
         return None
     if n==1:
@@ -581,9 +583,9 @@ def range_search(kdtree, qstart, qend):
         tree,depth=stack.pop()
         splitdim=depth%k
 
-        if tree==None:
+        if tree==None: #something is wrong
             continue
-        
+
         if isinstance(tree,tuple): #reached leaf, tree==point
             if tree[splitdim]>=qstart[splitdim] and tree[splitdim]<=qend[splitdim]:
                 #check ik point is contained in the range query
@@ -597,7 +599,7 @@ def range_search(kdtree, qstart, qend):
             continue
         
         splitvalue=tree['split']
-        
+
         if splitvalue>=qstart[splitdim] and splitvalue<=qend[splitdim]: #intersect
             if splitvalue != qstart[splitdim]: #equal values go right
                 stack.append((tree['left'],depth+1))
@@ -606,5 +608,5 @@ def range_search(kdtree, qstart, qend):
             stack.append((tree['right'],depth+1))
         else:
             stack.append((tree['left'],depth+1))
-        
+
     return points

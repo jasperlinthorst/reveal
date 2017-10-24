@@ -85,17 +85,10 @@ def plot(args):
             intv=idx.addsequence(seq.upper())
         
         qrylength=qrylength-1
-
         idx.construct()
         
-        if args.uniq:
-            print "Extracting mums..."
-            mmems=[(mem[0],mem[1],mem[2],0) for mem in idx.getmums(args.minlength)]
-        else:
-            print "Extracting mems..."
-            mmems=[(mem[0],mem[1],mem[2],0,mem[3]) for mem in idx.getmems(args.minlength)]
-        
-        print "done."
+        print "Extracting mums..."
+        mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
         
         sep=idx.nsep[0]
         
@@ -121,17 +114,13 @@ def plot(args):
             
             idx.construct()
             
-            print "Extracting RC mems..."            
-            
-            if args.uniq:
-                tmp=idx.getmums(args.minlength)
-            else:
-                tmp=idx.getmems(args.minlength)
+            print "Extracting RC mems..."
+            tmp=idx.getmums(args.minlength)
             
             vi=iter(qryintvs)
             v=vi.next()
             
-            tmp=[(m[0],m[1],sorted(m[2])) for m in tmp] #make sure start positions are sorted
+            tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
             tmp.sort(key=lambda l: l[2][1]) #sort by query pos
             
             nmmems=[]
@@ -140,10 +129,7 @@ def plot(args):
                     v=vi.next()
                 start,end=v
                 newqstart=end-(mem[2][1]-start)-mem[0]
-                if args.uniq:
-                    ntup=(mem[0],mem[1],(mem[2][0],newqstart),1)
-                else:
-                    ntup=(mem[0],mem[1],(mem[2][0],newqstart),mem[3])
+                ntup=(mem[0],mem[1],(mem[2][0],newqstart),1)
                 nmmems.append(ntup)
             
             mmems+=nmmems
@@ -176,21 +162,9 @@ def plot(args):
         
         if sp1>=start and ep1<=end:
             if mem[3]==0:
-                if args.uniq:
-                    plt.plot([sp1,ep1],[sp2,ep2],'r-')
-                else:
-                    if mem[4]==0: #non-uniq
-                        plt.plot([sp1,ep1],[sp2,ep2],'y-')
-                    else:
-                        plt.plot([sp1,ep1],[sp2,ep2],'r-')
+                plt.plot([sp1,ep1],[sp2,ep2],'r-')
             else:
-                if args.uniq: #only uniq matches in the list
-                    plt.plot([ep1,sp1],[sp2,ep2],'g-')
-                else:
-                    if mem[4]==0: #non-uniq
-                        plt.plot([ep1,sp1],[sp2,ep2],'y-')
-                    else:
-                        plt.plot([ep1,sp1],[sp2,ep2],'g-')
+                plt.plot([ep1,sp1],[sp2,ep2],'g-')
     
     for p in ctgoffsets:
         plt.axhline(y=p,linewidth=.5,color='black',linestyle='solid')

@@ -53,11 +53,11 @@ int push_index(RevealIndex *idx) {
 }
 
 PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
-    lcp_t minl=0;
+    int minl=0;
     lcp_t lb,la;
 
     if (args!=NULL) {
-        if (!PyArg_ParseTuple(args, "i", &minl))        
+        if (!PyArg_ParseTuple(args, "i", &minl))
             return NULL;
     }
     
@@ -97,9 +97,11 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 	//match is not a repeat and is maximally unique
         
 #ifdef SA64
-	PyObject *mum=Py_BuildValue("I,i,(L,L)",index->LCP[i],2,aStart,bStart);
+	// PyObject *mum=Py_BuildValue("I,i,(L,L)",index->LCP[i],2,aStart,bStart);
+    PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
 #else
-	PyObject *mum=Py_BuildValue("I,i,(i,i)",index->LCP[i],2,aStart,bStart);
+	// PyObject *mum=Py_BuildValue("I,i,(i,i)",index->LCP[i],2,aStart,bStart);
+    PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
 #endif
 	
         if (PyList_Append(mums,mum)==0){
@@ -110,68 +112,6 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 	}
     }
     return mums;
-}
-
-PyObject * getmems(RevealIndex *index, PyObject *args, PyObject *keywds){
-    
-    lcp_t minl=0;
-    
-    if (args!=NULL) {
-        if (!PyArg_ParseTuple(args, "i", &minl))
-            return NULL;
-    }
-    
-    saidx_t i=0,aStart,bStart;
-    lcp_t lb,la,uniq;
-    PyObject *mems=PyList_New(0);
-    for (i=1;i<index->n;i++){
-        if (index->LCP[i]<minl){
-            continue;
-        }
-	if ((index->SA[i]>index->nsep[0]) == (index->SA[i-1]>index->nsep[0])) { //repeat within same genome
-	    continue;
-	}
-	if (index->SA[i]<index->SA[i-1]) {
-	    aStart=index->SA[i];
-	    bStart=index->SA[i-1];
-	} else {
-	    aStart=index->SA[i-1];
-	    bStart=index->SA[i];
-	}
-	if (aStart>0 && bStart>0){ //if not it has to be maximal!
-	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
-		continue; //not maximal
-	    }
-	}
-	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
-	    lb=index->LCP[i-1];
-	    la=0;
-	} else {
-	    lb=index->LCP[i-1];
-	    la=index->LCP[i+1];
-	}
-	if (lb>=index->LCP[i] || la>=index->LCP[i]){
-            uniq=0;
-	} else {
-            uniq=1;
-        }
-        
-	//match is not a repeat and is maximal
-
-#ifdef SA64
-	PyObject *mem=Py_BuildValue("I,i,(L,L),i",index->LCP[i],2,aStart,bStart,uniq);
-#else
-	PyObject *mem=Py_BuildValue("I,i,(i,i),i",index->LCP[i],2,aStart,bStart,uniq);
-#endif
-
-        if (PyList_Append(mems,mem)==0){
-	    Py_DECREF(mem);
-	} else {
-            Py_DECREF(mem); //append increments reference count!
-	    return NULL;
-	}
-    }
-    return mems;
 }
 
 PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
@@ -283,7 +223,6 @@ PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     saidx_t i=0,aStart,bStart;
     lcp_t lb,la;
-    mum->u=1;
     mum->l=0;
     mum->score=0;
     mum->penalty=0;
@@ -369,7 +308,6 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
         penalize=0;
     }
     
-    mum->u=1;
     mum->l=0;
     mum->score=-2147483648;
     mum->penalty=0;
@@ -456,7 +394,6 @@ int getbestmum(RevealIndex *index, RevealMultiMUM *mum, int w_penalty, int w_sco
 }
 
 int getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n){
-    mum->u=1;
     mum->l=0;
     mum->score=0;
     mum->penalty=0;
@@ -576,35 +513,15 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
     return 0;
 }
 
-int ismultimem(RevealIndex * idx, lcp_t l, int lb, int ub) {
-    if (l>0){
-        int j;
-        
-        for (j=lb; j<ub; j++){ //check maximal
-            if (idx->SA[j]==0){
-                return 1; //success
-            }
-            if (idx->SA[j+1]==0){
-                return 1; //success
-            }
-            if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
-                return 1; //success
-            }
-        }
-    }
-    return 0;
-}
-
-
 PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
 
     lcp_t minl=0;
-
-    static char *kwlist[] = {"minlength","uniq", NULL};
-    int u=1;
+    int minn=2;
+    static char *kwlist[] = {"minlength","minn", NULL};
+    
     if (args!=NULL) {
-        if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ii", kwlist, &minl, &u))
-            return NULL;    
+        if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ii", kwlist, &minl, &minn))
+            return NULL;
     }
     
     PyObject * multimums;
@@ -618,13 +535,11 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     int *flag_so=calloc(mainidx->nsamples,sizeof *flag_so);
     lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
     lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);    
+    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
     lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
     
-    //int minl=10;
-
     stack_lcp[0]=0;
     stack_lb[0]=0;
     stack_ub[0]=0;
@@ -640,45 +555,44 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             int n=(i_ub-i_lb)+1;
             
             if (i_lcp>=minl){
-                if (n<=mainidx->nsamples){
-                    if (u==1){
-                        if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                            int x;
-                            PyObject *sp=PyTuple_New(n);
-                            for (x=0;x<n;x++) {
+                if (n<=mainidx->nsamples && n>=minn){
+                    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                        int x;
+
+                        PyObject *crdmap = PyDict_New();
+
+                        //PyObject *sp=PyList_New(n);
+                        // PyObject *ni=PyTuple_New(n);
+
+                        for (x=0;x<n;x++) {
+                            PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
-                                PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+
+                            //PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
-                                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+
+                            //PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                                PyTuple_SET_ITEM(sp, x, v);
-                            }
+                            //PyList_SET_ITEM(sp, x, v);
+                            // PyTuple_SET_ITEM(ni, x, s);
 
-                            PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                            Py_DECREF(sp);
-
-                            PyList_Append(multimums,multimum);
-                            Py_DECREF(multimum);
+                            PyDict_SetItem(crdmap, s, v);
+                            Py_DECREF(s);
+                            Py_DECREF(v);
                         }
-                    } else {
-                        if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
-                            int x;
-                            PyObject *sp=PyTuple_New(n);
-                            for (x=0;x<n;x++) {
-#ifdef SA64
-                                PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
-#else
-                                PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-#endif
-                                PyTuple_SET_ITEM(sp, x, v);
-                            }
 
-                            PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                            Py_DECREF(sp);
+                        //PyList_Sort(sp);
+                        //sp=PyList_AsTuple(sp);
 
-                            PyList_Append(multimums,multimum);
-                            Py_DECREF(multimum);
-                        }
+                        //PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
+                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
+                        // Py_DECREF(sp);
+                        // Py_DECREF(ni);
+
+                        PyList_Append(multimums,multimum);
+                        Py_DECREF(multimum);
                     }
                 }
             }
@@ -721,51 +635,45 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
         
         int n=(i_ub-i_lb)+1;
         if (i_lcp>=minl){
-            if (n<=mainidx->nsamples){
-                if (u==1) {
-                    if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
-                        int x;
-                        
-                        PyObject *sp=PyTuple_New(n);
-                        for (x=0;x<n;x++) {
+            if (n<=mainidx->nsamples && n>=minn){
+                if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                    int x;
+                    //PyObject *sp=PyList_New(n);
+                    // PyObject *ni=PyTuple_New(n);
+
+                    PyObject *crdmap = PyDict_New();
+
+                    for (x=0;x<n;x++) {
+                        PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
-                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                        PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                        //PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
-                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                        PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                        // PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                            PyTuple_SET_ITEM(sp, x, v);
-                        }
-
-                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                        PyList_Append(multimums,multimum);
-                        Py_DECREF(sp);
-
-                        Py_DECREF(multimum);
+                        //PyList_SET_ITEM(sp, x, v);
+                        // PyTuple_SET_ITEM(ni, x, s);
+                        PyDict_SetItem(crdmap, s, v);
+                        Py_DECREF(s);
+                        Py_DECREF(v);
                     }
-                } else {
-                    if (ismultimem(index, i_lcp, i_lb, i_ub)==1){
-                        int x;
-                        PyObject *sp=PyTuple_New(n);
-                        for (x=0;x<n;x++) {
-#ifdef SA64
-                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
-#else
-                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-#endif
-                            PyTuple_SET_ITEM(sp, x, v);
-                        }
 
-                        PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
-                        PyList_Append(multimums,multimum);
-                        Py_DECREF(sp);
+                    //PyList_Sort(sp);
+                    //sp=PyList_AsTuple(sp);
 
-                        Py_DECREF(multimum);
-                    }
+                    //PyObject *multimum=Py_BuildValue("I,i,O,O",i_lcp,n,sp);
+
+                    PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
+
+                    PyList_Append(multimums,multimum);
+                    // Py_DECREF(sp);
+                    // Py_DECREF(ni);
+                    Py_DECREF(multimum);
                 }
             }
         }
     }
-    
     free(stack_lcp);
     free(stack_lb);
     free(stack_ub);
@@ -857,17 +765,43 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
     }
 }
 
+void checkindex(RevealIndex* idx){
+    saidx_t i=0;
+    int l=0, j=0;
+    for (i=0; i<idx->n; i++) {
+        l=idx->LCP[i];
+        assert(l>=0);
+        for (j=0; j<l; j++){
+            if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
+
+                #ifdef SA64
+                fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
+                #else
+                fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);                
+                #endif
+            }
+            assert(idx->T[idx->SA[i]+j]<=90); //check it wasn't matched
+            assert(idx->T[idx->SA[i]+j]>64); //check it does not contain sentinel
+        }
+    }
+}
+
 void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
     lcp_t tmpLCP;
     int j=0;
     saidx_t i=0,x,tmpSA;
     
-    for (j=0; j<n; j++) {
+    for (j=0; j<n; j++){
+        for (i=sp[j];i<sp[j]+l;i++){
+            idx->T[i]=tolower(idx->T[i]); //mark corresponding intervals in T
+        }
+    }
+
+    for (j=0; j<n; j++) { // for each multi-mum
         
-        for (i=0; i<idx->n; i++){
+        for (i=0; i<idx->n; i++) { // for each suffix
 
-            if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i]>sp[j]){ // if match overlaps the start position of sp[j]
-
+            if ( (idx->SA[i] < sp[j]) && ((idx->SA[i]+idx->LCP[i]) > sp[j]) ){ // if match overlaps the start position of sp[j]
                 x=i;
                 tmpSA=idx->SA[i];
                 tmpLCP=idx->LCP[i];
@@ -877,35 +811,32 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
                     idx->SAi[idx->SA[x-1]]=x;
                     idx->SA[x]=idx->SA[x-1];
                     idx->LCP[x]=idx->LCP[x-1]; //!
+                    
                     x--;
                 }
-
-		assert(x<idx->n);
-		idx->SAi[tmpSA]=x;
-
-		idx->SA[x]=tmpSA;
-		idx->LCP[x+1]=sp[j]-tmpSA;
-                
-		if (i<idx->n-1){
-		    if (tmpLCP < idx->LCP[i+1]){
-			idx->LCP[i+1]=tmpLCP; //!
-		    }
-		}
-            } else {
-                if (i<idx->n-1){
-                    if (idx->SA[i]<sp[j] && idx->SA[i]+idx->LCP[i+1]>sp[j]){
-                        if (idx->LCP[i+1] > idx->LCP[i]){
-                            idx->LCP[i+1]= sp[j]-idx->SA[i];
-                        }
+                assert(x<idx->n);
+                idx->SAi[tmpSA]=x;
+                idx->SA[x]=tmpSA;
+                idx->LCP[x+1]=sp[j]-tmpSA;
+                        
+                if (i<idx->n-1){ //if not last entry of LCP
+                    if (tmpLCP < idx->LCP[i+1]){ 
+                        idx->LCP[i+1]=tmpLCP;
+                        //Check if T[SA[i+1]+LCP[i+1]-1] is not lower()
                     }
                 }
+            } else {
+
+                if (i<idx->n-1){
+
+                    if ((idx->SA[i] < sp[j]) && ((idx->SA[i]+idx->LCP[i+1]) > sp[j] ) ){
+                        if (idx->LCP[i+1] > idx->LCP[i]) {
+                            idx->LCP[i+1]=sp[j]-idx->SA[i];
+                        }
+                    }
+
+                }
             }
-        }
-    }
-    
-    for (j=0; j<n; j++){
-        for (i=sp[j];i<sp[j]+l;i++){
-            idx->T[i]=tolower(idx->T[i]); //mark corresponding intervals in T
         }
     }
 }
@@ -921,12 +852,13 @@ void *aligner(void *arg) {
     PyGILState_STATE gstate;
     RevealIndex * idx;
     while(1) {
-	int hasindex=0;
+        int hasindex=0;
         int i=0;
         
         pthread_mutex_lock(&mutex);/* acquire the mutex lock */
         aw++;
         idx=pop_index();
+
         if (idx==NULL) {
             hasindex=0;
             aw--;
@@ -942,10 +874,15 @@ void *aligner(void *arg) {
         if (hasindex==1){
 
 #ifdef REVEALDEBUG
+            //fprintf(stderr,"Initial.\n");
+            //checkindex(idx);
             fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
             fprintf(stderr,"samples=%d\n",idx->nsamples);
             fprintf(stderr,"depth=%d\n",idx->depth);
             fprintf(stderr,"n=%d\n",idx->n);
+            fprintf(stderr,"minl=%d...\n", rw->minl);
+            fprintf(stderr,"wpen=%d...\n", rw->wpen);
+            fprintf(stderr,"wscore=%d...\n", rw->wscore);
 #endif
             assert(idx->nsamples>0);
 
@@ -960,222 +897,146 @@ void *aligner(void *arg) {
             pthread_mutex_lock(&python);
             gstate = PyGILState_Ensure();
 
-            if (rw->mumpicker!=Py_None){
-                if (!PyCallable_Check(rw->mumpicker)) {
-                    PyErr_SetString(PyExc_TypeError, "**** mumpicker isn't callable");
-                    err_flag=1;
-                    Py_DECREF(idx);
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-
-                    free(mmum.sp);
-                    break;
-                }
-                
-                PyObject *multimums;
-
-#ifdef REVEALDEBUG
-                time(&t0);
-                fprintf(stderr,"Extracting mums... ");
-#endif
-               
-                if (((RevealIndex *) idx->main)->nsamples>2){
-                    multimums = getmultimums(idx,NULL,NULL);
-                } else {
-                    multimums = getmums(idx,NULL,NULL);
-                }
-
-#ifdef REVEALDEBUG
-                time(&t1);
-                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-#endif
-                
-                PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
-                
-#ifdef REVEALDEBUG
-                time(&t0);
-                fprintf(stderr,"Selecting best mum (python callback)...\n");
-#endif
-
-                PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
-
-#ifdef REVEALDEBUG
-                time(&t1);
-                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-#endif
-
-                if (mum==Py_None){
-                    //TODO 1: NO MORE MUMS, call prune nodes here!
-                    Py_DECREF(idx);
-                    Py_DECREF(arglist);
-                    Py_DECREF(multimums);
-                    Py_DECREF(mum);
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-
-                    pthread_mutex_lock(&mutex);
-                    aw--;
-                    pthread_mutex_unlock(&mutex);
-
-                    free(mmum.sp);
-                    continue;
-                }
-                
-                if (!PyTuple_Check(mum)){
-                    PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
-                    err_flag=1;
-                    Py_DECREF(idx);
-                    Py_DECREF(arglist);
-                    Py_DECREF(multimums);
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-
-                    free(mmum.sp);
-                    break;
-                }
-                
-                PyObject *sp=NULL;
-                PyObject *tidx=NULL;
-
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Parsing mum tuple...\n");
-#endif                
-                PyArg_ParseTuple(mum,"IOiLOK", &mmum.l, &tidx, &mmum.n, &mmum.score, &sp, &mmum.penalty);
-                
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Done.\n");
-#endif
-
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Convert PyList[%d] to c...\n",mmum.n);
-#endif
-
-                for (i=0; i<mmum.n; i++){
-                    //PyObject * pos=PyList_GetItem(sp,i);
-                    PyObject * pos=PyTuple_GetItem(sp,i);
-                    
-                    if (pos==NULL){
-                        fprintf(stderr,"**** invalid results from mumpicker\n");
-                        mmum.sp[i]=0;
-                        continue;
-                    }
-#ifdef SA64
-                    mmum.sp[i]=PyLong_AsLongLong(pos); //TODO: check what do to with this..
-#else
-                    mmum.sp[i]=PyInt_AS_LONG(pos);
-#endif
-                }
-
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Done.\n");
-#endif
-
-
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Graphalign (python callback)...\n");
-#endif
-                result = PyEval_CallObject(rw->graphalign, mum);
-#ifdef REVEALDEBUG
-                fprintf(stderr,"Done.\n");
-#endif
-
-                Py_DECREF(arglist);
-                Py_DECREF(mum);
-                Py_DECREF(multimums);
-            } else {
-
-
-#ifdef REVEALDEBUG
-                time(&t0);
-                fprintf(stderr,"Extracting best mum... ");
-#endif
-
-                if (idx->nsamples>2){
-                    getbestmultimum(idx, &mmum, idx->nsamples);
-                } else { //simpler method (tiny bit more efficient), but essentially should produce the same results
-                    //getlongestmum(idx, &mmum);
-                    getbestmum(idx, &mmum, rw->wpen, rw->wscore);
-                }
-
-#ifdef REVEALDEBUG
-                time(&t1);
-                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-#endif
-
-                if (mmum.l==0){
-                    //TODO 2: NO MORE MUMS, call prune nodes here!
-
-                    Py_DECREF(idx);
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-
-                    pthread_mutex_lock(&mutex);
-                    aw--;
-                    pthread_mutex_unlock(&mutex);
-
-                    free(mmum.sp);
-                    continue;                
-                }
-                
-                PyObject *sps;
-                PyObject *arglist;
-                
-                //build a list of start positions in the index
-                sps=PyList_New(mmum.n);
-                PyObject *pos;
-                for (i=0;i<mmum.n;i++){
-#ifdef SA64
-                    pos=Py_BuildValue("L",mmum.sp[i]);
-#else
-                    pos=Py_BuildValue("i",mmum.sp[i]);
-#endif
-                    PyList_SetItem(sps,i,pos);
-                }
-                
-                arglist = Py_BuildValue("(I,O,i,L,O,K)", mmum.l, idx, mmum.n, mmum.score, sps, mmum.penalty);
-                Py_DECREF(sps);
-                
-                if (arglist==NULL){
-                    PyErr_SetString(PyExc_TypeError, "***** Building argument list failed");
-                    err_flag=1;
-                    Py_DECREF(idx);
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-
-                    free(mmum.sp);
-                    break;
-                }
-                
-                if (!PyCallable_Check(rw->graphalign)) {
-                    PyErr_SetString(PyExc_TypeError, "***** graphalign isn't callable");
-                    err_flag=1;
-                    PyGILState_Release(gstate);
-                    pthread_mutex_unlock(&python);
-                    free(mmum.sp);
-                    break;
-                }
-                
-                result = PyEval_CallObject(rw->graphalign,arglist);
-                Py_DECREF(arglist);
-            }
-            
-            if (result==NULL){
-                fprintf(stderr,"***** Python callback raised exception, stopping all threads!\n");
+            // if (rw->mumpicker!=Py_None){
+            if (!PyCallable_Check(rw->mumpicker)) {
+                PyErr_SetString(PyExc_TypeError, "**** mumpicker isn't callable");
                 err_flag=1;
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
+
                 free(mmum.sp);
                 break;
             }
+            
+            PyObject *multimums;
+
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"Extracting mums... ");
+#endif
+            
+            if (((RevealIndex *) idx->main)->nsamples>2){
+                PyObject *args = PyTuple_New(0);
+                PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", 2);
+                multimums = getmultimums(idx,args,kwargs);
+                Py_DECREF(kwargs);
+                Py_DECREF(args);
+            } else {
+                PyObject *args = Py_BuildValue("(i)", rw->minl);
+                multimums = getmums(idx,args,NULL);
+                Py_DECREF(args);
+            }
+
+#ifdef REVEALDEBUG
+            time(&t1);
+            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
+            
+            PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
+            
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"Selecting best mum (python callback)...\n");
+#endif
+
+            PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
+
+#ifdef REVEALDEBUG
+            time(&t1);
+            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+#endif
+
+            if (mum==Py_None){
+                //TODO 1: NO MORE MUMS, call prune nodes here!
+                Py_DECREF(idx);
+                Py_DECREF(arglist);
+                Py_DECREF(multimums);
+                Py_DECREF(mum);
+                PyGILState_Release(gstate);
+                pthread_mutex_unlock(&python);
+
+                pthread_mutex_lock(&mutex);
+                aw--;
+                pthread_mutex_unlock(&mutex);
+
+                free(mmum.sp);
+                continue;
+            }
+            
+            if (!PyTuple_Check(mum)){
+                PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
+                err_flag=1;
+                Py_DECREF(idx);
+                Py_DECREF(arglist);
+                Py_DECREF(multimums);
+                PyGILState_Release(gstate);
+                pthread_mutex_unlock(&python);
+
+                free(mmum.sp);
+                break;
+            }
+            
+            PyObject *sp=NULL;
+            PyObject *spd=NULL;
+            PyObject *tidx=NULL;
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Parsing mum tuple...\n");
+#endif
+            // PyArg_ParseTuple(mum,"IOiLOK", &mmum.l, &tidx, &mmum.n, &mmum.score, &sp, &mmum.penalty);
+            PyArg_ParseTuple(mum,"O(IiO)", &tidx, &mmum.l, &mmum.n, &spd);
+            sp=PyDict_Values(spd);
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Done.\n");
+#endif
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Convert PyList[%d] to c...\n",mmum.n);
+#endif
+
+            for (i=0; i<mmum.n; i++){
+                PyObject * pos=PyList_GetItem(sp,i);
+                // PyObject * pos=PyTuple_GetItem(sp,i);
+
+                if (pos==NULL){
+                    fprintf(stderr,"**** invalid results from mumpicker\n");
+                    mmum.sp[i]=0;
+                    continue;
+                }
+#ifdef SA64
+                mmum.sp[i]=PyLong_AsLongLong(pos); //TODO: check what do to with this..
+#else
+                mmum.sp[i]=PyInt_AS_LONG(pos);
+#endif
+            }
+
+            Py_DECREF(sp);
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Done.\n");
+#endif
+
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Graphalign (python callback)...\n");
+#endif
+            result = PyEval_CallObject(rw->graphalign, mum);
+#ifdef REVEALDEBUG
+            fprintf(stderr,"Done.\n");
+#endif
+
+            Py_DECREF(arglist);
+            Py_DECREF(mum);
+            Py_DECREF(multimums);
             
             PyObject *leading_intervals;
             PyObject *trailing_intervals;
             PyObject *rest;
             PyObject *merged;
-            PyObject *newleft;
-            PyObject *newright;
-            
+            PyObject *newleftnode;
+            PyObject *newrightnode;
+
             if (result==Py_None){
                 //TODO 3: NO MORE MUMS, call prune nodes here!
 
@@ -1191,7 +1052,7 @@ void *aligner(void *arg) {
                 continue;
             }
             
-            if (!PyArg_ParseTuple(result, "OOOOOO", &leading_intervals, &trailing_intervals, &rest, &merged, &newleft, &newright)){
+            if (!PyArg_ParseTuple(result, "OOOOOO", &leading_intervals, &trailing_intervals, &rest, &merged, &newleftnode, &newrightnode)) {
                 fprintf(stderr,"Failed to parse result of call to graph_align!\n");
                 //no tuple returned by python call, apparently we're done...
                 Py_DECREF(idx);
@@ -1349,11 +1210,11 @@ void *aligner(void *arg) {
             i_leading->nsamples=leadingsamples;
             i_leading->nsep=idx->nsep;
             i_leading->main=idx->main;
-            Py_INCREF(idx->left);
-            i_leading->left=idx->left; //interval that is bounding on the left
-            Py_INCREF(newright);
-            i_leading->right=newright; //interval that is bounding on the right
-            
+            Py_INCREF(idx->left_node);
+            i_leading->left_node=idx->left_node; //interval that is bounding on the left
+            Py_INCREF(newrightnode);
+            i_leading->right_node=newrightnode; //interval that is bounding on the right
+
             assert(trailingn>=0);
             //fprintf(stderr,"Allocating trailing (%zd nodes) %llu\n", PyList_Size(trailing_intervals), trailingn);
             RevealIndex *i_trailing=newIndex();
@@ -1370,10 +1231,10 @@ void *aligner(void *arg) {
             i_trailing->nsamples=trailingsamples;
             i_trailing->nsep=idx->nsep;
             i_trailing->main=idx->main;
-            Py_INCREF(newleft);
-            i_trailing->left=newleft; //interval that is bounding on the left
-            Py_INCREF(idx->right);
-            i_trailing->right=idx->right; //interval that is bounding on the right
+            Py_INCREF(newleftnode);
+            i_trailing->left_node=newleftnode; //interval that is bounding on the left
+            Py_INCREF(idx->right_node);
+            i_trailing->right_node=idx->right_node; //interval that is bounding on the right
 
             assert(parn>=0);
             //fprintf(stderr,"Allocating parallel (%zd nodes) %llu %d %d %llu\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
@@ -1391,10 +1252,10 @@ void *aligner(void *arg) {
             i_parallel->nsamples=parsamples;//idx->nsamples-(mmum.n);
             i_parallel->nsep=idx->nsep;
             i_parallel->main=idx->main;
-            Py_INCREF(idx->left);
-            i_parallel->left=idx->left; //interval that is bounding on the left
-            Py_INCREF(idx->right);
-            i_parallel->right=idx->right; //interval that is bounding on the right
+            Py_INCREF(idx->left_node);
+            i_parallel->left_node=idx->left_node; //interval that is bounding on the left
+            Py_INCREF(idx->right_node);
+            i_parallel->right_node=idx->right_node; //interval that is bounding on the right
 
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
@@ -1402,6 +1263,8 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             time(&t0);
             fprintf(stderr,"Splitting SA... ");
+            //fprintf(stderr,"Before split.\n");
+            //checkindex(idx);
 #endif
             split(idx, D, i_leading, i_trailing, i_parallel);
 #ifdef REVEALDEBUG
@@ -1417,6 +1280,12 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
+            fprintf(stderr,"Check leading.\n");
+            checkindex(i_leading);
+            fprintf(stderr,"Check trailing.\n");
+            checkindex(i_trailing);
+            fprintf(stderr,"Check parallel.\n");
+            checkindex(i_parallel);
 #endif
 
             free(D);

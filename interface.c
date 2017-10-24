@@ -252,14 +252,15 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     PyObject *mumpicker;
     PyObject *graphalign;
 
-    static char *kwlist[] = {"mumpicker","align","threads","wpen","wscore",NULL};
+    static char *kwlist[] = {"mumpicker","align","threads","wpen","wscore","minl",NULL};
     int numThreads=0; /* Number of alignment threads */
     int wpen=0;
     int wscore=0;
+    int minl=0;
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore))
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iiii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore, &minl))
         return NULL;
-    
+
     int i;
     time_t tstart,tfinish;
     
@@ -298,6 +299,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
             rw->graphalign=graphalign;
             rw->wpen=wpen;
             rw->wscore=wscore;
+            rw->minl=minl;
             int rv;
             rv=pthread_create(&tids[i],&attr,aligner,rw);
             if (rv!=0){
@@ -341,6 +343,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
         rw->graphalign=graphalign;
         rw->wpen=wpen;
         rw->wscore=wscore;
+        rw->minl=minl;
         aligner(rw);
     }
     
@@ -398,7 +401,6 @@ static PyMethodDef reveal_methods[] = {
     { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
     { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
-    { "getmems", (PyCFunction) getmems, METH_VARARGS|METH_KEYWORDS },
     { "getscoredmums", (PyCFunction) getscoredmums, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
@@ -419,9 +421,10 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->samples = PyList_New(0);
     self->nodes = PyList_New(0);
     Py_INCREF(Py_None);
-    self->left=Py_None;
+    self->left_node=Py_None;
     Py_INCREF(Py_None);
-    self->right=Py_None;
+    self->right_node=Py_None;
+
     self->safile="";
     self->lcpfile="";
     
@@ -618,17 +621,17 @@ reveal_getnodes(RevealIndex *self, void *closure)
 }
 
 static PyObject *
-reveal_left(RevealIndex *self, void *closure)
+reveal_leftnode(RevealIndex *self, void *closure)
 {
-    Py_INCREF(self->left);
-    return self->left;
+    Py_INCREF(self->left_node);
+    return self->left_node;
 }
 
 static PyObject *
-reveal_right(RevealIndex *self, void *closure)
+reveal_rightnode(RevealIndex *self, void *closure)
 {
-    Py_INCREF(self->right);
-    return self->right;
+    Py_INCREF(self->right_node);
+    return self->right_node;
 }
 
 static PyObject *
@@ -658,12 +661,12 @@ static PyGetSetDef reveal_getseters[] = {
         (getter)reveal_getnodes, NULL,
         "Returns the set of intervals or nodes associated with the index.",
         NULL},
-    {"left",
-        (getter)reveal_left, NULL,
+    {"leftnode",
+        (getter)reveal_leftnode, NULL,
         "Returns the interval of the node bounding the index on the left.",
         NULL},
-    {"right",
-        (getter)reveal_right, NULL,
+    {"rightnode",
+        (getter)reveal_rightnode, NULL,
         "Returns the interval of the node bounding the index on the right.",
         NULL},
     {"nsep",
@@ -698,10 +701,6 @@ reveal_dealloc(RevealIndex *self)
 {
 #ifdef REVEALDEBUG
     fprintf(stderr,"Dealloc index of size %zd\n",self->n);
-    //fprintf(stderr,"Nodes refcount %zd\n",self->nodes->ob_refcnt);
-    //fprintf(stderr,"Samples refcount %zd\n",self->samples->ob_refcnt);
-    //fprintf(stderr,"Left refcount %zd\n",self->left->ob_refcnt);
-    //fprintf(stderr,"Right refcount %zd\n",self->right->ob_refcnt);
 #endif
     totdealloc=totdealloc+1;
     if (self->depth==0){ //only there for the main index
@@ -730,15 +729,15 @@ reveal_dealloc(RevealIndex *self)
         
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
-        Py_DECREF(self->left);
-        Py_DECREF(self->right);
+        Py_DECREF(self->left_node);
+        Py_DECREF(self->right_node);
     } else {
         //fprintf(stderr,"dealloc SUB index!\n");
         //Py_DECREF(self->main);
         Py_DECREF(self->nodes);
         Py_DECREF(self->samples);
-        Py_DECREF(self->left);
-        Py_DECREF(self->right);
+        Py_DECREF(self->left_node);
+        Py_DECREF(self->right_node);
         if (self->SA!=NULL){
             free(self->SA);
         }

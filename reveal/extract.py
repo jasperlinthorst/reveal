@@ -42,31 +42,39 @@ def extract_cmd(args):
 def extract(G,sample):
     logging.debug("Extracting path: %s"%sample)
 
+    if sample not in G.graph['sample2id']:
+        logging.fatal("Unknown path: %s, graph contains: %s"%(sample, G.graph['sample2id'].keys()))
+        sys.exit(1)
+
     sid=G.graph['sample2id'][sample]
     sg=[]
+
     for n1,n2,d in G.edges_iter(data=True):
         if sid in d['paths']:
             sg.append((n1,n2,d))
 
-    #G can be a MultiDiGraph, but subgraph should be single edge!
-    subgraph=nx.DiGraph(sg)
+    if len(sg)>0:
+        #G can be a MultiDiGraph, but subgraph should be single edge!
+        subgraph=nx.DiGraph(sg)
+        seq=""
+        path=nx.topological_sort(subgraph)
+        subgraph.add_edge(0,path[0],ofrom='+',oto='+')
 
-    seq=""
-    path=nx.topological_sort(subgraph)
-    pnode=path[0]
-    for node in path[1:]:
-        o=subgraph[pnode][node]['ofrom']
-        if o=="+":
-            seq+=G.node[pnode]['seq'] # --> seq content should come from the original graph
-        else:
-            seq+=utils.rc(G.node[pnode]['seq'])
-        if node==path[-1]:#last
+        pnode=0
+        for node in path:
             o=subgraph[pnode][node]['oto']
             if o=="+":
-                seq+=G.node[node]['seq']
+                seq+=G.node[node]['seq'] # --> seq content should come from the original graph
             else:
                 seq+=utils.rc(G.node[node]['seq'])
-        pnode=node
+            pnode=node
+
+    else: #has to be a single node
+        seq=""
+        for n,d in G.nodes_iter(data=True):
+            if sid in d['offsets']:
+                seq=d['seq']
+                break
 
     return seq
 
