@@ -1281,11 +1281,11 @@ void *aligner(void *arg) {
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
             fprintf(stderr,"Check leading.\n");
-            checkindex(i_leading);
+            // checkindex(i_leading);
             fprintf(stderr,"Check trailing.\n");
-            checkindex(i_trailing);
+            // checkindex(i_trailing);
             fprintf(stderr,"Check parallel.\n");
-            checkindex(i_parallel);
+            // checkindex(i_parallel);
 #endif
 
             free(D);
