@@ -223,6 +223,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     localstart=tuple([-1]+[sep for sep in idx.nsep])
     localend=tuple([sep-1 for sep in idx.nsep]+[idx.n-2])
     lengths=tuple([e-s for s,e in zip(localstart,localend)])
+
     p1=tuple([o-1 for o in offsets])
     p2=tuple([o+l for o,l in zip(offsets,lengths)])
     
@@ -262,18 +263,13 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
         bestpoint=p1
         bestpenalty=0
         for v in range_search(tree,p1,t):
-            
             l=G.node[v]['l']
-
             for i,d in enumerate(v): #no overlapping mums
                 if d+l>t[i]:
                     break
             else:
-                # if t==p2:
-                #     penalty=0
-                # else:
                 penalty=gapcost(v,t,model=gcmodel)
-                score=G.node[v]['score']+(wscore*l)-(wpen*penalty)
+                score=G.node[v]['score']+(wscore*(l*len(v)))-(wpen*penalty)
                 if score>bestscore:
                     bestscore=score
                     bestpoint=v
@@ -301,7 +297,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     
     #remove nodes that are not contained in the bestpath
     G.remove_nodes_from(delete)
-    
+
     return G,p1,p2,bestpath[::-1]
 
 def insertSubgraph(G,start,end,subg,sstart,send,keepedge):
