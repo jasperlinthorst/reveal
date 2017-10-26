@@ -57,7 +57,11 @@ def breaknode(node,pos,l):
                 assert(d['oto']=='+')
                 for p in d['paths']:
                     pospaths.add(p)
-    pospaths=pospaths | allpaths
+    else: #single node, without edges
+        pospaths=allpaths
+
+    if pospaths==set(): #only incoming edges from other strand
+        pospaths=allpaths-negpaths
 
     G.add_node(mn,offsets=moffsets,aligned=0)#create merge node
     
@@ -326,6 +330,7 @@ def graphalign(index,mum):
         msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
         logging.debug("Merging samples: %s"%str(msamples))
         logging.debug("Nodes before segmenting: %s"%nodes)
+
         intervals=segmentgraph(mn,nodes)
         leading,trailing,rest,merged=intervals
 
