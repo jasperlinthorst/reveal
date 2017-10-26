@@ -68,31 +68,31 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
         if (index->LCP[i]<minl){
             continue;
         }
-	if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
-	    continue;
-	}
-	if ((index->SA[i])<(index->SA[i-1])) {
-	    aStart=index->SA[i];
-	    bStart=index->SA[i-1];
-	} else {
-	    aStart=index->SA[i-1];
-	    bStart=index->SA[i];
-	}
-	if (aStart>0 && bStart>0){ //if not it has to be maximal!
-	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
-		continue; //not maximal
-	    }
-	}
-	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
-	    lb=index->LCP[i-1];
-	    la=0;
-	} else {
-	    lb=index->LCP[i-1];
-	    la=index->LCP[i+1];
-	}
-	if (lb>=index->LCP[i] || la>=index->LCP[i]){
-	    continue;//not unique
-	}
+    	if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
+    	    continue;
+    	}
+    	if ((index->SA[i])<(index->SA[i-1])) {
+    	    aStart=index->SA[i];
+    	    bStart=index->SA[i-1];
+    	} else {
+    	    aStart=index->SA[i-1];
+    	    bStart=index->SA[i];
+    	}
+    	if (aStart>0 && bStart>0){ //if not it has to be maximal!
+    	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+    		continue; //not maximal
+    	    }
+    	}
+    	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+    	    lb=index->LCP[i-1];
+    	    la=0;
+    	} else {
+    	    lb=index->LCP[i-1];
+    	    la=index->LCP[i+1];
+    	}
+    	if (lb>=index->LCP[i] || la>=index->LCP[i]){
+    	    continue;//not unique
+    	}
 
 	//match is not a repeat and is maximally unique
         
@@ -105,11 +105,11 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
 #endif
 	
         if (PyList_Append(mums,mum)==0){
-	    Py_DECREF(mum);
-	} else {
+            Py_DECREF(mum);
+        } else {
             Py_DECREF(mum); //append increments reference count!
-	    return NULL;
-	}
+            return NULL;
+        }
     }
     return mums;
 }
@@ -771,18 +771,25 @@ void checkindex(RevealIndex* idx){
     for (i=0; i<idx->n; i++) {
         l=idx->LCP[i];
         assert(l>=0);
-        for (j=0; j<l; j++){
-            if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
+        if (l==0){
+            continue;
+        }
 
+        j=l-1;
+
+        //for (j=0; j<l; j++){
+
+            if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
                 #ifdef SA64
                 fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
                 #else
-                fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);                
+                fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
                 #endif
             }
+
             assert(idx->T[idx->SA[i]+j]<=90); //check it wasn't matched
             assert(idx->T[idx->SA[i]+j]>64); //check it does not contain sentinel
-        }
+        //}
     }
 }
 
@@ -871,7 +878,7 @@ void *aligner(void *arg) {
             break;
         }
         
-        if (hasindex==1){
+        if (hasindex==1) {
 
 #ifdef REVEALDEBUG
             //fprintf(stderr,"Initial.\n");
@@ -909,30 +916,44 @@ void *aligner(void *arg) {
                 break;
             }
             
-            PyObject *multimums;
+            PyObject *multimums;            
+            PyObject *mumobject;
+            PyObject *sp=NULL;
+            PyObject *spd=NULL;            
+            PyObject *skipmumsleft=NULL;
+            PyObject *skipmumsright=NULL;
+
+            if (PyList_Size(idx->skipmums)==0){
+#ifdef REVEALDEBUG
+                time(&t0);
+                fprintf(stderr,"Extracting new mums...\n");
+#endif
+                if (((RevealIndex *) idx->main)->nsamples>2){
+                    PyObject *args = PyTuple_New(0);
+                    PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", 2);
+                    multimums = getmultimums(idx,args,kwargs);
+                    Py_DECREF(kwargs);
+                    Py_DECREF(args);
+                } else {
+                    PyObject *args = Py_BuildValue("(i)", rw->minl);
+                    multimums = getmums(idx,args,NULL);
+                    Py_DECREF(args);
+                }
 
 #ifdef REVEALDEBUG
-            time(&t0);
-            fprintf(stderr,"Extracting mums... ");
+                time(&t1);
+                fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
-            
-            if (((RevealIndex *) idx->main)->nsamples>2){
-                PyObject *args = PyTuple_New(0);
-                PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", 2);
-                multimums = getmultimums(idx,args,kwargs);
-                Py_DECREF(kwargs);
-                Py_DECREF(args);
+                
+
             } else {
-                PyObject *args = Py_BuildValue("(i)", rw->minl);
-                multimums = getmums(idx,args,NULL);
-                Py_DECREF(args);
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Using precomputed mum...\n");
+#endif
+                multimums=idx->skipmums;
             }
 
-#ifdef REVEALDEBUG
-            time(&t1);
-            fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-#endif
-            
+
             PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
             
 #ifdef REVEALDEBUG
@@ -940,31 +961,34 @@ void *aligner(void *arg) {
             fprintf(stderr,"Selecting best mum (python callback)...\n");
 #endif
 
-            PyObject *mum = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
+            PyObject *pickresult = PyEval_CallObject(rw->mumpicker, arglist); //mumpicker returns intervals
+
+            Py_DECREF(arglist);
+            Py_DECREF(multimums);
 
 #ifdef REVEALDEBUG
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
 
-            if (mum==Py_None){
+            if (pickresult==Py_None){
                 //TODO 1: NO MORE MUMS, call prune nodes here!
                 Py_DECREF(idx);
                 Py_DECREF(arglist);
                 Py_DECREF(multimums);
-                Py_DECREF(mum);
+                Py_DECREF(pickresult);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
 
                 pthread_mutex_lock(&mutex);
                 aw--;
                 pthread_mutex_unlock(&mutex);
-
+                
                 free(mmum.sp);
                 continue;
             }
             
-            if (!PyTuple_Check(mum)){
+            if (!PyTuple_Check(pickresult)){
                 PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
                 err_flag=1;
                 Py_DECREF(idx);
@@ -977,16 +1001,31 @@ void *aligner(void *arg) {
                 break;
             }
             
-            PyObject *sp=NULL;
-            PyObject *spd=NULL;
-            PyObject *tidx=NULL;
-
 #ifdef REVEALDEBUG
             fprintf(stderr,"Parsing mum tuple...\n");
 #endif
             // PyArg_ParseTuple(mum,"IOiLOK", &mmum.l, &tidx, &mmum.n, &mmum.score, &sp, &mmum.penalty);
-            PyArg_ParseTuple(mum,"O(IiO)", &tidx, &mmum.l, &mmum.n, &spd);
+            // PyArg_ParseTuple(mum,"O(IiO)", &tidx, &mmum.l, &mmum.n, &spd);
+            PyArg_ParseTuple(pickresult,"OOO", &mumobject, &skipmumsleft, &skipmumsright);
+            
+            Py_INCREF(mumobject);
+            Py_INCREF(skipmumsleft);
+            Py_INCREF(skipmumsright);
+            
+            Py_DECREF(pickresult);
+
+            if (!PyTuple_Check(mumobject)) {
+                fprintf(stderr,"Invalid mum tuple...\n");
+            }
+
+            PyArg_ParseTuple(mumobject,"IiO", &mmum.l, &mmum.n, &spd);
             sp=PyDict_Values(spd);
+
+            if (!PyList_Check(sp)) {
+                fprintf(stderr,"SP is not a list...\n");
+            }
+
+            // Py_DECREF(pickresult);
 
 #ifdef REVEALDEBUG
             fprintf(stderr,"Done.\n");
@@ -998,7 +1037,6 @@ void *aligner(void *arg) {
 
             for (i=0; i<mmum.n; i++){
                 PyObject * pos=PyList_GetItem(sp,i);
-                // PyObject * pos=PyTuple_GetItem(sp,i);
 
                 if (pos==NULL){
                     fprintf(stderr,"**** invalid results from mumpicker\n");
@@ -1021,14 +1059,24 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             fprintf(stderr,"Graphalign (python callback)...\n");
 #endif
-            result = PyEval_CallObject(rw->graphalign, mum);
+            // result = PyEval_CallObject(rw->graphalign, mum);
+
+            PyObject *tmp =Py_BuildValue("(O,O)", idx, mumobject);
+
+            result = PyEval_CallObject(rw->graphalign, tmp);
+
+            Py_DECREF(tmp);
+            Py_DECREF(mumobject);
+
+            
+
 #ifdef REVEALDEBUG
             fprintf(stderr,"Done.\n");
 #endif
 
-            Py_DECREF(arglist);
-            Py_DECREF(mum);
-            Py_DECREF(multimums);
+            // Py_DECREF(arglist);
+            // Py_DECREF(pickresult);
+            // Py_DECREF(multimums);
             
             PyObject *leading_intervals;
             PyObject *trailing_intervals;
@@ -1039,7 +1087,6 @@ void *aligner(void *arg) {
 
             if (result==Py_None){
                 //TODO 3: NO MORE MUMS, call prune nodes here!
-
                 Py_DECREF(idx);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
@@ -1052,6 +1099,17 @@ void *aligner(void *arg) {
                 continue;
             }
             
+            if (!PyTuple_Check(result)){
+                fprintf(stderr,"**** call to graphalign failed\n");
+                PyErr_SetString(PyExc_TypeError, "**** call to graphalign failed");
+                err_flag=1;
+                Py_DECREF(idx);
+                PyGILState_Release(gstate);
+                pthread_mutex_unlock(&python);
+                free(mmum.sp);
+                break;
+            }
+
             if (!PyArg_ParseTuple(result, "OOOOOO", &leading_intervals, &trailing_intervals, &rest, &merged, &newleftnode, &newrightnode)) {
                 fprintf(stderr,"Failed to parse result of call to graph_align!\n");
                 //no tuple returned by python call, apparently we're done...
@@ -1214,6 +1272,7 @@ void *aligner(void *arg) {
             i_leading->left_node=idx->left_node; //interval that is bounding on the left
             Py_INCREF(newrightnode);
             i_leading->right_node=newrightnode; //interval that is bounding on the right
+            i_leading->skipmums=skipmumsleft;
 
             assert(trailingn>=0);
             //fprintf(stderr,"Allocating trailing (%zd nodes) %llu\n", PyList_Size(trailing_intervals), trailingn);
@@ -1235,6 +1294,7 @@ void *aligner(void *arg) {
             i_trailing->left_node=newleftnode; //interval that is bounding on the left
             Py_INCREF(idx->right_node);
             i_trailing->right_node=idx->right_node; //interval that is bounding on the right
+            i_trailing->skipmums=skipmumsright;
 
             assert(parn>=0);
             //fprintf(stderr,"Allocating parallel (%zd nodes) %llu %d %d %llu\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
@@ -1256,6 +1316,7 @@ void *aligner(void *arg) {
             i_parallel->left_node=idx->left_node; //interval that is bounding on the left
             Py_INCREF(idx->right_node);
             i_parallel->right_node=idx->right_node; //interval that is bounding on the right
+            i_parallel->skipmums=PyList_New(0);
 
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
@@ -1280,12 +1341,12 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-            fprintf(stderr,"Check leading.\n");
-            // checkindex(i_leading);
             fprintf(stderr,"Check trailing.\n");
-            // checkindex(i_trailing);
+            checkindex(i_trailing);
             fprintf(stderr,"Check parallel.\n");
-            // checkindex(i_parallel);
+            checkindex(i_parallel);
+            fprintf(stderr,"Check leading.\n");
+            checkindex(i_leading);
 #endif
 
             free(D);

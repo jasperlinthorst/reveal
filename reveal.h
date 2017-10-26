@@ -34,8 +34,7 @@ typedef struct
     PyObject * nodes; //list of intervals in T that are associated with this index
     PyObject * left_node;
     PyObject * right_node;
-    // PyObject * left_mum;
-    // PyObject * right_mum;
+    PyObject * skipmums;
 } RevealIndex;
 
 RevealIndex* newIndex(void);

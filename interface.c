@@ -420,6 +420,7 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->nsamples=0;
     self->samples = PyList_New(0);
     self->nodes = PyList_New(0);
+    self->skipmums = PyList_New(0);
     Py_INCREF(Py_None);
     self->left_node=Py_None;
     Py_INCREF(Py_None);
@@ -728,6 +729,7 @@ reveal_dealloc(RevealIndex *self)
         }
         
         Py_DECREF(self->nodes);
+        Py_DECREF(self->skipmums);
         Py_DECREF(self->samples);
         Py_DECREF(self->left_node);
         Py_DECREF(self->right_node);
@@ -735,6 +737,7 @@ reveal_dealloc(RevealIndex *self)
         //fprintf(stderr,"dealloc SUB index!\n");
         //Py_DECREF(self->main);
         Py_DECREF(self->nodes);
+        Py_DECREF(self->skipmums);
         Py_DECREF(self->samples);
         Py_DECREF(self->left_node);
         Py_DECREF(self->right_node);

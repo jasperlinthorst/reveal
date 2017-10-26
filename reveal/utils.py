@@ -290,7 +290,6 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
         for pi,gfn in enumerate(path):
             nid,orientation=gfn
-            
             node=nmapping[int(nid)]
 
             # graph.graph['sample2path'][sample].append((node,orientation))
@@ -306,10 +305,13 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             
             if pi==0:
                 pnode=node
+                pnid=nid
                 porientation=orientation
                 continue
             else:
-
+                if node not in graph[pnode]:
+                    logging.fatal("Path %s has %s -> %s, but no edge between these nodes exists in the graph definition!"%(sample,pnid,nid))
+                assert(node in graph[pnode])
                 if type(graph)==nx.MultiDiGraph:
                     for i in graph[pnode][node]:
                         if graph[pnode][node][i]['oto']==orientation and graph[pnode][node][i]['ofrom']==porientation:
@@ -322,6 +324,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     graph[pnode][node]['paths'].add(sid)
 
             pnode=node
+            pnid=nid
             porientation=orientation
         
         graph.graph['id2end'][sid]=o

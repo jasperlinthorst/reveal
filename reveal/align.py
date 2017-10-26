@@ -15,7 +15,6 @@ except:
     pass
 
 def breaknode(node,pos,l):
-    logging.debug("Breaking node: %s"%str(node))
     att=G.node[node]
     
     in_edges=G.in_edges(node,data=True)
@@ -25,9 +24,12 @@ def breaknode(node,pos,l):
     other=set()
     
     if mn==node: #no breaking needed
+        logging.debug("Node %s does not need to be broken."%str(node))
         t.remove(node)
         return node,other
     
+    logging.debug("Breaking node: %s into: %s"%(str(node),str(mn)))
+
     allpaths=set()
     
     moffsets=dict()
@@ -35,12 +37,13 @@ def breaknode(node,pos,l):
         moffsets[s]=att['offsets'][s]+(pos-node.begin)
         allpaths.add(s)
     
+    logging.debug("Offsets after break: %s"%str(moffsets))
+
     soffsets=dict()
     for s in att['offsets']:
         soffsets[s]=att['offsets'][s]+((pos+l)-node.begin)
     
     #if node is traversed via the other strand, add reverse edges
-
     negstrand=False
     negpaths=set()
     pospaths=set()
@@ -54,8 +57,7 @@ def breaknode(node,pos,l):
                 assert(d['oto']=='+')
                 for p in d['paths']:
                     pospaths.add(p)
-    else: #single node
-        pospaths=allpaths
+    pospaths=pospaths | allpaths
 
     G.add_node(mn,offsets=moffsets,aligned=0)#create merge node
     
@@ -66,8 +68,10 @@ def breaknode(node,pos,l):
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
         G.add_edge(pn,mn,paths=pospaths.copy(),ofrom='+',oto='+')
+        assert(pospaths!=set())
         if negstrand:
             G.add_edge(mn,pn,paths=negpaths.copy(),ofrom='-',oto='-')
+            assert(negpaths!=set())
         t.add(pn)
         other.add(pn)
     else:
@@ -80,8 +84,10 @@ def breaknode(node,pos,l):
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
         G.add_edge(mn,sn,paths=pospaths.copy(),ofrom='+',oto='+')
+        assert(pospaths!=set())
         if negstrand:
             G.add_edge(sn,mn,paths=negpaths.copy(),ofrom='-',oto='-')
+            assert(negpaths!=set())
         t.add(sn)
         other.add(sn)
     else:
@@ -296,58 +302,60 @@ def segmentgraph(node,nodes):
     return list(leading), list(trailing), list(rest), (node.begin,node.end)
 
 def graphalign(index,mum):
-    logging.debug("In graphalign.")
+    try:
+        logging.debug("In graphalign with %s"%str(mum))
+        l,n,spd=mum
+        nodes=index.nodes
+        isize=index.n
+        mns=[]
+        topop=[]
+        sp=spd.values()
 
-    l,n,spd=mum
-
-    nodes=index.nodes
-    isize=index.n
+        for pos in sp:
+            old=t[pos].pop()
+            assert(old.end-old.begin>=l)
+            mn,other=breaknode(old,pos,l)
+            mns.append(mn)
+            if isinstance(old,Interval):
+                nodes.remove((old.begin,old.end))
+            for node in other:
+                if isinstance(node,Interval):
+                    nodes.append((node.begin,node.end))
         
-    mns=[]
-    topop=[]
-    sp=spd.values()
+        mn=mergenodes(mns)
+        msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
+        logging.debug("Merging samples: %s"%str(msamples))
+        logging.debug("Nodes before segmenting: %s"%nodes)
+        intervals=segmentgraph(mn,nodes)
+        leading,trailing,rest,merged=intervals
 
-    for pos in sp:
-        old=t[pos].pop()
-        assert(old.end-old.begin>=l)
-        mn,other=breaknode(old,pos,l)
-        mns.append(mn)
-        if isinstance(old,Interval):
-            nodes.remove((old.begin,old.end))
-        for node in other:
-            if isinstance(node,Interval):
-                nodes.append((node.begin,node.end))
-    
-    mn=mergenodes(mns)
+        logging.debug("Leading nodes after segmenting: %s"%leading)
+        logging.debug("Trailing nodes after segmenting: %s"%trailing)
+        logging.debug("Parallel nodes after segmenting: %s"%rest)
 
-    msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
-    
-    logging.debug("Merging samples: %s"%str(msamples))
+        logging.debug("Merged interval: %s"%str(merged))
+        logging.debug("Number of leading intervals: %d"%len(leading))
+        logging.debug("Number of trailing intervals: %d"%len(trailing))
+        logging.debug("Number of parallel intervals: %d"%len(rest))
+        logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
+        newleftnode=mn
+        newrightnode=mn
 
-    intervals=segmentgraph(mn,nodes)
-    
-    leading,trailing,rest,merged=intervals
-    
-    logging.debug("Merged interval: %s"%str(merged))
-    logging.debug("Number of leading intervals: %d"%len(leading))
-    logging.debug("Number of trailing intervals: %d"%len(trailing))
-    logging.debug("Number of parallel intervals: %d"%len(rest))
-    logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
+        for intv in leading:
+            if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the left
+                newrightnode=index.rightnode
+                break
         
-    newleftnode=mn
-    newrightnode=mn
+        for intv in trailing:
+            if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the right
+                newleftnode=index.leftnode
+                break
 
-    for intv in leading:
-        if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the left
-            newrightnode=index.rightnode
-            break
-    
-    for intv in trailing:
-        if not set(G.node[Interval(intv[0],intv[1])]['offsets'].keys()).issubset(msamples): #no clean dissection of all paths on the right
-            newleftnode=index.leftnode
-            break
-    
-    return leading,trailing,rest,merged,newleftnode,newrightnode
+        return leading,trailing,rest,merged,newleftnode,newrightnode
+
+    except Exception as e:
+        print "GRAPHALIGN ERROR", e, sys.exc_info()[0]
+        return None
 
 def prune_nodes(G,T):
     converged=False
@@ -455,7 +463,7 @@ def align_cmd(args):
     logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
     logging.info("Writing graph...")
     if args.gml:
-        graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=True)
+        graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=False)
     else:
         write_gfa(G,T,nometa=args.nometa, outputfile=args.output+'.gfa')
         graph=args.output+'.gfa'
@@ -498,6 +506,7 @@ def align_genomes(args):
     schemes.gcmodel=args.gcmodel
     schemes.wscore=args.wscore
     schemes.wpen=args.wpen
+    schemes.seedsize=args.seedsize
     
     graph=False
     
@@ -538,6 +547,8 @@ def align_genomes(args):
                 t.add(Intv)
                 G.add_node(Intv,offsets={sid:0},aligned=0)
     
+    logging.debug("Graph contains the following paths: %s"%G.graph['samples'])
+
     if not nx.is_directed_acyclic_graph(G):
         logging.info("*** Input is not a DAG! ...")
 
@@ -561,7 +572,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,threads=0,targetsample=None,maxsamples=None,topn=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,topn=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -588,6 +599,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,threads=0,targetsample=None,maxsamp
     schemes.minlength=minlength
     schemes.minn=minn
     schemes.topn=topn
+    schemes.seedsize=seedsize
     schemes.wpen=wpen
     schemes.wscore=wscore
     graph=False

@@ -32,7 +32,7 @@ def realign_bubble_cmd(args):
     
     write_gfa(G,"",outputfile=fn)
 
-def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000,wscore=3,wpen=1,sa64=False):
+def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000,wscore=3,wpen=1,seedsize=None,sa64=False):
     #print "Realigning graph between %s and %s"%(source,sink)
     nn=max(G.nodes())+1
     bubblenodes=[]
@@ -82,6 +82,7 @@ def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000
     
     schemes.wpen=wpen
     schemes.wscore=wscore
+    schemes.seedsize=seedsize
 
     ng,idx=align(aobjs,minlength=minlength,minn=minn,sa64=sa64)
     T=idx.T

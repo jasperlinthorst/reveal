@@ -85,7 +85,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         #subactive.sort(key=lambda x: score[x], reverse=True) #sort active by score decreasing, kind of priority queue
 
         w=None
-
         for amum in active:
             s=score[amum[2][ref]]+(wscore*(mum[0]*mum[1]))
 
@@ -178,9 +177,9 @@ def graphmumpicker(mums,idx):
         mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
 
         if len(mmums)==0:
-            logging.info("No MUMS that span all input genomes, segment genomes.")
+            logging.debug("No MUMS that span all input genomes, segment genomes.")
             mmums=segment(mums)
-            logging.info("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
+            logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
 
         if len(mmums)>topn:
             logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),topn))
@@ -234,16 +233,28 @@ def graphmumpicker(mums,idx):
         if len(mums)==0:
             return
 
-        mums.sort(key=lambda m: m[0]) #sort by size
+        splitmum=sorted(mums,key=lambda m: m[0])[-1]
 
         logging.debug("Best MUM from chain: %s"%str(mums[-1]))
-
-        #map mums[-1] back to index space
-        splitmum=mapping[tuple(mums[-1][2].values())]
+        skipleft=[]
+        skipright=[]
+        if seedsize!=None:
+            t=skipright
+            for mum in mums:
+                if mum==splitmum:
+                    t=skipleft
+                    continue
+                t.append(mapping[tuple(mum[2].values())])
+            skipleft=[mum for mum in skipleft if mum[0]>=seedsize]
+            skipright=[mum for mum in skipright if mum[0]>=seedsize]
 
         logging.debug("Mapped back to index space: %s"%str(splitmum))
+        splitmum=mapping[tuple(splitmum[2].values())]
+        logging.debug("Skipleft: %d"%len(skipleft))
+        logging.debug("Skipright: %d"%len(skipright))
 
-        return idx,splitmum
+        return splitmum,skipleft,skipright
+
     except Exception as e:
         print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
         return 1
