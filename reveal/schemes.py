@@ -54,8 +54,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     processed=[]
     
     for mum in mums:
-        print mum
-
         #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
         remove=[]
         for pmum in processed:
@@ -74,8 +72,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         
         active.sort(key=lambda x: score[x[2][ref]], reverse=True) #sort active by score decreasing, kind of priority queue
         
-        print len(active)
-
         # subactive=[]
         # for amum in active:
         #     for psp,sp in zip(amum[2],mum[2]):
