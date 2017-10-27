@@ -316,7 +316,6 @@ def graphalign(index,mum):
         mns=[]
         topop=[]
         sp=spd.values()
-
         for pos in sp:
             old=t[pos].pop()
             assert(old.end-old.begin>=l)
@@ -361,7 +360,6 @@ def graphalign(index,mum):
         return leading,trailing,rest,merged,newleftnode,newrightnode
 
     except Exception:
-        #print "GRAPHALIGN ERROR", e, sys.exc_info()[0]
         print traceback.format_exc()
         return
 

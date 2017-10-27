@@ -16,11 +16,11 @@ import traceback
 def chain(mums,left,right,gcmodel="sumofpairs"):
     if len(mums)==0:
         return []
-    logging.debug("Number of anchors: %d",len(mums))
+    logging.debug("Number of anchors before chaining: %d",len(mums))
     
     #use one coordinate system for sorting
     ref=mums[0][2].keys()[0]
-    logging.debug("Ref is %s"%ref)
+    logging.trace("Ref is %s"%ref)
     mums.append(right)
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
 
@@ -40,10 +40,10 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     #    eps.append(tuple(t))
     #mumeptree=utils.kdtree(eps,2)
     
-    logging.debug("left: %s"%str(left))
-    logging.debug("right: %s"%str(right))
+    logging.trace("left: %s"%str(left))
+    logging.trace("right: %s"%str(right))
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-    logging.debug("Initial cost is: %d"%minscore)
+    logging.trace("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
     end=right[2][ref]

@@ -63,7 +63,7 @@ def main():
     parser_aln.add_argument("-n", dest="minn", type=int, default=None, help="Only align graph on exact matches that occur in at least this many samples (if not set, equal to total number of genomes in the (sub)index).")
     parser_aln.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Weight of penalty during chaining.")
-    parser_aln.add_argument("--ws", dest="wscore", type=int, default=3, help="Weight of score during chaining.")
+    parser_aln.add_argument("--ws", dest="wscore", type=int, default=1, help="Weight of score during chaining.")
     parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size.")
     parser_aln.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
@@ -165,7 +165,7 @@ def main():
     parser_realign.add_argument("--maxlen", dest="maxlen", type=int, default=10000000, help="Maximum length of the cumulative sum of all paths that run through the complex bubble.")
     parser_realign.add_argument("--maxsize", dest="maxsize", type=int, default=500, help="Maximum allowed number of nodes that are contained in a complex bubble.")
     parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
-    parser_realign.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
+    parser_realign.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme.")
     parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size.")
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
     
@@ -180,7 +180,7 @@ def main():
     parser_chain.add_argument("-a", dest="maxmums", type=int, default=5000, help="Number of largest mums to use for chaining.")
     
     parser_chain.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
-    parser_chain.add_argument("--ws", dest="wscore", type=int, default=3, help="Multiply length of MUM by this number in scoring scheme.")
+    parser_chain.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme.")
     parser_chain.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
     parser_chain.add_argument("--recurse", dest="recurse", action="store_true", default=False, help="Use recursive approach to chain gaps.")
     parser_chain.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")

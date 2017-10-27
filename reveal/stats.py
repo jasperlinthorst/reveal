@@ -93,7 +93,7 @@ def stats(gfafile):
         stats["Number of variants in component %d (indels)"%sgi]=indelcount
         stats["Number of variants in component %d (multi-allelic)"%sgi]=multicount
         stats["Number of variants in component %d (complex)"%sgi]=unknowncount
-        stats["Number of variants in component %d (regions)"%sgi]=regioncount    
+        stats["Number of variants in component %d (regions)"%sgi]=regioncount
 
         #chain stats
         chain=[]
@@ -108,7 +108,7 @@ def stats(gfafile):
             if len(offsets)==nsgsamples:
                 coords=tuple([offsets[k] for k in sorted(offsets.keys())])
                 chain.append((coords,l))
-                chainweight+=l*len(offsets)
+                chainweight+=l*((len(offsets)*(len(offsets)-1))/2) #sumofpairs score!
                 chainlengthbp+=l
                 chainlength+=1
         
@@ -118,14 +118,14 @@ def stats(gfafile):
         for point,length in chain[1:]:
             for i in range(len(point)):
                 assert(point[i]>=ppoint[i])
-            p=gapcost(ppoint,point)
+            p=gapcost(ppoint,point) #sumofpairs penalty!
             ppoint=tuple([c+length for c in point])
             chainpenalty+=p
         
         stats["Chain length in component %d"%sgi]=chainlength
         stats["Chain length basepairs in component %d"%sgi]=chainlengthbp
-        stats["Chain weight in component %d"%sgi]=chainweight
-        stats["Chain penalty in component %d"%sgi]=chainpenalty
+        stats["Chain weight (sum-of-pairs) in component %d"%sgi]=chainweight
+        stats["Chain penalty (sum-of-pairs) in component %d"%sgi]=chainpenalty
         stats["Chain score in component %d"%sgi]=chainweight-chainpenalty
     
     for label in sorted(stats.keys()):
