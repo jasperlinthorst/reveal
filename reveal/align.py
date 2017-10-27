@@ -1,4 +1,5 @@
 import logging
+import traceback
 from utils import *
 from intervaltree import Interval, IntervalTree
 from collections import defaultdict, deque
@@ -24,11 +25,11 @@ def breaknode(node,pos,l):
     other=set()
     
     if mn==node: #no breaking needed
-        logging.debug("Node %s does not need to be broken."%str(node))
+        logging.log(1,"Node %s does not need to be broken."%str(node))
         t.remove(node)
         return node,other
     
-    logging.debug("Breaking node: %s into: %s"%(str(node),str(mn)))
+    logging.log(1,"Breaking node: %s into: %s"%(str(node),str(mn)))
 
     allpaths=set()
     
@@ -37,7 +38,7 @@ def breaknode(node,pos,l):
         moffsets[s]=att['offsets'][s]+(pos-node.begin)
         allpaths.add(s)
     
-    logging.debug("Offsets after break: %s"%str(moffsets))
+    logging.log(1,"Offsets after break: %s"%str(moffsets))
 
     soffsets=dict()
     for s in att['offsets']:
@@ -67,7 +68,7 @@ def breaknode(node,pos,l):
     
     if (node[0]!=pos):
         pn=Interval(node[0],pos)
-        logging.debug("Creating prefix node: %s"%str(pn))
+        logging.log(1,"Creating prefix node: %s"%str(pn))
         G.add_node(pn,offsets=att['offsets'],aligned=0)#create prefix node
         assert(not G.has_edge(pn,mn))
         assert(not G.has_edge(mn,pn))
@@ -83,7 +84,7 @@ def breaknode(node,pos,l):
 
     if (node[1]!=pos+l):
         sn=Interval(pos+l,node[1])
-        logging.debug("Creating suffix node: %s"%str(sn))
+        logging.log(1,"Creating suffix node: %s"%str(sn))
         G.add_node(sn,offsets=soffsets,aligned=0)#create suffix node
         assert(not G.has_edge(mn,sn))
         assert(not G.has_edge(sn,mn))
@@ -115,8 +116,8 @@ def breaknode(node,pos,l):
         else:
             G.add_edge(pn,to,**d)
     
-    logging.debug("Leading/Trailing node(s): %s"%str(other))
-    logging.debug("Matching node: %s"%str(mn))
+    logging.log(1,"Leading/Trailing node(s): %s"%str(other))
+    logging.log(1,"Matching node: %s"%str(mn))
 
     return mn,other #return merge node
 
@@ -329,21 +330,21 @@ def graphalign(index,mum):
         
         mn=mergenodes(mns)
         msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
-        logging.debug("Merging samples: %s"%str(msamples))
-        logging.debug("Nodes before segmenting: %s"%nodes)
+        logging.trace("Merging samples: %s"%str(msamples))
+        logging.trace("Nodes before segmenting: %s"%nodes)
 
         intervals=segmentgraph(mn,nodes)
         leading,trailing,rest,merged=intervals
 
-        logging.debug("Leading nodes after segmenting: %s"%leading)
-        logging.debug("Trailing nodes after segmenting: %s"%trailing)
-        logging.debug("Parallel nodes after segmenting: %s"%rest)
+        logging.trace("Leading nodes after segmenting: %s"%leading)
+        logging.trace("Trailing nodes after segmenting: %s"%trailing)
+        logging.trace("Parallel nodes after segmenting: %s"%rest)
 
         logging.debug("Merged interval: %s"%str(merged))
         logging.debug("Number of leading intervals: %d"%len(leading))
         logging.debug("Number of trailing intervals: %d"%len(trailing))
         logging.debug("Number of parallel intervals: %d"%len(rest))
-        logging.debug("Number of nodes in the entire graph: %d"%G.number_of_nodes())
+        logging.trace("Number of nodes in the entire graph: %d"%G.number_of_nodes())
         newleftnode=mn
         newrightnode=mn
 
@@ -359,9 +360,10 @@ def graphalign(index,mum):
 
         return leading,trailing,rest,merged,newleftnode,newrightnode
 
-    except Exception as e:
-        print "GRAPHALIGN ERROR", e, sys.exc_info()[0]
-        return None
+    except Exception:
+        #print "GRAPHALIGN ERROR", e, sys.exc_info()[0]
+        print traceback.format_exc()
+        return
 
 def prune_nodes(G,T):
     converged=False

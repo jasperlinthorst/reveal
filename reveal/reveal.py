@@ -34,8 +34,8 @@ def main():
     http://www.biorxiv.org/content/early/2015/07/17/022715.
     """
     
-    parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-l", "--log-level", type=int, dest="loglevel", default=20, help="Log level: 10=debug 20=info 30=warn 40=error 50=fatal.")
+    parser = argparse.ArgumentParser(prog="reveal", usage="reveal -h for usage", description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)    
+    parser.add_argument("-l", "--log-level", type=int, dest="loglevel", default=20, help="Log level: 1=trace 10=debug 20=info 30=warn 40=error 50=fatal.")
     parser.add_argument("--64", dest="sa64", default=False, action="store_true", help="Use 64bit suffix array in the index.")
     
     subparsers = parser.add_subparsers()
@@ -197,6 +197,12 @@ def main():
     args = parser.parse_args()
     
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
+
+    #add custom loglevel TRACE
+    logging.TRACE = 1
+    logging.addLevelName(logging.TRACE, "TRACE")
     logging.logThreads = 0
-    
+    logging.Logger.trace = lambda inst, msg, *args, **kwargs: inst.log(logging.TRACE, msg, *args, **kwargs)
+    logging.trace = lambda msg, *args, **kwargs: logging.log(logging.TRACE, msg, *args, **kwargs)
+
     args.func(args)

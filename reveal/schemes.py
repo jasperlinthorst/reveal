@@ -11,6 +11,7 @@ import sys
 import math
 import logging
 import utils
+import traceback
 
 def chain(mums,left,right,gcmodel="sumofpairs"):
     if len(mums)==0:
@@ -169,7 +170,7 @@ def graphmumpicker(mums,idx,precomputed=False):
     try:
         if len(mums)==0:
             return
-        
+
         if not precomputed:
             logging.debug("Selecting input multimums for %d samples: %d"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
@@ -256,9 +257,9 @@ def graphmumpicker(mums,idx,precomputed=False):
         logging.debug("Skipright: %d"%len(skipright))
         return splitmum,skipleft,skipright
 
-    except Exception as e:
-        print "GRAPHMUMPICKER ERROR", e, sys.exc_info()[0]
-        return 1
+    except Exception:
+        print traceback.format_exc()
+        return
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
