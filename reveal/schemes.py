@@ -20,7 +20,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     #use one coordinate system for sorting
     ref=mums[0][2].keys()[0]
     logging.debug("Ref is %s"%ref)
-
     mums.append(right)
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
 
@@ -42,9 +41,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     
     logging.debug("left: %s"%str(left))
     logging.debug("right: %s"%str(right))
-
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-
     logging.debug("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
@@ -57,6 +54,8 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     processed=[]
     
     for mum in mums:
+        print mum
+
         #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
         remove=[]
         for pmum in processed:
@@ -75,6 +74,8 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         
         active.sort(key=lambda x: score[x[2][ref]], reverse=True) #sort active by score decreasing, kind of priority queue
         
+        print len(active)
+
         # subactive=[]
         # for amum in active:
         #     for psp,sp in zip(amum[2],mum[2]):
@@ -86,7 +87,13 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
         w=None
         for amum in active:
-            s=score[amum[2][ref]]+(wscore*(mum[0]*mum[1]))
+            s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
+
+            if mum==right:
+                print "amum",amum[2][ref]
+                print "amum score",score[amum[2][ref]]
+                print "s",s
+                print "w",w
 
             if w!=None:
                 if w > s: #as input is sorted by score
@@ -98,13 +105,14 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                     overlap=True
                     break
             if overlap:
+                print "overlap"
                 continue
 
             penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
 
             assert(penalty>=0)
 
-            tmpw=score[amum[2][ref]]+(wscore*(mum[0]*mum[1]))-(wpen*penalty)
+            tmpw=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(wpen*penalty)
 
             if tmpw>w or w==None:
                 w=tmpw
@@ -115,7 +123,13 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
         processed.append(mum)
 
+    print "link",link
+    print "score",score
+
     assert(score[end]>=minscore)
+
+    print "start",start
+    print "end",end
 
     #backtrack
     path=[]

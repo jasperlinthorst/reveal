@@ -59,7 +59,7 @@ def main():
     parser_aln.add_argument("-o", "--output", dest="output", help="Prefix of the variant and alignment graph files to produce, default is \"sequence1_sequence2\"")
     parser_aln.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_aln.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
-    parser_aln.add_argument("--topn", dest="topn", type=int, default=1000, help="Number of largest MUMs to consider for chaining.")
+    parser_aln.add_argument("--topn", dest="topn", type=int, default=10000, help="Number of largest MUMs to consider for chaining.")
     parser_aln.add_argument("-n", dest="minn", type=int, default=None, help="Only align graph on exact matches that occur in at least this many samples (if not set, equal to total number of genomes in the (sub)index).")
     parser_aln.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Weight of penalty during chaining.")

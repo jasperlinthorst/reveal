@@ -144,7 +144,7 @@ def finish(args):
                         ctg=ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci-1
                     ctgs.append(ctg)
                 defref2ctg[ref]=ctgs
-     
+    
     #build graph/fasta for the structural layout of the genome
     for ref in sorted(defref2ctg):
         pn=None
@@ -248,7 +248,7 @@ def finish(args):
                 gapsize=args.gapsize
             
             logging.debug("%d (index on ctg: %d->%d) - Order %s (revcomp=%d,prefstart=%d,prefend=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d,gapsize=%d)"%(i,pci,ci,args.order,revcomp,prefbegin,prefend,refbegin,refend,ctgbegin,ctgend,gapsize))
-             
+            
             if args.order=='chains':
                 event=None
                 
@@ -1287,7 +1287,7 @@ def bestmempathwithinversions(mems,n=15000):
     
     return path,maxscore
 
-def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,all=True):
+def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,wscore=3,wpen=1,all=True):
     nmums=len(mems)
     if nmums>n: #take only n largest mems
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
@@ -1337,9 +1337,8 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
         maxscore=0
         
         for mem in mems:
-            
             best=init
-            w=mem[2]
+            w=wscore*mem[2]
             
             if mem[4]==1:
                 frompoint=(mem[0]-maxgapsize, mem[1])
@@ -1350,7 +1349,12 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
                 topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]-1)
                 subactive=[pointtomem[p] for p in range_search(memtree,frompoint,topoint)]
             
+            subactive.sort(key=lambda s: score[tuple(s)], reverse=True) #
+
             for amem in subactive:
+                if score[tuple(amem)]+(wscore*mem[2])<w:
+                    break
+
                 #calculate score of connecting to active point
                 if mem[4]==1:
                     p1=(mem[0], mem[1]+mem[2])
@@ -1364,11 +1368,11 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
                     p1=(amem[0]+amem[2], amem[1]+amem[2])
                     p2=(mem[0], mem[1])
                     penalty=gapcost(p1,p2)
-                    tmpw=score[tuple(amem)]+mem[2]-penalty
+                    tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
                     if tmpw>w:
                         w=tmpw
                         best=amem
-        
+            
             link[tuple(mem)]=tuple(best)
             score[tuple(mem)]=w
             

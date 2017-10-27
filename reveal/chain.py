@@ -269,7 +269,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
                     break
             else:
                 penalty=gapcost(v,t,model=gcmodel)
-                score=G.node[v]['score']+(wscore*(l*len(v)))-(wpen*penalty)
+                score=G.node[v]['score']+(wscore*(l*((len(v)*(len(v)-1))/2)))-(wpen*penalty)
                 if score>bestscore:
                     bestscore=score
                     bestpoint=v
