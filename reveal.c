@@ -810,13 +810,13 @@ void *aligner(void *arg) {
             
             saidx_t i,j,begin,end,trailingn=0,leadingn=0,parn=0;
 
-            int nintv_leading=0, nintv_trailing=0, nintv_par=0;
+            // int nintv_leading=0, nintv_trailing=0, nintv_par=0;
             int leadingsamples=0, trailingsamples=0, parsamples=0;
             
             PyObject *iter;
             PyObject *tup;
 
-            nintv_leading=PySet_Size(leading_intervals);
+            // nintv_leading=PySet_Size(leading_intervals);
             iter=PyObject_GetIter(leading_intervals);
             while ((tup=PyIter_Next(iter))){
 #ifdef SA64
@@ -848,7 +848,7 @@ void *aligner(void *arg) {
             Py_DECREF(iter);
             memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
 
-            nintv_trailing=PySet_Size(trailing_intervals);
+            // nintv_trailing=PySet_Size(trailing_intervals);
             iter=PyObject_GetIter(trailing_intervals);
             while ((tup=PyIter_Next(iter))){
 #ifdef SA64
@@ -880,7 +880,7 @@ void *aligner(void *arg) {
             Py_DECREF(iter);
             memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
             
-            nintv_par=PySet_Size(rest);
+            // nintv_par=PySet_Size(rest);
             iter=PyObject_GetIter(rest);
             while ((tup=PyIter_Next(iter))){
 #ifdef SA64
