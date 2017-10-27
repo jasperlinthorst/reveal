@@ -89,12 +89,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         for amum in active:
             s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
 
-            if mum==right:
-                print "amum",amum[2][ref]
-                print "amum score",score[amum[2][ref]]
-                print "s",s
-                print "w",w
-
             if w!=None:
                 if w > s: #as input is sorted by score
                     break
@@ -105,7 +99,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                     overlap=True
                     break
             if overlap:
-                print "overlap"
                 continue
 
             penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
@@ -123,13 +116,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
         processed.append(mum)
 
-    print "link",link
-    print "score",score
-
     assert(score[end]>=minscore)
-
-    print "start",start
-    print "end",end
 
     #backtrack
     path=[]
