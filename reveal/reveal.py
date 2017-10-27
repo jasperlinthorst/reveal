@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-
 from intervaltree import Interval, IntervalTree
 import networkx as nx
 import argparse
-import logging
 import os
 import sys
 import time
@@ -25,6 +23,15 @@ import matches
 import chain
 import stats
 import split
+
+import logging
+#add custom loglevel TRACE
+logging.TRACE = 1
+logging.addLevelName(logging.TRACE, "TRACE")
+logging.logThreads = 0
+logging.Logger.trace = lambda inst, msg, *args, **kwargs: inst.log(logging.TRACE, msg, *args, **kwargs)
+logging.trace = lambda msg, *args, **kwargs: logging.log(logging.TRACE, msg, *args, **kwargs)
+
 
 def main():
     desc="""
@@ -197,12 +204,5 @@ def main():
     args = parser.parse_args()
     
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
-
-    #add custom loglevel TRACE
-    logging.TRACE = 1
-    logging.addLevelName(logging.TRACE, "TRACE")
-    logging.logThreads = 0
-    logging.Logger.trace = lambda inst, msg, *args, **kwargs: inst.log(logging.TRACE, msg, *args, **kwargs)
-    logging.trace = lambda msg, *args, **kwargs: logging.log(logging.TRACE, msg, *args, **kwargs)
 
     args.func(args)
