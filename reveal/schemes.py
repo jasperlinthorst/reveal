@@ -165,81 +165,86 @@ def maptooffsets(mums):
         mapping[tuple(relmum[2].values())]=mum
     return relmums,mapping
 
-def graphmumpicker(mums,idx):
+def graphmumpicker(mums,idx,precomputed=False):
     try:
         if len(mums)==0:
             return
         
-        logging.debug("Selecting input multimums for %d samples: %d"%(idx.nsamples, len(mums)))
-        mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
+        if not precomputed:
+            logging.debug("Selecting input multimums for %d samples: %d"%(idx.nsamples, len(mums)))
+            mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
 
-        if len(mmums)==0:
-            logging.debug("No MUMS that span all input genomes, segment genomes.")
-            mmums=segment(mums)
-            logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
+            if len(mmums)==0:
+                logging.debug("No MUMS that span all input genomes, segment genomes.")
+                mmums=segment(mums)
+                logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
 
-        if len(mmums)>topn:
-            logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),topn))
-            mmums.sort(key=lambda mum: mum[0]) #sort by size
-            mmums=mmums[-topn:] #cap to topn mums
+            if len(mmums)>topn:
+                logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),topn))
+                mmums.sort(key=lambda mum: mum[0]) #sort by size
+                mmums=mmums[-topn:] #cap to topn mums
 
-        logging.debug("Mapping indexed positions to relative postions within genomes.")
-        
-        relmums,mapping=maptooffsets(mmums)
+            logging.debug("Mapping indexed positions to relative postions within genomes.")
+            
+            relmums,mapping=maptooffsets(mmums)
 
-        logging.debug("Subset to max available number of samples in set")
-        relmums.sort(key=lambda m: m[1]) #sort by n
-        
-        relmums=[mum for mum in relmums if mum[2].keys()==relmums[-1][2].keys()] #subset to only those mums that apply to all genomes in the graph
+            logging.debug("Subset to max available number of samples in set")
+            relmums.sort(key=lambda m: m[1]) #sort by n
+            
+            relmums=[mum for mum in relmums if mum[2].keys()==relmums[-1][2].keys()] #subset to only those mums that apply to all genomes in the graph
 
-        if len(relmums)==0:
-            logging.debug("No MUMS that span all genomes that are in the graph, segment genomes.")
-            relmums=segment(relmums)
-            logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(relmums[0][2].keys(),len(relmums)))
+            if len(relmums)==0:
+                logging.debug("No MUMS that span all genomes that are in the graph, segment genomes.")
+                relmums=segment(relmums)
+                logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(relmums[0][2].keys(),len(relmums)))
 
-        logging.debug("Left with %d mums"%len(relmums))
+            logging.debug("Left with %d mums"%len(relmums))
 
-        if idx.leftnode!=None:
-            spd=dict()
-            for k in relmums[-1][2].keys():
-                spd[k]=G.node[idx.leftnode]['offsets'][k]+(idx.leftnode[1]-idx.leftnode[0])-1
-            left=(0,0,spd)
+            if idx.leftnode!=None:
+                spd=dict()
+                for k in relmums[-1][2].keys():
+                    spd[k]=G.node[idx.leftnode]['offsets'][k]+(idx.leftnode[1]-idx.leftnode[0])-1
+                left=(0,0,spd)
+            else:
+                spd=dict()
+                for sid in relmums[-1][2].keys():
+                    spd[sid]=-1
+                left=(0,0,spd)
+
+            if idx.rightnode!=None:
+                spd=dict()
+                for k in relmums[-1][2].keys():
+                    spd[k]=G.node[idx.rightnode]['offsets'][k]
+                right=(0,0,spd)
+            else:
+                spd=dict()
+                for sid in relmums[-1][2].keys():
+                    spd[sid]=G.graph['id2end'][sid]
+                right=(0,0,spd)
+
+            logging.debug("Chaining %d mums"%len(mmums))
+
+            chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
+            
+            logging.debug("Selected chain of %d mums"%len(chainedmums))
+
+            if len(chainedmums)==0:
+                return
+
+            splitmum=sorted(chainedmums,key=lambda m: m[0])[-1] #take largest
         else:
-            spd=dict()
-            for sid in relmums[-1][2].keys():
-                spd[sid]=-1
-            left=(0,0,spd)
-
-        if idx.rightnode!=None:
-            spd=dict()
-            for k in relmums[-1][2].keys():
-                spd[k]=G.node[idx.rightnode]['offsets'][k]
-            right=(0,0,spd)
-        else:
-            spd=dict()
-            for sid in relmums[-1][2].keys():
-                spd[sid]=G.graph['id2end'][sid]
-            right=(0,0,spd)
-
-        logging.debug("Chaining %d mums"%len(mmums))
-
-        mums=chain(relmums,left,right,gcmodel=gcmodel)
+            assert(len(mums)>0)
+            chainedmums,mapping=maptooffsets(mums)
+            splitmum=chainedmums[len(chainedmums)/2] #take the middle
         
-        logging.debug("Selected chain of %d mums"%len(mums))
-
-        if len(mums)==0:
-            return
-
-        splitmum=sorted(mums,key=lambda m: m[0])[-1]
-
-        logging.debug("Best MUM from chain: %s"%str(mums[-1]))
+        logging.debug("Best MUM from chain: %s"%str(splitmum))
         skipleft=[]
         skipright=[]
         if seedsize!=None:
-            t=skipright
-            for mum in mums:
+            t=skipleft
+            for mum in chainedmums:
                 if mum==splitmum:
-                    t=skipleft
+                    t=skipright
                     continue
                 t.append(mapping[tuple(mum[2].values())])
             skipleft=[mum for mum in skipleft if mum[0]>=seedsize]
@@ -249,7 +254,6 @@ def graphmumpicker(mums,idx):
         splitmum=mapping[tuple(splitmum[2].values())]
         logging.debug("Skipleft: %d"%len(skipleft))
         logging.debug("Skipright: %d"%len(skipright))
-
         return splitmum,skipleft,skipright
 
     except Exception as e:
