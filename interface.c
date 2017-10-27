@@ -89,7 +89,8 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
 #else
     PyObject *intv=Py_BuildValue("(i,i)",s,self->n-1);
 #endif
-    PyList_Append(self->nodes,intv);
+    // PyList_Append(self->nodes,intv);
+    PySet_Add(self->nodes,intv);
     
     return intv;
 };
@@ -363,45 +364,13 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     }
 };
 
-static PyObject *
-reveal_getbestmultimum(RevealIndex *self, PyObject *args, PyObject *keywds)
-{
-    RevealMultiMUM mmum;
-    mmum.sp=(saidx_t *) malloc(self->nsamples*sizeof(saidx_t));
-    mmum.l=0;
-    int min_n=2,i=0;
-    
-    //getbestmultimum(RevealIndex *index, RevealMultiMUM *mum, int min_n)
-    if (getbestmultimum(self, &mmum, min_n)==0) {
-        PyObject *sps;
-        PyObject *arglist;
-        sps=PyList_New(mmum.n);
-        PyObject *pos;
-        for (i=0;i<mmum.n;i++){
-#ifdef SA64
-            pos=Py_BuildValue("L",mmum.sp[i]);
-#else
-            pos=Py_BuildValue("i",mmum.sp[i]);
-#endif
-            PyList_SetItem(sps,i,pos);
-        }
-        arglist = Py_BuildValue("(i,i,O)", mmum.l, mmum.n, sps);
-        Py_DECREF(sps);
-        return arglist;
-    } else {
-        return NULL;
-    }
-}
-
 static PyMethodDef reveal_methods[] = {
     { "align", (PyCFunction) align, METH_VARARGS|METH_KEYWORDS },
     { "addsample", (PyCFunction) addsample, METH_VARARGS },
     { "addsequence", (PyCFunction) addsequence, METH_VARARGS },
     { "construct", (PyCFunction) construct, METH_VARARGS },
-    { "getbestmultimum", (PyCFunction) reveal_getbestmultimum, METH_VARARGS },
     { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
-    { "getscoredmums", (PyCFunction) getscoredmums, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
 
@@ -419,7 +388,8 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->n=0;
     self->nsamples=0;
     self->samples = PyList_New(0);
-    self->nodes = PyList_New(0);
+    // self->nodes = PyList_New(0);
+    self->nodes = PySet_New(0);
     self->skipmums = PyList_New(0);
     Py_INCREF(Py_None);
     self->left_node=Py_None;
