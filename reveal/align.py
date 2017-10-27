@@ -299,11 +299,12 @@ def segmentgraph(node,nodes):
         leading=leading.intersection(reverse_leading)
     
     leading = set([(i.begin,i.end) for i in leading if isinstance(i,Interval)]).intersection(nodes) #TODO: remove "if isinstance(i,Interval)]"
+
     trailing = set([(i.begin,i.end) for i in trailing if isinstance(i,Interval)]).intersection(nodes)
     
     rest = nodes - (leading | trailing)
     
-    return list(leading), list(trailing), list(rest), (node.begin,node.end)
+    return leading, trailing, rest, (node.begin,node.end)
 
 def graphalign(index,mum):
     try:
@@ -324,7 +325,7 @@ def graphalign(index,mum):
                 nodes.remove((old.begin,old.end))
             for node in other:
                 if isinstance(node,Interval):
-                    nodes.append((node.begin,node.end))
+                    nodes.add((node.begin,node.end))
         
         mn=mergenodes(mns)
         msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
