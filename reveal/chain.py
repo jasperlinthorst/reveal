@@ -205,7 +205,7 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
             G.add_edge(source,v)
             G.add_edge(v,sink)
 
-def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=3):
+def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=1):
     k=idx.nsamples
     
     if k>2:
