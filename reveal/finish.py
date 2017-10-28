@@ -3,15 +3,21 @@ import reveallib64
 from utils import *
 from matplotlib import pyplot as plt
 from multiprocessing.pool import Pool
-
+import signal
 
 def finish(args):
     logging.debug("Extracting mums.")
 
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=2 if args.nproc>=2 else 1)
-    async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
-    async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
-    pool.close()
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    try:
+        async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
+        async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
+    except KeyboardInterrupt:
+        pool.terminate()
+    else:
+        pool.close()
     pool.join()
 
     logging.debug("Done.")
@@ -75,17 +81,21 @@ def finish(args):
     
     defref2ctg=dict()
     unused=[]
-    
+
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)    
     pool = Pool(processes=args.nproc)
-
-    #multi-process contig-path computation
-    for ref in ref2ctg:
-        if ref=='unchained' or ref=='unplaced':
-            defref2ctg[ref]=ref2ctg[ref]
-            continue
-        defref2ctg[ref]=pool.apply_async(bestctgpath, (ref2ctg[ref],))
-
-    pool.close()
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    try:
+        #multi-process contig-path computation
+        for ref in ref2ctg:
+            if ref=='unchained' or ref=='unplaced':
+                defref2ctg[ref]=ref2ctg[ref]
+                continue
+            defref2ctg[ref]=pool.apply_async(bestctgpath, (ref2ctg[ref],))
+    except KeyboardInterrupt:
+        pool.terminate()
+    else:
+        pool.close()
     pool.join()
 
     #retrieve multi-process results
@@ -626,15 +636,18 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
     
     ref2ctg={'unchained':set()}
     ctg2ref=dict()
-    
-    pool=Pool(processes=nproc)
-
     results=dict()
-    for ctg in ctg2mums:
-        results[ctg]=pool.apply_async(decompose_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
 
-    pool.close()
-    pool.join()
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool=Pool(processes=nproc)
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    try:
+        for ctg in ctg2mums:
+            results[ctg]=pool.apply_async(decompose_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
+    except KeyboardInterrupt:
+        pool.terminate()
+    else:
+        pool.close()
 
     for ctg in ctg2mums:
         logging.debug("Determining best chain(s) for: %s"%ctg)
@@ -699,14 +712,18 @@ def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,max
     
     ref2ctg={'unplaced':[]}
     ctg2ref=dict()
-
-    pool=Pool(processes=nproc)
-
     results=dict()
-    for ctg in ctg2mums:
-        results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
 
-    pool.close()
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    pool=Pool(processes=nproc)
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    try:
+        for ctg in ctg2mums:
+            results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
+    except KeyboardInterrupt:
+        pool.terminate()
+    else:
+        pool.close()
     pool.join()
 
     for ctg in ctg2mums:

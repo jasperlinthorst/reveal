@@ -668,6 +668,8 @@ static PyGetSetDef reveal_getseters[] = {
 static void
 reveal_dealloc(RevealIndex *self)
 {
+    fprintf(stderr,"Dealloc index of size %zd\n",self->n);
+    
 #ifdef REVEALDEBUG
     fprintf(stderr,"Dealloc index of size %zd\n",self->n);
 #endif

@@ -93,17 +93,12 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     	if (lb>=index->LCP[i] || la>=index->LCP[i]){
     	    continue;//not unique
     	}
-
 	//match is not a repeat and is maximally unique
-        
 #ifdef SA64
-	// PyObject *mum=Py_BuildValue("I,i,(L,L)",index->LCP[i],2,aStart,bStart);
     PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
 #else
-	// PyObject *mum=Py_BuildValue("I,i,(i,i)",index->LCP[i],2,aStart,bStart);
     PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
 #endif
-	
         if (PyList_Append(mums,mum)==0){
             Py_DECREF(mum);
         } else {
@@ -239,39 +234,20 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                 if (n<=mainidx->nsamples && n>=minn){
                     if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                         int x;
-
                         PyObject *crdmap = PyDict_New();
-
-                        //PyObject *sp=PyList_New(n);
-                        // PyObject *ni=PyTuple_New(n);
-
                         for (x=0;x<n;x++) {
                             PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
                             PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
-
-                            //PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
                             PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-
-                            //PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                            //PyList_SET_ITEM(sp, x, v);
-                            // PyTuple_SET_ITEM(ni, x, s);
-
                             PyDict_SetItem(crdmap, s, v);
                             Py_DECREF(s);
                             Py_DECREF(v);
                         }
-
-                        //PyList_Sort(sp);
-                        //sp=PyList_AsTuple(sp);
-
-                        //PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,sp);
                         PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
-                        // Py_DECREF(sp);
-                        // Py_DECREF(ni);
-
+                        Py_DECREF(crdmap);
                         PyList_Append(multimums,multimum);
                         Py_DECREF(multimum);
                     }
@@ -319,37 +295,21 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             if (n<=mainidx->nsamples && n>=minn){
                 if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                     int x;
-                    //PyObject *sp=PyList_New(n);
-                    // PyObject *ni=PyTuple_New(n);
-
                     PyObject *crdmap = PyDict_New();
-
                     for (x=0;x<n;x++) {
                         PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
                         PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
-                        //PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
                         PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
-                        // PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                        //PyList_SET_ITEM(sp, x, v);
-                        // PyTuple_SET_ITEM(ni, x, s);
                         PyDict_SetItem(crdmap, s, v);
                         Py_DECREF(s);
                         Py_DECREF(v);
                     }
-
-                    //PyList_Sort(sp);
-                    //sp=PyList_AsTuple(sp);
-
-                    //PyObject *multimum=Py_BuildValue("I,i,O,O",i_lcp,n,sp);
-
                     PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
-
+                    Py_DECREF(crdmap);
                     PyList_Append(multimums,multimum);
-                    // Py_DECREF(sp);
-                    // Py_DECREF(ni);
                     Py_DECREF(multimum);
                 }
             }
@@ -569,8 +529,8 @@ void *aligner(void *arg) {
             fprintf(stderr,"depth=%d\n",idx->depth);
             fprintf(stderr,"n=%d\n",idx->n);
             fprintf(stderr,"minl=%d...\n", rw->minl);
-            fprintf(stderr,"wpen=%d...\n", rw->wpen);
-            fprintf(stderr,"wscore=%d...\n", rw->wscore);
+            // fprintf(stderr,"wpen=%d...\n", rw->wpen);
+            // fprintf(stderr,"wscore=%d...\n", rw->wscore);
 #endif
             assert(idx->nsamples>0);
 
@@ -628,8 +588,6 @@ void *aligner(void *arg) {
                 time(&t1);
                 fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
-                
-
             } else {
 #ifdef REVEALDEBUG
                 fprintf(stderr,"Using precomputed mum...\n");
@@ -640,15 +598,18 @@ void *aligner(void *arg) {
             }
 
             PyObject *keywds = Py_BuildValue("{s:O}", "precomputed", precomputed);
+            Py_DECREF(precomputed);
+
             PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
-            
+            Py_DECREF(multimums);
+
 #ifdef REVEALDEBUG
             time(&t0);
             fprintf(stderr,"Selecting best mum (python callback)...\n");
 #endif
             PyObject *pickresult = PyEval_CallObjectWithKeywords(rw->mumpicker, arglist, keywds); //mumpicker returns intervals
             Py_DECREF(arglist);
-            Py_DECREF(multimums);
+            // Py_DECREF(multimums);
 
 #ifdef REVEALDEBUG
             time(&t1);
@@ -659,7 +620,7 @@ void *aligner(void *arg) {
                 //TODO 1: NO MORE MUMS, call prune nodes here!
                 Py_DECREF(idx);
                 Py_DECREF(arglist);
-                Py_DECREF(multimums);
+                // Py_DECREF(multimums);
                 Py_DECREF(pickresult);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
@@ -677,7 +638,7 @@ void *aligner(void *arg) {
                 err_flag=1;
                 Py_DECREF(idx);
                 Py_DECREF(arglist);
-                Py_DECREF(multimums);
+                // Py_DECREF(multimums);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
 
@@ -938,71 +899,77 @@ void *aligner(void *arg) {
             
             //fprintf(stderr,"Allocating leading (%zd nodes) %lld\n", PyList_Size(leading_intervals), leadingn);
             
-            RevealIndex *i_leading=newIndex();
-            
-            i_leading->SA=malloc(leadingn*sizeof(saidx_t));
-            i_leading->LCP=malloc(leadingn*sizeof(lcp_t));
-            Py_INCREF(leading_intervals);
-            i_leading->nodes=leading_intervals;
-            i_leading->depth=newdepth;
-            i_leading->n=leadingn;
-            i_leading->SAi=idx->SAi;
-            i_leading->T=idx->T;
-            i_leading->SO=idx->SO;
-            i_leading->nsamples=leadingsamples;
-            i_leading->nsep=idx->nsep;
-            i_leading->main=idx->main;
-            Py_INCREF(idx->left_node);
-            i_leading->left_node=idx->left_node; //interval that is bounding on the left
-            Py_INCREF(newrightnode);
-            i_leading->right_node=newrightnode; //interval that is bounding on the right
-            Py_INCREF(skipmumsleft);
-            i_leading->skipmums=skipmumsleft;
+            RevealIndex *i_leading=NULL;
+            if (leadingn>0){
+                i_leading=newIndex();
+                i_leading->SA=malloc(leadingn*sizeof(saidx_t));
+                i_leading->LCP=malloc(leadingn*sizeof(lcp_t));
+                Py_INCREF(leading_intervals);
+                i_leading->nodes=leading_intervals;
+                i_leading->depth=newdepth;
+                i_leading->n=leadingn;
+                i_leading->SAi=idx->SAi;
+                i_leading->T=idx->T;
+                i_leading->SO=idx->SO;
+                i_leading->nsamples=leadingsamples;
+                i_leading->nsep=idx->nsep;
+                i_leading->main=idx->main;
+                Py_INCREF(idx->left_node);
+                i_leading->left_node=idx->left_node; //interval that is bounding on the left
+                Py_INCREF(newrightnode);
+                i_leading->right_node=newrightnode; //interval that is bounding on the right
+                Py_INCREF(skipmumsleft);
+                i_leading->skipmums=skipmumsleft;
+            }
 
             assert(trailingn>=0);
-            //fprintf(stderr,"Allocating trailing (%zd nodes) %llu\n", PyList_Size(trailing_intervals), trailingn);
-            RevealIndex *i_trailing=newIndex();
+            RevealIndex *i_trailing=NULL;
+            if (trailingn>0){
+                //fprintf(stderr,"Allocating trailing (%zd nodes) %llu\n", PyList_Size(trailing_intervals), trailingn);
+                i_trailing=newIndex();
+                i_trailing->SA=malloc(trailingn*sizeof(saidx_t));
+                i_trailing->LCP=malloc(trailingn*sizeof(lcp_t));
+                Py_INCREF(trailing_intervals);
+                i_trailing->nodes=trailing_intervals;
+                i_trailing->depth=newdepth;
+                i_trailing->n=trailingn;
+                i_trailing->SAi=idx->SAi;
+                i_trailing->T=idx->T;
+                i_trailing->SO=idx->SO;
+                i_trailing->nsamples=trailingsamples;
+                i_trailing->nsep=idx->nsep;
+                i_trailing->main=idx->main;
+                Py_INCREF(newleftnode);
+                i_trailing->left_node=newleftnode; //interval that is bounding on the left
+                Py_INCREF(idx->right_node);
+                i_trailing->right_node=idx->right_node; //interval that is bounding on the right
+                Py_INCREF(skipmumsright);
+                i_trailing->skipmums=skipmumsright;
+            }
 
-            i_trailing->SA=malloc(trailingn*sizeof(saidx_t));
-            i_trailing->LCP=malloc(trailingn*sizeof(lcp_t));
-            Py_INCREF(trailing_intervals);
-            i_trailing->nodes=trailing_intervals;
-            i_trailing->depth=newdepth;
-            i_trailing->n=trailingn;
-            i_trailing->SAi=idx->SAi;
-            i_trailing->T=idx->T;
-            i_trailing->SO=idx->SO;
-            i_trailing->nsamples=trailingsamples;
-            i_trailing->nsep=idx->nsep;
-            i_trailing->main=idx->main;
-            Py_INCREF(newleftnode);
-            i_trailing->left_node=newleftnode; //interval that is bounding on the left
-            Py_INCREF(idx->right_node);
-            i_trailing->right_node=idx->right_node; //interval that is bounding on the right
-            Py_INCREF(skipmumsright);
-            i_trailing->skipmums=skipmumsright;
-
+            RevealIndex *i_parallel=NULL;
             assert(parn>=0);
-            //fprintf(stderr,"Allocating parallel (%zd nodes) %llu %d %d %llu\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
-            RevealIndex *i_parallel=newIndex();
-            
-            i_parallel->SA=malloc(parn*sizeof(saidx_t));
-            i_parallel->LCP=malloc(parn*sizeof(lcp_t));
-            Py_INCREF(rest);
-            i_parallel->nodes=rest;
-            i_parallel->depth=newdepth;
-            i_parallel->n=parn;
-            i_parallel->SAi=idx->SAi;
-            i_parallel->T=idx->T;
-            i_parallel->SO=idx->SO;
-            i_parallel->nsamples=parsamples;//idx->nsamples-(mmum.n);
-            i_parallel->nsep=idx->nsep;
-            i_parallel->main=idx->main;
-            Py_INCREF(idx->left_node);
-            i_parallel->left_node=idx->left_node; //interval that is bounding on the left
-            Py_INCREF(idx->right_node);
-            i_parallel->right_node=idx->right_node; //interval that is bounding on the right
-            i_parallel->skipmums=PyList_New(0);
+            if (parn>0){
+                //fprintf(stderr,"Allocating parallel (%zd nodes) %llu %d %d %llu\n", PyList_Size(rest), parn, mmum.l, mmum.n, idx->n);
+                i_parallel=newIndex();
+                i_parallel->SA=malloc(parn*sizeof(saidx_t));
+                i_parallel->LCP=malloc(parn*sizeof(lcp_t));
+                Py_INCREF(rest);
+                i_parallel->nodes=rest;
+                i_parallel->depth=newdepth;
+                i_parallel->n=parn;
+                i_parallel->SAi=idx->SAi;
+                i_parallel->T=idx->T;
+                i_parallel->SO=idx->SO;
+                i_parallel->nsamples=parsamples;//idx->nsamples-(mmum.n);
+                i_parallel->nsep=idx->nsep;
+                i_parallel->main=idx->main;
+                Py_INCREF(idx->left_node);
+                i_parallel->left_node=idx->left_node; //interval that is bounding on the left
+                Py_INCREF(idx->right_node);
+                i_parallel->right_node=idx->right_node; //interval that is bounding on the right
+                i_parallel->skipmums=PyList_New(0);
+            }
 
             PyGILState_Release(gstate);
             pthread_mutex_unlock(&python);
@@ -1023,16 +990,24 @@ void *aligner(void *arg) {
             time(&t0);
             fprintf(stderr,"Bubble sorting leading SA... ");
 #endif
-            bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
+            if (leadingn>0){
+                bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
+            }
 #ifdef REVEALDEBUG
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
-            fprintf(stderr,"Check trailing.\n");
-            checkindex(i_trailing);
-            fprintf(stderr,"Check parallel.\n");
-            checkindex(i_parallel);
-            fprintf(stderr,"Check leading.\n");
-            checkindex(i_leading);
+            if (trailingn>0) {
+                fprintf(stderr,"Check trailing.\n");
+                checkindex(i_trailing);
+            }
+            if (parn>0) {
+                fprintf(stderr,"Check parallel.\n");
+                checkindex(i_parallel);
+            }
+            if (leadingn>0) {
+                fprintf(stderr,"Check leading.\n");
+                checkindex(i_leading);
+            }
 #endif
 
             free(D);
@@ -1052,9 +1027,9 @@ void *aligner(void *arg) {
             
             pthread_mutex_lock(&mutex);
             nmums++;
+
             //add resulting indices to the queue 
-            if (i_parallel->n>0){
-    		     //fprintf(stderr,"push parallel\n");
+            if (parn>0){
                 if (!(push_index(i_parallel)==0)){
                     fprintf(stderr,"Failed to add parallel paths index to queue.\n");
                     Py_DECREF(i_parallel);
@@ -1062,12 +1037,9 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
-            } else {
-                Py_DECREF(i_parallel);
             }
             
-            if (i_leading->n>0){
-		     //fprintf(stderr,"push leading\n");
+            if (leadingn>0){
                 if (!(push_index(i_leading)==0)){
                     fprintf(stderr,"Failed to add leading index to queue.\n");
                     Py_DECREF(i_leading);
@@ -1075,12 +1047,9 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
-            } else {
-                Py_DECREF(i_leading);
             }
             
-            if (i_trailing->n>0){
-		     //fprintf(stderr,"push trailing\n");
+            if (trailingn>0){
                 if (!(push_index(i_trailing)==0)){
                     fprintf(stderr,"Failed to add trailing index to queue.\n");
                     Py_DECREF(i_trailing);
@@ -1088,8 +1057,6 @@ void *aligner(void *arg) {
                     pthread_mutex_unlock(&mutex);
                     break;
                 }
-            } else {
-                Py_DECREF(i_trailing);
             }
             
             PyGILState_Release(gstate);
