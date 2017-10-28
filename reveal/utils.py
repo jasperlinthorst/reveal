@@ -468,10 +468,8 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
             for node,data in G.nodes_iter(data=True):
                 if sid in data['offsets']:
                     path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
-
             if len(path)==0: #not just a single node, sample not part of the graph, dont write path
                 continue
-
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
     

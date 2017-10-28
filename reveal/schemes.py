@@ -180,10 +180,10 @@ def graphmumpicker(mums,idx,precomputed=False):
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2].keys(),len(mmums)))
 
-            if len(mmums)>topn:
-                logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),topn))
+            if len(mmums)>maxmums and maxmums!=0:
+                logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mums),maxmums))
                 mmums.sort(key=lambda mum: mum[0]) #sort by size
-                mmums=mmums[-topn:] #cap to topn mums
+                mmums=mmums[-maxmums:] #cap to topn mums
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
             
@@ -234,6 +234,7 @@ def graphmumpicker(mums,idx,precomputed=False):
 
             splitmum=sorted(chainedmums,key=lambda m: m[0])[-1] #take largest
         else:
+            logging.debug("Selecting MUM from precomputed chain")
             assert(len(mums)>0)
             chainedmums,mapping=maptooffsets(mums)
             splitmum=chainedmums[len(chainedmums)/2] #take the middle

@@ -145,10 +145,10 @@ def plot(args):
     
     del idx
     
-    if len(mmems)>args.maxn:
-        logging.info("Too many mums (%d), taking the %d largest."%(len(mmems),args.maxn))
+    if len(mmems)>args.maxmums:
+        logging.info("Too many mums (%d), taking the %d largest."%(len(mmems),args.maxmums))
         mmems.sort(key=lambda mem: mem[0],reverse=True) #sort by size
-        mmems=mmems[:args.maxn] #take the n largest
+        mmems=mmems[:args.maxmums] #take the n largest
     
     print "Drawing",len(mmems),"matches."
     

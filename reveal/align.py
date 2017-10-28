@@ -48,21 +48,32 @@ def breaknode(node,pos,l):
     negstrand=False
     negpaths=set()
     pospaths=set()
-    if len(in_edges)>0:
-        for fro,to,d in in_edges:
-            if d['oto']=='-':
-                negstrand=True
-                for p in d['paths']:
-                    negpaths.add(p)
-            else:
-                assert(d['oto']=='+')
-                for p in d['paths']:
-                    pospaths.add(p)
-    else: #single node, without edges
+    
+    if len(in_edges)==0 and len(out_edges)==0:
         pospaths=allpaths
+    else:
+        if len(in_edges)>0:
+            for fro,to,d in in_edges:
+                if d['oto']=='-':
+                    negstrand=True
+                    for p in d['paths']:
+                        negpaths.add(p)
+                else:
+                    assert(d['oto']=='+')
+                    for p in d['paths']:
+                        pospaths.add(p)
+        if len(out_edges)>0:
+            for fro,to,d in out_edges:
+                if d['ofrom']=='-':
+                    negstrand=True
+                    for p in d['paths']:
+                        negpaths.add(p)
+                else:
+                    assert(d['ofrom']=='+')
+                    for p in d['paths']:
+                        pospaths.add(p)
 
-    if pospaths==set(): #only incoming edges from other strand
-        pospaths=allpaths-negpaths
+    assert(pospaths.intersection(negpaths)==set())
 
     G.add_node(mn,offsets=moffsets,aligned=0)#create merge node
     
@@ -122,8 +133,8 @@ def breaknode(node,pos,l):
     return mn,other #return merge node
 
 def mergenodes(mns,mark=True):
-    logging.debug("Merging nodes %s"%str(mns))
-
+    logging.trace("Merging nodes %s"%str(mns))
+    
     global o
     ri=0
     if reference!=None:
@@ -507,7 +518,7 @@ def align_genomes(args):
 
     o=0
     schemes.minlength=args.minlength
-    schemes.topn=args.topn
+    schemes.maxmums=args.maxmums
     schemes.minn=args.minn
     schemes.gcmodel=args.gcmodel
     schemes.wscore=args.wscore
@@ -578,7 +589,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,topn=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -604,7 +615,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     schemes.gcmodel=gcmodel
     schemes.minlength=minlength
     schemes.minn=minn
-    schemes.topn=topn
+    schemes.maxmums=maxmums
     schemes.seedsize=seedsize
     schemes.wpen=wpen
     schemes.wscore=wscore

@@ -43,9 +43,9 @@ def finish(args):
     logging.info("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
     if args.order=='chains':
-        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
+        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxmums=args.maxmums,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
     else:
-        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxn=args.maxn,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
+        ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxmums=args.maxmums,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
     
     if args.output==None:
         pref=[]
@@ -549,7 +549,7 @@ def finish(args):
     else:
         logging.info("%.2f%% (%d out of %d) of the assembly was placed with respect to the reference."% ( (totseqplaced/float(totseq))*100, totseqplaced, totseq ))
 
-def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000):
+def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxmums=15000):
 
     logging.debug("Determining best chain(s) for: %s"%ctg)
     paths=[]
@@ -558,7 +558,7 @@ def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn
     for ref in mums:
         mems=mums[ref]
 
-        candidatepaths=mempathsbothdirections(mems,contiglength,n=maxn,maxgapsize=maxgapsize,minchainsum=minchainsum)
+        candidatepaths=mempathsbothdirections(mems,contiglength,n=maxmums,maxgapsize=maxgapsize,minchainsum=minchainsum)
         for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
             if len(path)>0:
                 paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
@@ -632,7 +632,7 @@ def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn
 
     return paths
 
-def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000,nproc=1):
+def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxmums=15000,nproc=1):
     
     ref2ctg={'unchained':set()}
     ctg2ref=dict()
@@ -643,7 +643,7 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
     signal.signal(signal.SIGINT, original_sigint_handler)
     try:
         for ctg in ctg2mums:
-            results[ctg]=pool.apply_async(decompose_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
+            results[ctg]=pool.apply_async(decompose_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxmums':maxmums})
     except KeyboardInterrupt:
         pool.terminate()
     else:
@@ -697,18 +697,18 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn
 
     return ref2ctg,ctg2ref
 
-def map_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxn=15000):
+def map_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxmums=15000):
     logging.debug("Determining best chain for: %s"%ctg)
     paths=[]
     for ref in mums:
         logging.debug("Checking %s"%ref)
-        mpaths=mempathsbothdirections(mums[ref],contiglength,n=maxn,all=False,maxgapsize=maxgapsize,minchainsum=minchainsum)
+        mpaths=mempathsbothdirections(mums[ref],contiglength,n=maxmums,all=False,maxgapsize=maxgapsize,minchainsum=minchainsum)
         if len(mpaths)>0:
             path,score,o,ctgstart,ctgend,refstart,refend=mpaths[0]
             paths.append((score,ctgstart,ctgend,refstart,refend,ref,o,path))
     return paths
 
-def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxn=15000,nproc=1):
+def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxmums=15000,nproc=1):
     
     ref2ctg={'unplaced':[]}
     ctg2ref=dict()
@@ -719,7 +719,7 @@ def contigstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,max
     signal.signal(signal.SIGINT, original_sigint_handler)
     try:
         for ctg in ctg2mums:
-            results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxn':maxn})
+            results[ctg]=pool.apply_async(map_contig,(ctg,ctg2mums[ctg],contig2length[ctg],),{'maxgapsize':maxgapsize,'minchainsum':minchainsum,'maxmums':maxmums})
     except KeyboardInterrupt:
         pool.terminate()
     else:

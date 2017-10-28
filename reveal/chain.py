@@ -205,7 +205,7 @@ def outputVariantNodes(G,T,source,sink,varnodes,lengths,merge=True):
             G.add_edge(source,v)
             G.add_edge(v,sink)
 
-def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=1):
+def chain(idx,offsets,minlength,depth,maxmums,recurse=True,uniq=True,gcmodel="sumofpairs",wpen=1,wscore=1):
     k=idx.nsamples
     
     if k>2:
@@ -229,21 +229,22 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     
     mums=[m for m in mums if m[1]==k] #filter only mums that occur in all genomes
     
-    if len(mums)>maxn:
-        logging.info("Capping the %d anchors that were detected, taking the maxn=%d longest for chaining."%(len(mums),maxn))
-        mums=sorted(mums,key=lambda m: m[0])[-maxn:] #take top n longest mums
+    if len(mums)>maxmums and maxmums!=0:
+        logging.info("Capping the %d anchors that were detected, taking the maxmums=%d longest for chaining."%(len(mums),maxmums))
+        mums=sorted(mums,key=lambda m: m[0])[-maxmums:] #take top n longest mums
+    elif len(mums)==0:
+        return G,p1,p2,[p1,p2]
     else:
         #print "Found %d anchors."%len(mums)
         mums=sorted(mums,key=lambda m: m[0])
     
+    logging.debug("Computing chain for %d mums."%len(mums))
     #add all nodes to the graph
     for mum in mums:
         # point=sorted(mum[2])
         point=sorted(mum[2].values())
-
         for i,p in enumerate(point):
             point[i]=offsets[i]+(point[i]-localoffsets[i]) #map positions back to toplevel T index
-        
         point=tuple(point)
         points.append(point)
         G.add_node(point,l=mum[0])
@@ -259,10 +260,12 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
     
     #add edges to graph
     for t in points:
-        bestscore=0
         bestpoint=p1
-        bestpenalty=0
+        bestpenalty=gapcost(p1,t,model=gcmodel)
+        bestscore=-1*(wpen*bestpenalty)
         for v in range_search(tree,p1,t):
+            if v==t:
+                continue
             l=G.node[v]['l']
             for i,d in enumerate(v): #no overlapping mums
                 if d+l>t[i]:
@@ -278,6 +281,7 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
         G.node[t]['score']=bestscore
         G.add_edge(bestpoint,t,p=bestpenalty)
     
+    logging.debug("backtrack")
     bestpath=[]
     #backtrack the optimal path
     v=p2
@@ -288,15 +292,16 @@ def chain(idx,offsets,minlength,depth,maxn,recurse=True,uniq=True,gcmodel="sumof
 
     bestpath.append(p1)
     
+    logging.debug("remove nodes")
     #remove nodes that aren't part of the optimal path
     delete=[]
     bestpaths=set(bestpath)
     for node in G.nodes():
         if node not in bestpaths:
             delete.append(node)
-    
     #remove nodes that are not contained in the bestpath
     G.remove_nodes_from(delete)
+    logging.debug("done")
 
     return G,p1,p2,bestpath[::-1]
 
