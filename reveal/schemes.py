@@ -23,11 +23,11 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     logging.trace("Ref is %s"%ref)
     mums.append(right)
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
-
+    
     sp2mum=dict()
     for mum in mums:
         sp2mum[mum[2][ref]]=mum
-
+    
     #sps=[mum[2] for mum in mums]
     #mumsptree=utils.kdtree(sps,2)
     #eps=[tuple([sp+mum[0] for sp in mum[2]]) for mum in mums]
@@ -40,14 +40,12 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     #    eps.append(tuple(t))
     #mumeptree=utils.kdtree(eps,2)
     
-    logging.trace("left: %s"%str(left))
-    logging.trace("right: %s"%str(right))
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
     logging.trace("Initial cost is: %d"%minscore)
-
+    
     start=left[2][ref]
     end=right[2][ref]
-
+    
     link=dict()
     score=dict({left[2][ref]:0})
     
@@ -81,7 +79,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         #     else: #pmum does not overlap in any dimension
         #         subactive.append(amum)
         #subactive.sort(key=lambda x: score[x], reverse=True) #sort active by score decreasing, kind of priority queue
-
         w=None
         for amum in active:
             s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
@@ -94,7 +91,6 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
             for crd in mum[2]:
                 if amum[2][crd]+amum[0]>mum[2][crd]:
                     overlap=True
-                    break
             if overlap:
                 continue
 
@@ -186,7 +182,6 @@ def graphmumpicker(mums,idx,precomputed=False):
                 mmums=mmums[-maxmums:] #cap to topn mums
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
-            
             relmums,mapping=maptooffsets(mmums)
 
             logging.debug("Subset to max available number of samples in set")
@@ -224,9 +219,7 @@ def graphmumpicker(mums,idx,precomputed=False):
                 right=(0,0,spd)
 
             logging.debug("Chaining %d mums"%len(mmums))
-
             chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
-            
             logging.debug("Selected chain of %d mums"%len(chainedmums))
 
             if len(chainedmums)==0:
@@ -242,7 +235,7 @@ def graphmumpicker(mums,idx,precomputed=False):
         logging.debug("Best MUM from chain: %s"%str(splitmum))
         skipleft=[]
         skipright=[]
-        if seedsize!=None:
+        if seedsize>0:
             t=skipleft
             for mum in chainedmums:
                 if mum==splitmum:
@@ -288,7 +281,7 @@ def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
 
             if i>=start and i<=end:
                 #f.write("%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+maxline].ljust(maxline) if l1<=maxline else t[s:s+maxline]+"..."+t[s+l1-40:s+l1].ljust(maxline) ) )
-                f.write("%s\t%s\t%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+40] ,t[s+l1-40:s+l1], t[s+l2-40:s+l2] ) )
+                f.write("%s\t%s\t%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+maxline] ,t[s+l1-maxline:s+l1], t[s+l2-maxline:s+l2] ) )
 
 
 

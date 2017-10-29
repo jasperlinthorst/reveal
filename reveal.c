@@ -68,36 +68,36 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
         if (index->LCP[i]<minl){
             continue;
         }
-    	if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
-    	    continue;
-    	}
-    	if ((index->SA[i])<(index->SA[i-1])) {
-    	    aStart=index->SA[i];
-    	    bStart=index->SA[i-1];
-    	} else {
-    	    aStart=index->SA[i-1];
-    	    bStart=index->SA[i];
-    	}
-    	if (aStart>0 && bStart>0){ //if not it has to be maximal!
-    	    if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
-    		continue; //not maximal
-    	    }
-    	}
-    	if (i==index->n-1) { //is it the last value in the array, then only check predecessor
-    	    lb=index->LCP[i-1];
-    	    la=0;
-    	} else {
-    	    lb=index->LCP[i-1];
-    	    la=index->LCP[i+1];
-    	}
-    	if (lb>=index->LCP[i] || la>=index->LCP[i]){
-    	    continue;//not unique
-    	}
-	//match is not a repeat and is maximally unique
+        if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
+            continue;
+        }
+        if ((index->SA[i])<(index->SA[i-1])) {
+            aStart=index->SA[i];
+            bStart=index->SA[i-1];
+        } else {
+            aStart=index->SA[i-1];
+            bStart=index->SA[i];
+        }
+        if (aStart>0 && bStart>0){ //if not it has to be maximal!
+            if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+                continue; //not maximal
+            }
+        }
+        if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+            lb=index->LCP[i-1];
+            la=0;
+        } else {
+            lb=index->LCP[i-1];
+            la=index->LCP[i+1];
+        }
+        if (lb>=index->LCP[i] || la>=index->LCP[i]){
+            continue;//not unique
+        }
+        //match is not a repeat and is maximally unique
 #ifdef SA64
-    PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
+        PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
 #else
-    PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
+        PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
 #endif
         if (PyList_Append(mums,mum)==0){
             Py_DECREF(mum);
@@ -439,12 +439,6 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
     int j=0;
     saidx_t i=0,x,tmpSA;
     
-    for (j=0; j<n; j++){
-        for (i=sp[j];i<sp[j]+l;i++){
-            idx->T[i]=tolower(idx->T[i]); //mark corresponding intervals in T
-        }
-    }
-
     for (j=0; j<n; j++) { // for each multi-mum
         
         for (i=0; i<idx->n; i++) { // for each suffix
@@ -454,7 +448,7 @@ void bubble_sort(RevealIndex* idx, saidx_t* sp, int n, lcp_t l){
                 tmpSA=idx->SA[i];
                 tmpLCP=idx->LCP[i];
                 
-                while ((idx->LCP[x] > sp[j]-tmpSA) && (x>0)){
+                while ((idx->LCP[x] >= sp[j]-tmpSA) && (x>0)){
                     assert(x<idx->n);
                     idx->SAi[idx->SA[x-1]]=x;
                     idx->SA[x]=idx->SA[x-1];
@@ -897,10 +891,9 @@ void *aligner(void *arg) {
             
             assert(leadingn>=0);
             
-            //fprintf(stderr,"Allocating leading (%zd nodes) %lld\n", PyList_Size(leading_intervals), leadingn);
-            
             RevealIndex *i_leading=NULL;
             if (leadingn>0){
+                //fprintf(stderr,"Allocating leading (%zd nodes) %lld\n", PyList_Size(leading_intervals), leadingn);
                 i_leading=newIndex();
                 i_leading->SA=malloc(leadingn*sizeof(saidx_t));
                 i_leading->LCP=malloc(leadingn*sizeof(lcp_t));
@@ -977,8 +970,6 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             time(&t0);
             fprintf(stderr,"Splitting SA... ");
-            //fprintf(stderr,"Before split.\n");
-            //checkindex(idx);
 #endif
             split(idx, D, i_leading, i_trailing, i_parallel);
 #ifdef REVEALDEBUG
@@ -990,6 +981,13 @@ void *aligner(void *arg) {
             time(&t0);
             fprintf(stderr,"Bubble sorting leading SA... ");
 #endif
+            //mark corresponding intervals in T
+            for (j=0; j<mmum.n; j++){
+                for (i=mmum.sp[j];i<mmum.sp[j]+mmum.l;i++){
+                    idx->T[i]=tolower(idx->T[i]);
+                }
+            }
+
             if (leadingn>0){
                 bubble_sort(i_leading, mmum.sp, mmum.n, mmum.l);
             }

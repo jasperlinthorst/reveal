@@ -71,7 +71,7 @@ def main():
     parser_aln.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Weight of penalty during chaining.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=1, help="Weight of score during chaining.")
-    parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size.")
+    parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=0, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
     parser_aln.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     
@@ -173,7 +173,7 @@ def main():
     parser_realign.add_argument("--maxsize", dest="maxsize", type=int, default=500, help="Maximum allowed number of nodes that are contained in a complex bubble.")
     parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_realign.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme.")
-    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size.")
+    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=0, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
     
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
