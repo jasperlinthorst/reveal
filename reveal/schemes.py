@@ -23,11 +23,11 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     logging.trace("Ref is %s"%ref)
     mums.append(right)
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
-    
+
     sp2mum=dict()
     for mum in mums:
         sp2mum[mum[2][ref]]=mum
-    
+
     #sps=[mum[2] for mum in mums]
     #mumsptree=utils.kdtree(sps,2)
     #eps=[tuple([sp+mum[0] for sp in mum[2]]) for mum in mums]
@@ -39,13 +39,13 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     #        t.append(sp+mum[0])
     #    eps.append(tuple(t))
     #mumeptree=utils.kdtree(eps,2)
-    
+
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
     logging.trace("Initial cost is: %d"%minscore)
-    
+
     start=left[2][ref]
     end=right[2][ref]
-    
+
     link=dict()
     score=dict({left[2][ref]:0})
     
@@ -221,11 +221,20 @@ def graphmumpicker(mums,idx,precomputed=False):
             logging.debug("Chaining %d mums"%len(mmums))
             chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
             logging.debug("Selected chain of %d mums"%len(chainedmums))
-
             if len(chainedmums)==0:
                 return
-
-            splitmum=sorted(chainedmums,key=lambda m: m[0])[-1] #take largest
+            
+            optsplit=None
+            for mum in chainedmums: #determine optimal split in chain
+                lseq=0
+                rseq=0
+                for crd in mum[2]:
+                    lseq=mum[2][crd]
+                    rseq=right[crd]-mum[2][crd]+mum[0]
+                if optsplit==None or abs(lseq-rseq)<optsplit:
+                    optsplit=abs(lseq-rseq)
+                    splitmum=mum
+        
         else:
             logging.debug("Selecting MUM from precomputed chain")
             assert(len(mums)>0)
