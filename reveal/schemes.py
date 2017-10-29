@@ -230,11 +230,13 @@ def graphmumpicker(mums,idx,precomputed=False):
                 rseq=0
                 for crd in mum[2]:
                     lseq=mum[2][crd]
-                    rseq=right[crd]-mum[2][crd]+mum[0]
+                    assert(lseq>=0)
+                    rseq=right[2][crd]-mum[2][crd]+mum[0]
+                    assert(rseq>=0)
                 if optsplit==None or abs(lseq-rseq)<optsplit:
                     optsplit=abs(lseq-rseq)
                     splitmum=mum
-        
+
         else:
             logging.debug("Selecting MUM from precomputed chain")
             assert(len(mums)>0)
