@@ -71,7 +71,7 @@ def main():
     parser_aln.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use.")
     parser_aln.add_argument("--wp", dest="wpen", type=int, default=1, help="Weight of penalty during chaining.")
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=1, help="Weight of score during chaining.")
-    parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=0, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
+    parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
     parser_aln.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     
@@ -143,6 +143,7 @@ def main():
     parser_convert.add_argument("--gml-max", dest="hwm", default=4000, type=int, help="Max number of nodes per graph in gml output.")
     parser_convert.add_argument("--gfa",  action="store_true", dest="gfa", default=False, help="Rewrite gfa file.")
     parser_convert.add_argument("--partition",  action="store_true", dest="partition", default=False, help="Output graph as multiple subgraphs if possible.")
+    parser_convert.add_argument("--nocycles",  action="store_true", dest="nocycles", default=True, help="Do not allow rearrangements (cycles) in graph.")
     parser_convert.set_defaults(func=convert.convert)
     
     parser_subgraph.add_argument('inputfiles', nargs='*', help='The gfa graph followed by node ids that make up the subgraph.')
@@ -159,7 +160,8 @@ def main():
     parser_variants.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_variants.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
     parser_variants.add_argument("--fasta", dest="fastaout", action="store_true", default=False, help="Output variant sequence in a fasta format.")
-    parser_variants.add_argument("--minsize", dest="minsize", default=0, type=int, help="Only sequence variants larger than this.")
+    parser_variants.add_argument("--minsize", dest="minsize", default=0, type=int, help="Only output variants larger than this.")
+    parser_variants.add_argument("--minflank", dest="minflank", default=0, type=int, help="Only output variants with an exact matching flanking sequence of at least this length.")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
     
     parser_realign.add_argument("graph", nargs=1, help='Graph in gfa format for which a bubble should be realigned.') 
@@ -173,7 +175,7 @@ def main():
     parser_realign.add_argument("--maxsize", dest="maxsize", type=int, default=500, help="Maximum allowed number of nodes that are contained in a complex bubble.")
     parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
     parser_realign.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme.")
-    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=0, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
+    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
     
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')

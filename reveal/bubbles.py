@@ -202,7 +202,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tsource\tsink\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos\tminflanksize\tsource\tsink\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -225,7 +225,11 @@ def variants_cmd(args):
         else:
             cds=v.vpos.keys()[0]
         
-        sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+        minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
+        if minflank<args.minflank:
+            continue
+        
+        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes)))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
