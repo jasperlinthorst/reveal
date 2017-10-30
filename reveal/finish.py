@@ -358,19 +358,12 @@ def finish(args):
                     else: #non-consecutive chains: different contig or structural variant
                         
                         if gapsize>0: #add a gap node
-                            #gapi+=1
-                            #n=(gapi)
-                            #G.add_node(n,seq="N"*gapsize,offsets={G.graph['sample2id'][ctgchromname]:o})
-                            #if pn!=None:
-                            #    G.add_edge(pn,n,ofrom="+",oto="+")
-                            #pn=n
                             gapseq="N"*gapsize
                         else:
                             gapseq=""
                         
                         n=(ctgname,ctgbegin,ctgend,revcomp)
                         
-                        #G.add_node(n,seq=gapseq+seq,offsets={G.graph['sample2id'][ctgchromname]:o+len(gapseq)})
                         G.add_node(n,seq=gapseq+seq,offsets={refid:o,G.graph['sample2id']["*"+base+"_"+n[0]]:n[1]})
 
                         refpath.append(n)
@@ -1106,207 +1099,10 @@ def bestctgpath(ctgs):
     
     return path[::-1]
 
-def bestmempath(mems,ctglength,n=15000,revcomp=False):
-    
-    if len(mems)>n: #take only n largest mems
-        logging.info("Too many mums (%d), taking the %d largest."%(len(mems),n))
-        mems.sort(key=lambda mem: mem[2]) #sort by size
-        mems=mems[:n]
-    
-    mems=[tuple(m) for m in mems if m[4]==revcomp]
-    
-    if len(mems)==0:
-        return [],0
-
-    c=sum([m[2] for m in mems])
-    logging.debug("Number of anchors: %d",len(mems))
-    logging.debug("Sum of anchors: %d", c)
-    logging.debug("Length of contig: %d", ctglength)
-    logging.debug("Cov ratio: %s"% (c/float(ctglength)) )
-    
-    mems.sort(key=lambda mem: mem[0]) #sort by reference position
-    init=(None, None, 0, 0, 0, 0)
-    link=dict()
-    score=dict({init:0})
-    
-    active=[]
-    processed=[]
-    start=init
-    end=None
-    maxscore=0
-    
-    for mem in mems:
-        remove=[]
-        for pmem in processed:
-            pendpoint=pmem[0]+pmem[2]
-            if pendpoint<mem[0]:
-                active.append(pmem)
-                remove.append(pmem)
-        
-        for r in remove:
-            processed.remove(r)
-        
-        best=init
-        w=0
-        
-        #sort active by score decreasing
-        active.sort(key=lambda x: score[x], reverse=True)
-        
-        for amem in active:
-            s=score[amem]+mem[2]
-            #assert(s>=0)
-            if w > s: #as input is sorted by score
-                break
-            
-            #calculate score of connecting to active point
-            if revcomp:
-                if amem[1] >= mem[1]+mem[2]:
-                    penalty=abs( (amem[1]-(mem[1]+mem[2]) ) - (mem[0]-(amem[0]+amem[2])  ) )
-
-                    tmpw=score[amem]+mem[2]-penalty
-                    if tmpw>w:
-                        w=tmpw
-                        best=amem
-            else:
-                if amem[1] <= mem[1]:
-
-                    penalty=abs( ((amem[1]+amem[2])-mem[1]) - ((amem[0]+amem[2])-mem[0]) )
-
-                    tmpw=score[amem]+mem[2]-penalty
-                    if tmpw>w:
-                        w=tmpw
-                        best=amem
-        
-        assert(best!=None)
-        
-        link[mem]=best
-        score[mem]=w+mem[2]
-        
-        if w+mem[2]>maxscore:
-            maxscore=w+mem[2]
-            end=mem
-        
-        processed.append(mem)
-    
-    #backtrack
-    minscore=0
-    path=[]
-    while end!=start:
-        path.append(end)
-        if score[end]<minscore:
-            minscore=score[end]
-            start=end
-        end=link[end]
-    
-    return path,maxscore
-
-def bestmempathwithinversions(mems,n=15000):
-    nmums=len(mems)
-    if nmums>n: #take only n largest mems
-        logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
-        mems.sort(key=lambda mem: mem[2],reverse=True) #sort by size
-        mems=mems[:n] #take the n largest
-
-    if len(mems)==0:
-        return [],0
-    
-    c=sum([m[2] for m in mems])
-    logging.debug("Number of anchors: %d",len(mems))
-    logging.debug("Sum of anchors: %d", c)
-    
-    mems.sort(key=lambda mem: mem[0]) #sort by reference position
-    
-    init=(None, None, 0, 0, 0, 0)
-    link=dict()
-    score=dict({init:0})
-    active=[]
-    processed=[]
-    start=init
-    end=None
-    maxscore=0
-    
-    for mem in mems:
-        remove=[]
-        for pmem in processed:
-            pendpoint=pmem[0]+pmem[2]
-            if pendpoint<mem[0]+mem[2]:
-                active.append(pmem)
-                remove.append(pmem)
-        
-        for r in remove:
-            processed.remove(r)
-        
-        best=init
-        w=mem[2]
-        
-        for amem in active:
-            #calculate score of connecting to active point
-            tmpw=0
-            
-            if mem[4]==1: #reverse complement match, connected to top
-                if amem[4]==1: #active mem also from reverse complement
-                    if amem[1] >= mem[1]: #may overlap, but mem may not be contained
-                        p1=(mem[0], mem[1]+mem[2])
-                        p2=(amem[0]+amem[2], amem[1])
-                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-                else: #active mem has regular orientation mem from reverse complement
-                    if mem[1]+mem[2] >= amem[1]+amem[2]:
-                        p1=tuple([mem[0]])
-                        p2=tuple([amem[0]])
-                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-            else: #mem on regular orientation
-                if amem[4]==1: #active mem from reverse complement
-                    if amem[1] <= mem[1]: #then it has to be 'above' mem
-                        p1=tuple([mem[0]])
-                        p2=tuple([amem[0]+amem[2]])
-                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-                else: #mem and amem on same regular orientation
-                    if amem[1]+amem[2] <= mem[1]+mem[2]: #may overlap, but mem may not be contained
-                        p1=(mem[0], mem[1])
-                        p2=(amem[0]+amem[2], amem[1]+amem[2])
-                        penalty=gapcost(p1,p2)+abs(p1[0]-p2[0])+abs(p1[1]-p2[1])
-                        tmpw=score[tuple(amem)]+mem[2]-penalty
-            
-            if tmpw>w:
-                w=tmpw
-                best=amem
-        
-        link[tuple(mem)]=best
-        score[tuple(mem)]=w
-        
-        if w>maxscore:
-            maxscore=w
-            end=mem
-        
-        processed.append(mem)
-    
-    #backtrack
-    minscore=0
-    path=[]
-    while end!=start:
-        path.append(end)
-        if score[tuple(end)]<minscore:
-            minscore=score[tuple(end)]
-            start=end
-        end=link[tuple(end)]
-    
-    #from matplotlib import pyplot as plt
-    
-    #for mem in path:
-    #    if mem[4]==1:
-    #        plt.plot((mem[0],mem[0]+mem[2]),(mem[1]+mem[2], mem[1]),'g-')
-    #    else:
-    #        plt.plot((mem[0],mem[0]+mem[2]),(mem[1], mem[1]+mem[2]),'r-')
-    #plt.show()
-    
-    return path,maxscore
 
 def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,wscore=3,wpen=1,all=True):
     nmums=len(mems)
-    if nmums>n: #take only n largest mems
+    if nmums>n and n!=0: #take only n largest mems
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
         mems.sort(key=lambda mem: mem[2],reverse=True) #sort by size
         mems=mems[:n] #take the n largest
