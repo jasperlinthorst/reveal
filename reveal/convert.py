@@ -6,8 +6,12 @@ import os
 
 def convert(args):
     for graph in args.graphs:
-        #g=nx.DiGraph()
-        g=nx.MultiDiGraph()
+        
+        if args.nocycles:
+            g=nx.DiGraph()
+        else:
+            g=nx.MultiDiGraph()
+
         g.graph['samples']=[]
         g.graph['sample2id']=dict()
         g.graph['id2sample']=dict()
