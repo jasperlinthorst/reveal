@@ -212,12 +212,23 @@ def variants_cmd(args):
         
         if v.size<args.minsize:
             continue
+
+        if v.vtype!=args.type and args.type!='all':
+            continue
         
         if args.fastaout:
-            for i,seq in enumerate(v.genotypes):
-                if seq!='-':
-                    sys.stdout.write(">%s_%d\n"%(v.source,i))
-                    sys.stdout.write("%s\n"%seq)
+            if args.split:
+                with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
+                    for i,seq in enumerate(v.genotypes):
+                        if seq!='-':
+                            of.write(">%s_%d\n"%(v.source,i))
+                            of.write("%s\n"%seq)
+            else:
+                for i,seq in enumerate(v.genotypes):
+                    if seq!='-':
+                        sys.stdout.write(">%s_%d\n"%(v.source,i))
+                        sys.stdout.write("%s\n"%seq)
+            
             continue
         
         if args.reference in v.vpos:
@@ -228,8 +239,8 @@ def variants_cmd(args):
         minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
         if minflank<args.minflank:
             continue
-        
-        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes)))
+
+        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes) ))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
@@ -294,7 +305,7 @@ class Variant(Bubble):
                     self.genotypes.append(s)
                     if len(s)>self.size:
                         self.size=len(s)
-            self.genotypes.sort()
+            #self.genotypes.sort()
         else:
             for v in gt:
                 self.genotypes.append('N')
