@@ -582,7 +582,9 @@ void *aligner(void *arg) {
                 time(&t1);
                 fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
-            } else {
+                
+            }
+            else {
 #ifdef REVEALDEBUG
                 fprintf(stderr,"Using precomputed mum...\n");
 #endif
@@ -591,12 +593,14 @@ void *aligner(void *arg) {
                 precomputed=Py_True;
             }
 
-            PyObject *keywds = Py_BuildValue("{s:O}", "precomputed", precomputed);
+            PyObject *keywds = Py_BuildValue("{s:O}", "precomputed", precomputed, "prevchain", multimums);
+            // PyObject *keywds = Py_BuildValue("{s:O}", "prevchain", multimums);
             Py_DECREF(precomputed);
-
+            // Py_DECREF(idx->skipmums);
+            
             PyObject *arglist = Py_BuildValue("(O,O)", multimums, idx);
             Py_DECREF(multimums);
-
+            
 #ifdef REVEALDEBUG
             time(&t0);
             fprintf(stderr,"Selecting best mum (python callback)...\n");

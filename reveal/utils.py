@@ -445,7 +445,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     
     #write paths
     for sample in G.graph['samples']:
-        logging.info("Writing path: %s"%sample)
+        logging.debug("Writing path: %s"%sample)
 
         sid=G.graph['sample2id'][sample]
         subgraph=[]
@@ -456,11 +456,22 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         path=[]
         if len(subgraph)>0:
             sg=nx.DiGraph(subgraph)
+
+            if (len([c for c in nx.connected_components(sg.to_undirected())] )!=1):
+                write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
+
             nodepath=nx.topological_sort(sg)
             pn=nodepath[0]
             for n in nodepath[1:]:
-                assert(n in G[pn]) #path is unconnected in graph! Something went wrong..
-                path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
+                #assert(n in G[pn]) #path is unconnected in graph! Something went wrong..
+
+                if n not in G[pn]:
+                    logging.error("Path %s spells a path that is not supported by the graph %s->%s!"%(sample,str(mapping[n]),str(mapping[pn])))
+                    write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
+                    break
+                else:
+                    path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
+                
                 if n==nodepath[-1]:
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                 pn=n

@@ -11,6 +11,10 @@ def extract_cmd(args):
     #G=nx.DiGraph();
     G=nx.MultiDiGraph()
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
+
+    if args.all:
+        args.input=G.graph['samples']
+    
     try:
         i=0
         for ins in args.input:

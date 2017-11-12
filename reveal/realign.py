@@ -21,9 +21,25 @@ def realign_bubble_cmd(args):
     read_gfa(args.graph[0],None,"",G)
     
     if args.all:
-        G=realign_all(G,minlength=args.minlength,minn=args.minn,wscore=args.wscore,wpen=args.wpen,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
+        G=realign_all(G,    minlength=args.minlength,
+                            minn=args.minn,
+                            wscore=args.wscore,
+                            wpen=args.wpen,
+                            maxlen=args.maxlen,
+                            seedsize=args.seedsize,
+                            maxmums=args.maxmums,
+                            gcmodel=args.gcmodel,
+                            sa64=args.sa64)
     else:
-        G=realign_bubble(G,args.source,args.sink,minlength=args.minlength,minn=args.minn,wscore=args.wscore,wpen=args.wpen,maxsize=args.maxsize,maxlen=args.maxlen,sa64=args.sa64)
+        G=realign_bubble(G,args.source,args.sink,minlength=args.minlength,
+                                                 minn=args.minn,
+                                                 wscore=args.wscore,
+                                                 wpen=args.wpen,
+                                                 maxlen=args.maxlen,
+                                                 seedsize=args.seedsize,
+                                                 maxmums=args.maxmums,
+                                                 gcmodel=args.gcmodel,
+                                                 sa64=args.sa64)
     
     if args.outfile==None:
         fn=args.graph[0].replace(".gfa",".realigned.gfa")
@@ -32,8 +48,16 @@ def realign_bubble_cmd(args):
     
     write_gfa(G,"",outputfile=fn)
 
-def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000,wscore=3,wpen=1,seedsize=None,sa64=False):
-    #print "Realigning graph between %s and %s"%(source,sink)
+def realign_bubble(G,source,sink,minlength=20,
+                                 minn=2,
+                                 maxlen=10000000,
+                                 wscore=1,
+                                 wpen=1,
+                                 seedsize=None,
+                                 maxmums=None,
+                                 gcmodel="sumofpairs",
+                                 sa64=False):
+
     nn=max(G.nodes())+1
     bubblenodes=[]
     
@@ -41,8 +65,6 @@ def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000
     assert(sink in G)
     sourcesamples=set(G.node[source]['offsets'].keys())
     sinksamples=set(G.node[sink]['offsets'].keys())
-    #sourcesamples=set([G.graph['id2sample'][sid] for sid in G.node[source]['offsets'].keys()])
-    #sinksamples=set([G.graph['id2sample'][sid] for sid in G.node[sink]['offsets'].keys()])
     
     if sourcesamples!=sinksamples:
         logging.error("Specify proper source/sink pair.")
@@ -54,7 +76,7 @@ def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000
         if node==source:
             add=True
         if add:
-            bubblenodes.append(node)
+            bubblenodes.append(node) #TOOD: this comes from bubble class now..
         if node==sink:
             add=False
     
@@ -65,41 +87,61 @@ def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000
     
     #extract all paths
     for sid in sourcesamples.intersection(sinksamples): #should be equal..
-        #TODO: can also be that input was an assembly graph! What to do...
         seq=extract(sg,G.graph['id2sample'][sid])
-        #for i,seq in enumerate(extract(sg,sample)): #has to be just one component
-        #    print i,sample
-        #    pass
-        #assert(i==0)
 
         cumsum+=len(seq)
         if len(seq)>0:
             aobjs.append((G.graph['id2sample'][sid],seq))
-        
+
         if cumsum>maxlen:
             logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
             sys.exit(1)
-    
-    schemes.wpen=wpen
-    schemes.wscore=wscore
-    schemes.seedsize=seedsize
 
-    ng,idx=align(aobjs,minlength=minlength,minn=minn,sa64=sa64)
+    ng,idx=align(aobjs, minlength=minlength,
+                        minn=minn,
+                        seedsize=seedsize,
+                        maxmums=maxmums,
+                        wpen=wpen,
+                        wscore=wscore,
+                        gcmodel=gcmodel,
+                        sa64=sa64)
     T=idx.T
     
+    #map edge atts back to original graph
+    for n1,n2,data in ng.edges(data=True):
+        old=data['paths']
+        new=set()
+        for sid in old:
+            new.add( G.graph['sample2id'][ng.graph['id2sample'][sid]] )
+        data['paths']=new
+
+    #map node atts back to original graph
+    for node,data in ng.nodes(data=True):
+        old=data['offsets']
+        new=dict()
+        for sid in old:
+            new[G.graph['sample2id'][ng.graph['id2sample'][sid]]]=old[sid]
+        data['offsets']=new
+
+    ng.graph['samples']=G.graph['samples']
+    ng.graph['sample2id']=G.graph['sample2id']
+    ng.graph['id2sample']=G.graph['id2sample']
+
     for sample in G.graph['samples']:
         assert(G.graph['sample2id'][sample]==ng.graph['sample2id'][sample])
 
     prune_nodes(ng,T)
     
-    seq2node(ng,T)
+    seq2node(ng,T) #transfer sequence to node attributes
+
     mapping={}
     startnodes=set()
     endnodes=set()
     
+    #map nodes back to original offsets and ids
     for node,data in ng.nodes(data=True):
 
-        if len(ng.predecessors(node))==0: #TODO: this is not correct, this can go wrong when realignment introduces an indel on the first/last bit
+        if len(ng.predecessors(node))==0:
             startnodes.add(nn)
 
         if len(ng.successors(node))==0:
@@ -112,45 +154,73 @@ def realign_bubble(G,source,sink,minlength=20,minn=2,maxsize=100,maxlen=10000000
         ng.node[node]['offsets']=corrected
         mapping[node]=nn
         nn+=1
-    
+
     ng=nx.relabel_nodes(ng,mapping) #relabel nodes to get rid of Intervals
     
     #store edges that have to be reconnected after removing
     pre=G.predecessors(source)
     suc=G.successors(sink)
     
-    for node in bubblenodes: #remove all bubblenodes from the original graph except for source and sink
+    for node in bubblenodes: #remove all bubblenodes from the original graph
         G.remove_node(node)
+
     for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph, except for source and sink, update those with seq attribute
+        assert(node not in G.node)
         G.add_node(node,data)
+    
     for edge in ng.edges(data=True):
+        assert(edge[0] in G)
+        assert(edge[1] in G)
+        assert(edge[1] not in G[edge[0]])
         G.add_edge(*edge)
     
     #reconnect nodes
     for p in pre:
         for start in startnodes:
-            G.add_edge(p,start,ofrom='+',oto='+',paths=set(G.node[p]['offsets'].keys()).intersection(G.node[start]['offsets'].keys()) ) #TODO: same here, with a complex bubble this WILL go wrong, needs refactoring!
+            x=set(G.node[p]['offsets'].keys()).intersection(set(G.node[start]['offsets'].keys()))
+            if len(x)!=0:
+                G.add_edge(p,start,ofrom='+',oto='+',paths=x )
+            else:
+                print "!",source, sink, p, start, G.node[p]['offsets'], G.node[start]['offsets']
     for s in suc:
         for end in endnodes:
-            G.add_edge(end,s,ofrom='+',oto='+',paths=set(G.node[s]['offsets'].keys()).intersection(G.node[end]['offsets'].keys()) )
+            x=set(G.node[s]['offsets'].keys()).intersection(set(G.node[end]['offsets'].keys()))
+            if len(x)!=0:
+                G.add_edge(end,s,ofrom='+',oto='+',paths=x )
+            else:
+                print "!",source, sink, end, s, G.node[end]['offsets'], G.node[s]['offsets']
     
     return G
 
-def realign_all(G,minlength=20,minn=2,maxlen=10000000,wscore=3,wpen=1,maxsize=100,sa64=False):
+def realign_all(G,  minlength=20,
+                    minn=2,
+                    maxlen=10000000,
+                    wscore=1,
+                    wpen=1,
+                    seedsize=None,
+                    maxmums=None,
+                    gcmodel="sumofpairs",
+                    sa64=False):
+
     complexbubbles=dict()
     source2sink=dict()
     sink2source=dict()
     
     #detect all complex bubbles
-    for pair,bubblenodes,size,ordD in bubbles.bubbles(G):
+    for b in bubbles.bubbles(G):
+
+        if b.issimple():
+            continue
+
+        pair=(b.source,b.sink)
+        bubblenodes=b.nodes
+        ordD=b.ordD
+
         sourcesamples=set(G.node[pair[0]]['offsets'].keys())
         sinksamples=set(G.node[pair[1]]['offsets'].keys())
 
-        if not isinstance(sourcesamples,set):
-            print pair,"skipping, not set"
-            continue
         if sourcesamples!=sinksamples:
-            print pair,sourcesample,sinksamples
+            logging.warn("Invalid bubble between %s and %s"%(str(pair[0]),str(pair[1])))
             continue
         
         sucs=set(G.successors(pair[0]))
@@ -158,22 +228,9 @@ def realign_all(G,minlength=20,minn=2,maxlen=10000000,wscore=3,wpen=1,maxsize=10
         sucs.discard(pair[1])
         pres.discard(pair[0])
         
-        simple=True
-        if len(sucs)!=len(pres) or len(sucs)<size or len(pres)<size:
-            simple=False
-        else:
-            for suc in sucs:
-                if len(G.successors(suc))!=1:
-                    simple=False
-            for pre in pres:
-                if len(G.predecessors(pre))!=1:
-                    simple=False
-
-        if not simple and size<maxsize:
-            assert(len(bubblenodes)<maxsize)
-            complexbubbles[pair]=bubblenodes
-            source2sink[pair[0]]=pair[1]
-            sink2source[pair[1]]=pair[0]
+        complexbubbles[pair]=bubblenodes
+        source2sink[pair[0]]=pair[1]
+        sink2source[pair[1]]=pair[0]
      
     #join complex bubbles that share a source/sink nodes
     converged=False
@@ -213,19 +270,24 @@ def realign_all(G,minlength=20,minn=2,maxlen=10000000,wscore=3,wpen=1,maxsize=10
         for bubble in values:
             if set(bubble).issuperset(set(nodes)) and not set(bubble)==set(nodes):
                 #contained, dont add
-                #print source,sink,"is contained"
                 break
         else:
             distinctbubbles[(source,sink)]=nodes
-    
-    for bubble in distinctbubbles:
-        assert(len(distinctbubbles[bubble])<500)
 
-    #print "Total of %d bubbles to realign"%len(distinctbubbles)
+    logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     i=1
     for source,sink in distinctbubbles:
-        #print i,"realigning",source,sink,len(distinctbubbles[(source,sink)])
-        G=realign_bubble(G,source,sink,minlength=minlength,minn=minn,wscore=wscore,wpen=wpen)
+        logging.info("Realigning bubble between <%s> and <%s> of size %d."%(source,sink,len(distinctbubbles[(source,sink)])))
+        G=realign_bubble(G,source,sink, maxmums=maxmums,
+                                        seedsize=seedsize,
+                                        gcmodel=gcmodel,
+                                        minlength=minlength,
+                                        minn=minn,
+                                        wscore=wscore,
+                                        maxlen=maxlen,
+                                        wpen=wpen,
+                                        sa64=sa64)
+        write_gfa(G,"",outputfile=str(i))
         i+=1
     
     return G

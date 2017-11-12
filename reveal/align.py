@@ -463,21 +463,25 @@ def align_cmd(args):
     alignednodes=0
     
     totnodes=G.number_of_nodes()
+
+    #TODO: start, report identity per sample that was aligned, this does not make sense...
     if idx.nsamples>2: #was multi-alignment
-        totbases=idx.n-T.count('$') #TODO: inefficient, need a count of the number of nodes before the alignment
+        totbases=idx.n-T.count('$')-T.count('N')
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
                 alignedbases+=(node.end-node.begin)*len([k for k in data['offsets'] if not G.graph['id2sample'][k].startswith("*")])
                 alignednodes+=1
     else: #assume seq to graph
-        totbases=min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
+        totbases=idx.n-T.count('$')-T.count('N') # min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
                 l=node.end-node.begin
-                alignedbases+=l
+                alignedbases+=(l*2)
                 alignednodes+=1
+    
+    logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/(float(totbases)))*100,alignedbases,totbases,alignednodes,totnodes))
+    #TODO: end
 
-    logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/float(totbases))*100,alignedbases,totbases,alignednodes,totnodes))
     logging.info("Writing graph...")
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=False)
@@ -517,7 +521,7 @@ def align_genomes(args):
     G.graph['id2end']=dict()
 
     o=0
-    schemes.minlength=args.minlength
+    # schemes.minlength=args.minlength
     schemes.maxmums=args.maxmums
     schemes.minn=args.minn
     schemes.gcmodel=args.gcmodel
@@ -589,7 +593,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=3,sa64=False,gcmodel="sumofpairs"):
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,gcmodel="sumofpairs"):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -607,18 +611,21 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     
     G=nx.DiGraph()
     H=G
+
     G.graph['samples']=[]
     G.graph['sample2id']=dict()
     G.graph['id2sample']=dict()
     G.graph['id2end']=dict()
     o=0
+
     schemes.gcmodel=gcmodel
-    schemes.minlength=minlength
+    # schemes.minlength=minlength
     schemes.minn=minn
     schemes.maxmums=maxmums
     schemes.seedsize=seedsize
     schemes.wpen=wpen
     schemes.wscore=wscore
+
     graph=False
     
     for aobj in aobjs:
@@ -635,6 +642,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
                 G.graph['id2end'][len(G.graph['samples'])]=len(seq)
                 G.graph['samples'].append(name)
                 G.add_node(Intv,offsets={G.graph['sample2id'][name]:0},aligned=0)
+
         elif isinstance(aobj,str):
             if not os.path.isfile(aobj):
                 logging.fatal("Not a file, expecting fasta or gfa file.")
@@ -664,15 +672,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     
     idx.construct()
     
-    idx.align(schemes.graphmumpicker,graphalign,threads=threads)
-
-    # if len(aobjs)>2:
-    #     idx.align(schemes.graphmumpicker,graphalign,threads=threads)
-    # else:
-    #     if graph:
-    #         idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
-    #     else:
-    #         idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore)
+    idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore,minl=minlength)
     
     prune_nodes(G,idx.T)
 

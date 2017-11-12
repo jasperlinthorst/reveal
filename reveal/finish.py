@@ -1100,7 +1100,7 @@ def bestctgpath(ctgs):
     return path[::-1]
 
 
-def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,wscore=3,wpen=1,all=True):
+def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=1000,wscore=1,wpen=1,all=True):
     nmums=len(mems)
     if nmums>n and n!=0: #take only n largest mems
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
@@ -1109,12 +1109,14 @@ def mempathsbothdirections(mems,ctglength,n=15000,maxgapsize=1500,minchainsum=10
     
     if len(mems)==0:
         return []
-    
+
     c=sum([m[2] for m in mems])
     logging.debug("Number of anchors: %d",len(mems))
     logging.debug("Sum of anchors: %d", c)
     logging.debug("Length of contig: %d", ctglength)
     logging.debug("Cov ratio: %s"% (c/float(ctglength)) )
+    logging.debug("Min chain sum: %d"% minchainsum)
+    logging.debug("Max gap size: %d"% maxgapsize)
      
     paths=[]
     

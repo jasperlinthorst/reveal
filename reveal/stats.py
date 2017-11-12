@@ -29,6 +29,18 @@ def stats(gfafile):
     stats["Number of edges"]=G.number_of_edges()    
     
     stats["Number of connected components"]=0
+    stats["A count"]=0
+    stats["C count"]=0
+    stats["G count"]=0
+    stats["T count"]=0
+    stats["N count"]=0
+    for node,data in G.nodes(data=True):
+        stats["A count"]+=data['seq'].count('A')
+        stats["C count"]+=data['seq'].count('C')
+        stats["G count"]+=data['seq'].count('G')
+        stats["T count"]+=data['seq'].count('T')
+        stats["N count"]+=data['seq'].count('N')
+
     #for each connected component
     for sgi,sub in enumerate(nx.connected_components(G.to_undirected())):
         stats["Number of connected components"]+=1
@@ -68,7 +80,7 @@ def stats(gfafile):
         unknowncount=0
         
         for bubble in bubbles(sg):
-            if bubble.issimple:
+            if bubble.issimple():
                 simplebubbles+=1
             else:
                 complexbubbles+=1
