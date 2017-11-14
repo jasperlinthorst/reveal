@@ -1,9 +1,12 @@
 import reveallib
 import reveallib64
 from utils import *
-from matplotlib import pyplot as plt
 from multiprocessing.pool import Pool
 import signal
+try:
+    from matplotlib import pyplot as plt
+except:
+    pass
 
 def finish(args):
     logging.debug("Extracting mums.")
