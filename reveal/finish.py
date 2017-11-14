@@ -11,6 +11,9 @@ except:
 def finish(args):
     logging.debug("Extracting mums.")
 
+    # data_queue1 = multiprocessing.Queue()
+    # data_queue2 = multiprocessing.Queue()
+
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=2 if args.nproc>=2 else 1)
     signal.signal(signal.SIGINT, original_sigint_handler)
@@ -25,12 +28,25 @@ def finish(args):
 
     logging.debug("Done.")
 
-    # do some other stuff in the main process
-    mums,ref2length,contig2length,contig2seq = async_result1.get()
+    mums = async_result1.get()
     logging.debug("MUMS in normal orientation: %d"%len(mums))
 
-    rcmums,_,_,_ = async_result2.get()
+    rcmums = async_result2.get()
     logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
+
+    reffile=os.path.basename(args.reference)
+    ctgfile=os.path.basename(args.contigs)
+    
+    ref2length=dict()
+    for name,seq in fasta_reader(args.reference):
+        ref2length[name]=len(seq)
+    
+    contig2length=dict()
+    contig2seq=dict()
+    
+    for name,seq in fasta_reader(args.contigs,cutN=args.cutn):
+        contig2length[name]=len(seq)
+        contig2seq[name]=seq
 
     #combine matches
     mems=mums+rcmums
@@ -783,42 +799,31 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
         idx=reveallib.index()
     
     G=nx.DiGraph() #dummy for now
-    #G=nx.MultiDiGraph()
-    #G.graph['samples']=[]
     t=IntervalTree()
     
     reffile=os.path.basename(reference)
     ctgfile=os.path.basename(query)
     
-    ref2length=dict()
     idx.addsample(reffile)
-    if reference.endswith(".gfa"):
+    if reference.endswith(".gfa"): #dummy for now
+        logging.error("Not yet supported.")
         read_gfa(reference,idx,t,G)
     else:
-        #G.graph['samples'].append(reffile)
         for name,seq in fasta_reader(reference):
-            ref2length[name]=len(seq)
             intv=idx.addsequence(seq)
             intv=Interval(intv[0],intv[1],name)
             t.add(intv)
     
-    contig2length=dict()
-    contig2seq=dict()
-    
     idx.addsample(ctgfile)
-    if query.endswith(".gfa"):
+    if query.endswith(".gfa"): #dummy for now
+        logging.error("Not yet supported.")
         read_gfa(query,idx,t,G,revcomp=revcomp)
     else:
-        #G.graph['samples'].append(ctgfile)
         for name,seq in fasta_reader(query,cutN=cutN):
-            contig2length[name]=len(seq)
-
             if revcomp:
                 rcseq=rc(seq)
-                contig2seq[name]=rcseq
                 intv=idx.addsequence(rcseq)
             else:
-                contig2seq[name]=seq
                 intv=idx.addsequence(seq)
             
             intv=Interval(intv[0],intv[1],name)
@@ -839,7 +844,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
         else:
             mums.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0))
     
-    return mums,ref2length,contig2length,contig2seq
+    return mums
 
 def filtercontainedmumsboth(mems):
     #filter mems before trying to form chains
