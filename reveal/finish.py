@@ -11,8 +11,15 @@ except:
 def finish(args):
     logging.debug("Extracting mums.")
 
-    # data_queue1 = multiprocessing.Queue()
-    # data_queue2 = multiprocessing.Queue()
+    if args.output==None:
+        pref=[]
+        for f in [os.path.basename(args.reference),os.path.basename(args.contigs)]:
+            bn=os.path.basename(f)
+            if '.' in bn:
+                pref.append(bn[:bn.find('.')])
+            else:
+                pref.append(bn)
+        args.output="_".join(pref)
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=2 if args.nproc>=2 else 1)
@@ -62,19 +69,9 @@ def finish(args):
     logging.info("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
     if args.order=='chains':
-        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,maxmums=args.maxmums,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
+        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,ref2length,maxmums=args.maxmums,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc,extend=args.extend)
     else:
         ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxmums=args.maxmums,maxgapsize=args.maxgapsize,minchainsum=args.minchainsum,nproc=args.nproc)
-    
-    if args.output==None:
-        pref=[]
-        for f in [os.path.basename(args.reference),os.path.basename(args.contigs)]:
-            bn=os.path.basename(f)
-            if '.' in bn:
-                pref.append(bn[:bn.find('.')])
-            else:
-                pref.append(bn)
-        args.output="_".join(pref)
     
     #write finished assembly based on contigs or chains that map on each reference chromosome
     if not args.split:
@@ -143,16 +140,6 @@ def finish(args):
                         ref2ctg['unchained'][ctgname][ctgend:ctgbegin]=0
                     unused.append((ctgname,ci))
 
-    logging.debug("Following contig parts are not part of a chain:")
-    for part in ref2ctg['unchained']:
-        logging.debug("%s"%str(part))
-
-    if 'unplaced' in ref2ctg:
-        logging.debug("Following contig parts are not placed anywhere:")
-        for part in ref2ctg['unplaced']:
-            logging.debug("%s"%str(part))
-
-
     if args.order=="chains": #remove unused chains from the ctg2ref mapping
         unused.sort(reverse=True)
         for name,i in unused:
@@ -180,13 +167,10 @@ def finish(args):
                         ctg=ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci-1
                     ctgs.append(ctg)
                 defref2ctg[ref]=ctgs
-    
-
 
     #build graph/fasta for the structural layout of the genome
     for ref in sorted(defref2ctg):
         pn=None
-        
         if args.split:
             finished=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
             unplaced=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
@@ -229,11 +213,6 @@ def finish(args):
         G.graph['id2sample'][refid]=ctgchromname
         G.graph['samples'].append(ctgchromname)
 
-        #orgid=len(G.graph['samples'])
-        #G.graph['sample2id'][ctgchromnameorg]=orgid
-        #G.graph['id2sample'][orgid]=ctgchromnameorg
-        #G.graph['samples'].append(ctgchromnameorg)
-
         for ctg in ctgs:
             p="*"+base+"_"+ctg[0] #prefix with asterisk so they're recognisable
             if p not in G.graph['sample2id']:
@@ -245,13 +224,14 @@ def finish(args):
         
         i=0
         o=0
-        pctg=(None,ctgs[0][1],0,0,0,0,0,0,0)
-        
+
         refpath=[] #path that describes the 'transformed' genome
         orgpath=[] #path that describes the 'original' genome
         
         lastrefchain=False
         lastctgchain=False
+
+        pctg=(None,ctgs[0][1],0,0,0,0,0,0,0)
 
         for ctg in ctgs:
             ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
@@ -282,9 +262,6 @@ def finish(args):
                 sys.exit(1)
 
             gapsize=refbegin-prefend
-
-            logging.debug("coffset=%d, pctgend=%d, pctgbegin=%d, ctgbegin=%d, ctgend=%d"%(coffset,pctgend,pctgbegin,ctgbegin,ctgend))
-            #logging.info("Estimated gap size between %s and %s is %d (%d,%d)."%(pctgname[0:10],ctgname[0:10],gapsize,a,b))
             
             if gapsize<0 or args.fixedsize:
                 if gapsize<0:
@@ -295,22 +272,6 @@ def finish(args):
             
             if args.order=='chains':
                 event=None
-
-                # if lastrefchain and lastctgchain: #extend chains into telomere, if no other chains on either contig or reference
-                if lastctgchain:
-                    if revcomp:
-                        if ctgbegin!=0:
-                            logging.debug("Extending chain, trying to discard: %s[%d:%d]"%(ctgname,0,ctgbegin))
-                            for start,end,i in ref2ctg['unchained'][ctgname][0:ctgbegin]:
-                                ref2ctg['unchained'][ctgname].removei(start,end,i)
-                            ctgbegin=0
-                    else:
-                        if ctgend!=contig2length[ctgname]:
-                            logging.debug("Extending chain, trying to discard: %s[%d:%d]"%(ctgname,ctgend,contig2length[ctgname]))
-                            for start,end,i in ref2ctg['unchained'][ctgname][ctgend:contig2length[ctgname]]:
-                                ref2ctg['unchained'][ctgname].removei(start,end,i)
-                            ctgend=contig2length[ctgname]
-
                 if pctgname==ctgname and revcomp==prevcomp and ((pci==ci+1 and revcomp==1) or (pci==ci-1 and revcomp==0)) and i!=0: #are chains consecutive
                     logging.debug("Consecutive chains, no gap.")
                     if (pctgend>=ctgbegin and revcomp==0): #chains overlap; both in same orientation as reference
@@ -324,6 +285,7 @@ def finish(args):
                     else:  #chains do not overlap, but are consecutive, so there's sequence in between the two chains that does not match the reference anywhere, output sequence instead of gap
                         if revcomp:
                             assert(ctgend<=pctgbegin)
+                            assert(len(ref2ctg['unchained'][ctgname][ctgend:pctgbegin])>0)
                             for start,end,i in ref2ctg['unchained'][ctgname][ctgend:pctgbegin]:
                                 ref2ctg['unchained'][ctgname].removei(start,end,i)
                             finished.write(rc(contig2seq[ctgname][ctgend:pctgbegin]))
@@ -334,6 +296,7 @@ def finish(args):
                             gapsize=pctgbegin-ctgend #update gapsize so offset calculation is still correct
                         else:
                             assert(pctgend<=ctgbegin)
+                            assert(len(ref2ctg['unchained'][ctgname][pctgend:ctgbegin])>0)
                             for start,end,i in ref2ctg['unchained'][ctgname][pctgend:ctgbegin]:
                                 ref2ctg['unchained'][ctgname].removei(start,end,i)
                             finished.write(contig2seq[ctgname][pctgend:ctgbegin])
@@ -344,35 +307,8 @@ def finish(args):
                             gapsize=ctgbegin-pctgend
                     gap=False
                 else:
-                    if pctgname==None and ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)): #first chain of the chromosome and the contig
+                    if ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)) and (pctgname==None or ((pci==len(ctg2ref[pctgname])-1 and prevcomp==0) or (prevcomp==1 and pci==0))): #consecutive contigs, no chains in between
                         event='contig break'
-                        if revcomp: #extend alignment if its the first chain of the chromosome (telomeres are tricky)
-                            if contig2length[ctgname]!=ctgend:
-                                for start,end,i in ref2ctg['unchained'][ctgname][ctgend:contig2length[ctgname]]:
-                                    ref2ctg['unchained'][ctgname].removei(start,end,i)
-                                gapsize=gapsize-(contig2length[ctgname]-ctgend)
-                                ctgend=contig2length[ctgname]
-                        else:
-                            if ctgbegin!=0:
-                                for start,end,i in ref2ctg['unchained'][ctgname][0:ctgbegin]:
-                                    ref2ctg['unchained'][ctgname].removei(start,end,i)
-                                gapsize=gapsize-ctgbegin
-                                ctgbegin=0
-                            
-                    elif ((ci==0 and revcomp==0) or (revcomp==1 and ci==len(ctg2ref[ctgname])-1)) and ((pci==len(ctg2ref[pctgname])-1 and prevcomp==0) or (prevcomp==1 and pci==0)): #consecutive contigs, no chains in between
-                        event='contig break'
-                        if revcomp: #extend alignment if its the first chain of the next contig (telomeres are tricky)
-                            if contig2length[ctgname]!=ctgend:
-                                for start,end,i in ref2ctg['unchained'][ctgname][ctgend:contig2length[ctgname]]:
-                                    ref2ctg['unchained'][ctgname].removei(start,end,i)
-                                gapsize=gapsize-(contig2length[ctgname]-ctgend)
-                                ctgend=contig2length[ctgname]
-                        else:
-                            if ctgbegin!=0:
-                                for start,end,i in ref2ctg['unchained'][ctgname][0:ctgbegin]:
-                                    ref2ctg['unchained'][ctgname].removei(start,end,i)
-                                gapsize=gapsize-ctgbegin
-                                ctgbegin=0
                     else: #not first or last chain of contig, so has to be stuctural event
                         logging.debug("Non consecutive chains between %s [%d:%d:%d] and %s [%d:%d:%d]."%(pctgname,pctgbegin,pctgend,prevcomp,ctgname,ctgbegin,ctgend,revcomp))
                         if pctgname!=ctgname:
@@ -387,13 +323,8 @@ def finish(args):
                         if pctgname!=None:
                             logging.info("Index within previous contig (%s, %d) layout: %d (of %d)"%(pctgname,prevcomp,pci,len(ctg2ref[pctgname])))
                     
-                    logging.debug("Inserting gap of size: %d"%gapsize)
+                    logging.info("Inserting gap of size: %d"%gapsize)
                     
-                    if gapsize<0 or args.fixedsize:
-                        if gapsize<0:
-                            logging.info("Extended chains for contigs %s and %s overlap by %d bases."%(pctgname,ctgname,abs(gapsize)))
-                        gapsize=args.gapsize
-
                     gap=True
                     
                     if gapsize==0:
@@ -538,8 +469,13 @@ def finish(args):
             o=o+l
             yticks.append(o)
             yticklabels.append("%s:%d"%(ctgname[0:15],ctgend))
-            pctg=ctg
-        
+            # pctg=ctg
+
+            if revcomp:
+                pctg=ctgname,revcomp,score,refbegin,refend,ctgend,ctgbegin,ctglength,ci
+            else:
+                pctg=ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci
+
         finished.write("\n")
         pathi+=2
         
@@ -577,7 +513,7 @@ def finish(args):
         logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
         for name in ref2ctg['unchained']:
             for start,end,i in ref2ctg['unchained'][name]:
-                logging.info("%s (start=%d,end=%d,length=%d,contig=%d)"%(name,start,end,end-start,contig2length[name]))
+                logging.info("%s%s (start=%d,end=%d,length=%d,total-contig-length=%d)"%('*' if end-start!=contig2length[name] else '', name,start,end,end-start,contig2length[name]))
                 unplaced.write(">%s[%d:%d]\n"%(name,start,end))
                 unplaced.write("%s\n"%contig2seq[name][start:end])
                 totsequnplaced+=end-start
@@ -683,7 +619,7 @@ def decompose_contig(ctg,mums,contiglength,maxgapsize=1500,minchainsum=1000,maxm
 
     return paths
 
-def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxmums=15000,nproc=1):    
+def chainstorefence(ctg2mums,contig2length,ref2length,maxgapsize=1500,minchainsum=1000,maxmums=15000,nproc=1,extend=True):    
     ref2ctg={'unchained':dict()}
     ctg2ref=dict()
     results=dict()
@@ -710,12 +646,40 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxm
             continue
         
         logging.info("Found %d chains for contig: %s"%(len(paths),ctg))
-
         offset=0
         for i,path in enumerate(paths):
             score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
 
-            logging.debug("Path %d (%d): ctgstart=%d,ctgend=%d,refstart=%d,refend=%d"%(i,revcomp,ctgstart,ctgend,refstart,refend))
+            #extend first and last chain of every contig (altough these are not part of the chain, they are also not part of another chain, so this should be quite safe)
+            if extend:
+                if i==0:
+                    if revcomp:
+                        if ctgend<refstart:
+                            refstart-=ctgend
+                        else:
+                            refstart=0
+                        ctgend=0
+                    else:
+                        if ctgstart<refstart:
+                            refstart-=ctgstart
+                        else:
+                            refstart=0
+                        ctgstart=0
+                if i==len(paths)-1:
+                    if revcomp:
+                        if ref2length[ref]>refend+(contig2length[ctg]-ctgstart):
+                            refend+=contig2length[ctg]-ctgstart
+                        else:
+                            refend=ref2length[ref]
+                        ctgstart=contig2length[ctg]
+                    else:
+                        if ref2length[ref]>refend+(contig2length[ctg]-ctgend):
+                            refend+=contig2length[ctg]-ctgend
+                        else:
+                            refend=ref2length[ref]
+                        ctgend=contig2length[ctg]
+
+            # logging.debug("Path %d (%d): ctgstart=%d,ctgend=%d,refstart=%d,refend=%d"%(i,revcomp,ctgstart,ctgend,refstart,refend))
             
             assert(offset<=ctgstart) #should not be any overlap on the contig anymore
             
@@ -733,10 +697,12 @@ def chainstorefence(ctg2mums,contig2length,maxgapsize=1500,minchainsum=1000,maxm
                 ctgstart,ctgend=ctgend,ctgstart
             
             if offset!=ctgstart:
+                logging.debug("%d:%d:%d --> unchained"%(offset,ctgstart,revcomp))
                 ref2ctg['unchained'][ctg][offset:ctgstart]=i
-            
+            logging.debug("%d:%d:%d --> %s"%(ctgstart,ctgend,revcomp,ref))
+
             offset=ctgend
-        
+
         if offset!=contig2length[ctg]:
             assert(offset<contig2length[ctg])
             ref2ctg['unchained'][ctg][offset:contig2length[ctg]]=i
@@ -1136,7 +1102,6 @@ def bestctgpath(ctgs):
     path=[]
     while end[0]!=start[0]:
         path.append(end)
-        #end=link[tuple(end[2])]
         end=link[end]
     
     return path[::-1]
