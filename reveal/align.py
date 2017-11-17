@@ -326,8 +326,14 @@ def graphalign(index,mum):
         isize=index.n
         mns=[]
         topop=[]
+
+        logging.debug("Nodes in subgraph:")
+        for node in nodes:
+            logging.debug("%s"%str(node))
+
         sp=spd.values()
         for pos in sp:
+            logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
             assert(old.end-old.begin>=l)
             mn,other=breaknode(old,pos,l)
@@ -372,6 +378,7 @@ def graphalign(index,mum):
 
     except Exception:
         print traceback.format_exc()
+        raise Exception
         return
 
 def prune_nodes(G,T):
@@ -521,9 +528,7 @@ def align_genomes(args):
     G.graph['id2end']=dict()
 
     o=0
-    # schemes.minlength=args.minlength
     schemes.maxmums=args.maxmums
-    schemes.minn=args.minn
     schemes.gcmodel=args.gcmodel
     schemes.wscore=args.wscore
     schemes.wpen=args.wpen
@@ -586,10 +591,10 @@ def align_genomes(args):
     
     if len(args.inputfiles)==2 and not graph:
         logging.info("Constructing pairwise-alignment...")
-        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength,minn=args.minn)
     else:
         logging.info("Constructing graph-based multi-alignment...")
-        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength)
+        idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength,minn=args.minn)
     
     return G,idx
 
@@ -619,8 +624,6 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     o=0
 
     schemes.gcmodel=gcmodel
-    # schemes.minlength=minlength
-    schemes.minn=minn
     schemes.maxmums=maxmums
     schemes.seedsize=seedsize
     schemes.wpen=wpen
@@ -672,7 +675,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     
     idx.construct()
     
-    idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore,minl=minlength)
+    idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore,minl=minlength,minn=minn)
     
     prune_nodes(G,idx.T)
 

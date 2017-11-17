@@ -41,20 +41,17 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     processed=[]
     
     for mum in mums:
+        trace=False
         #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
         remove=[]
         for pmum in processed:
-            # pendpoint1=pmum[2][ref]+pmum[0]
-            # if pendpoint1<=mum[2][ref]:
-            #     active.append(pmum)
-            #     remove.append(pmum)
             for crd in pmum[2]:
                 if pmum[2][crd]+pmum[0]>mum[2][crd]:
                     break
             else:
                 active.append(pmum)
                 remove.append(pmum)
-        
+
         for r in remove:
             processed.remove(r)
 
@@ -62,28 +59,25 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         
         w=None
         for amum in active:
-            s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
-
-            if w!=None:
-                if w > s: #as input is sorted by score
+            for crd in amum[2]:
+                if amum[2][crd]+amum[0]>mum[2][crd]:
                     break
-            
-            # overlap=False
-            # for crd in mum[2]:
-            #     if amum[2][crd]+amum[0]>mum[2][crd]:
-            #         overlap=True
-            # if overlap:
-            #     continue
+            else:
+                s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
 
-            penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
+                if w!=None:
+                    if w > s: #as input is sorted by score
+                        break
 
-            assert(penalty>=0)
+                penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
 
-            tmpw=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(wpen*penalty)
+                assert(penalty>=0)
 
-            if tmpw>w or w==None:
-                w=tmpw
-                best=amum
+                tmpw=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(wpen*penalty)
+
+                if tmpw>w or w==None:
+                    w=tmpw
+                    best=amum
 
         link[mum[2][ref]]=best[2][ref]
         score[mum[2][ref]]=w
@@ -144,6 +138,7 @@ def maptooffsets(mums):
     return relmums,mapping
 
 splitchain="balanced"
+
 def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
     try:
         if len(mums)==0:
@@ -203,6 +198,10 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
             logging.debug("Chaining %d mums"%len(relmums))
             chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
 
+            if len(prevchain)>0:
+                if prevchain[-1][1]>chainedmums[-1][1]:
+                    logging.error("Decreased chain score! old=%d new%d",(prevchain[-1][1],chainedmums[-1][1]))
+
             # #CHECK IF CHAIN IS BETTER! IF NOT, IGNORE IT!
             # if len(chainedmums)!=len(prevchain) and len(prevchain)!=0:
             #     # print [m for m,s in prevchain if m[0]==27]
@@ -220,11 +219,17 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
                 return
 
             if splitchain=="balanced":
+                logging.debug("Selecting MUM from chain on position within chain.")
                 optsplit=None
+                # pmum=None
                 for mum,score in chainedmums: #determine optimal split in chain
+                    # logging.debug("on genome: %s"%str(mum))
+                    # logging.debug("on index: %s"%str(mapping[tuple(mum[2].values())]))
                     lseq=0
                     rseq=0
                     for crd in mum[2]:
+                        # if pmum!=None:
+                            # assert(mapping[tuple(pmum[2].values())][crd]<mapping[tuple(mum[2].values())][crd])
                         lseq=mum[2][crd]
                         assert(lseq>=0)
                         rseq=right[2][crd]-mum[2][crd]+mum[0]
@@ -233,13 +238,15 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
                         optsplit=abs(lseq-rseq)
                         splitmum=mum
             elif splitchain=="largest":
+                logging.debug("Selecting MUM from chain based on size.")
                 splitmum=sorted(chainedmums,key=lambda m:m[0][0])[-1][0]
             else: #select at random
+                logging.debug("Selecting MUM from chain at random.")
                 splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
 
             skipleft=[]
             skipright=[]
-            if seedsize>0:        
+            if seedsize>0:
                 t=skipleft
                 scoreatsplit=0
                 for mum,score in chainedmums:
@@ -255,15 +262,14 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
             splitmum=mapping[tuple(splitmum[2].values())]
 
         else:
-            #JUST SKIP THROUGH HERE UNTIL WE HAVE A NEW SET OF MUMS
-            logging.info("Selecting MUM from precomputed chain")
+            logging.debug("Selecting MUM from precomputed chain")
             assert(len(mums)>0)
             chainedmums=mums
             splitmum=chainedmums[len(chainedmums)/2][0]
             skipleft=chainedmums[:len(chainedmums)/2]
             skipright=chainedmums[(len(chainedmums)/2)+1:]
         
-        logging.debug("Best MUM length: %d"%splitmum[0])
+        logging.debug("Best MUM has length: %d"%splitmum[0])
         logging.trace("Best MUM from chain: %s"%str(splitmum))
         
         logging.debug("Skipleft: %d"%len(skipleft))

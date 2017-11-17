@@ -564,11 +564,11 @@ void *aligner(void *arg) {
                 precomputed=Py_False;
 #ifdef REVEALDEBUG
                 time(&t0);
-                fprintf(stderr,"Extracting new mums...\n");
+                fprintf(stderr,"Extracting new mums... %d\n",rw->minn);
 #endif
                 if (((RevealIndex *) idx->main)->nsamples>2){
                     PyObject *args = PyTuple_New(0);
-                    PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", 2);
+                    PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", rw->minn);
                     multimums = getmultimums(idx,args,kwargs);
                     Py_DECREF(kwargs);
                     Py_DECREF(args);

@@ -252,13 +252,14 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     PyObject *mumpicker;
     PyObject *graphalign;
 
-    static char *kwlist[] = {"mumpicker","align","threads","wpen","wscore","minl",NULL};
+    static char *kwlist[] = {"mumpicker","align","threads","wpen","wscore","minl","minn",NULL};
     int numThreads=0; /* Number of alignment threads */
     int wpen=0;
     int wscore=0;
     int minl=0;
+    int minn=0;
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iiii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore, &minl))
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "OO|iiiii", kwlist, &mumpicker, &graphalign, &numThreads, &wpen, &wscore, &minl, &minn))
         return NULL;
 
     int i;
@@ -300,6 +301,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
             rw->wpen=wpen;
             rw->wscore=wscore;
             rw->minl=minl;
+            rw->minn=minn;
             int rv;
             rv=pthread_create(&tids[i],&attr,aligner,rw);
             if (rv!=0){
@@ -344,6 +346,7 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
         rw->wpen=wpen;
         rw->wscore=wscore;
         rw->minl=minl;
+        rw->minn=minn;
         aligner(rw);
     }
     

@@ -47,6 +47,7 @@ typedef struct
     int wpen;
     int wscore;
     int minl;
+    int minn;
 } RevealWorker;
 
 typedef struct
