@@ -186,8 +186,8 @@ def variants_cmd(args):
     read_gfa(args.graph[0],None,"",G)
     complexbubblenodes=[]
     
-    if 'samples' in G.graph:
-        gori=sorted(G.graph['samples'])
+    if 'paths' in G.graph:
+        gori=sorted(G.graph['paths'])
     else:
         gori=[]
     
@@ -195,10 +195,10 @@ def variants_cmd(args):
         args.reference=gori[0]
         logging.warn("No reference specified as a coordinate system, use %s where possible."%args.reference)
     else:
-        if args.reference in G.graph['sample2id']:
-            args.reference=G.graph['sample2id'][args.reference]
+        if args.reference in G.graph['path2id']:
+            args.reference=G.graph['path2id'][args.reference]
         else:
-            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['samples'])))
+            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['paths'])))
             sys.exit(1)
     
     if not args.fastaout:
@@ -240,7 +240,7 @@ def variants_cmd(args):
         if minflank<args.minflank:
             continue
 
-        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2sample'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes) ))
+        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2path'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes) ))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
@@ -338,7 +338,7 @@ class Variant(Bubble):
                 if sampleid not in tmpsource:
                     continue
                 #self.calls[sample]=i
-                self.calls[bubble.G.graph['id2sample'][sampleid]]=i
+                self.calls[bubble.G.graph['id2path'][sampleid]]=i
                 #tmpsource.discard(sample)
                 tmpsource.discard(sampleid)
 

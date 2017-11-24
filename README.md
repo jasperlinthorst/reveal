@@ -77,7 +77,7 @@ To address large events (like translocations, inversions, but also misassemblies
 
 **reveal finish --order=chains reference.fasta draft.fasta**
 
-Have a look at the various parameters, especially: --maxgapsize, --minchainsum, --maxn and -m.
+Have a look at the various parameters, especially: --mineventsize, --minchainsum and -m.
 
 To obtain a graph-based representation that encodes the original as well as the 'transformed' genome as separate paths through a graph, use the --outputgraph option. Note that these graphs may contain cycles, but can still be used in subsequent alignments using REVEAL. Paths in the graph prefixed with an asterisk (\*) correspond to the original (non-transformed) input genomes, which are ignored by REVEAL during graph traversal and mainly function as a way to record structural events in a multi-genome alignment. By default, only the contigs in which a structural rearrangements was detected are output as a \*-path in order to save space.
 

@@ -29,10 +29,10 @@ def split(gfafile):
         sgsamples=[]
         for sid in sids:
             mapping[sid]=len(sgsamples)
-            sg.graph['sample2id'][G.graph['id2sample'][sid]]=len(sgsamples)
-            sgsamples.append(G.graph['id2sample'][sid])
+            sg.graph['path2id'][G.graph['id2path'][sid]]=len(sgsamples)
+            sgsamples.append(G.graph['id2path'][sid])
         
-        sg.graph['samples']=sgsamples
+        sg.graph['paths']=sgsamples
         
         for e1,e2,d in sg.edges(data=True):
             np=set()
@@ -45,5 +45,5 @@ def split(gfafile):
             for p in d['offsets']:
                 no[mapping[p]]=d['offsets'][p]
             sg.node[n]['offsets']=no
-        
-        write_gfa(sg,None,outputfile="%d.gfa"%i)
+        name="_".join(sg.graph['paths'])
+        write_gfa(sg,None,outputfile="%s.gfa"%name)

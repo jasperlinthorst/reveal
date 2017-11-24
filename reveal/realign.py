@@ -87,11 +87,11 @@ def realign_bubble(G,source,sink,minlength=20,
     
     #extract all paths
     for sid in sourcesamples.intersection(sinksamples): #should be equal..
-        seq=extract(sg,G.graph['id2sample'][sid])
+        seq=extract(sg,G.graph['id2path'][sid])
 
         cumsum+=len(seq)
         if len(seq)>0:
-            aobjs.append((G.graph['id2sample'][sid],seq))
+            aobjs.append((G.graph['id2path'][sid],seq))
 
         if cumsum>maxlen:
             logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
@@ -112,7 +112,7 @@ def realign_bubble(G,source,sink,minlength=20,
         old=data['paths']
         new=set()
         for sid in old:
-            new.add( G.graph['sample2id'][ng.graph['id2sample'][sid]] )
+            new.add( G.graph['path2id'][ng.graph['id2path'][sid]] )
         data['paths']=new
 
     #map node atts back to original graph
@@ -120,15 +120,15 @@ def realign_bubble(G,source,sink,minlength=20,
         old=data['offsets']
         new=dict()
         for sid in old:
-            new[G.graph['sample2id'][ng.graph['id2sample'][sid]]]=old[sid]
+            new[G.graph['path2id'][ng.graph['id2path'][sid]]]=old[sid]
         data['offsets']=new
 
-    ng.graph['samples']=G.graph['samples']
-    ng.graph['sample2id']=G.graph['sample2id']
-    ng.graph['id2sample']=G.graph['id2sample']
+    ng.graph['paths']=G.graph['paths']
+    ng.graph['path2id']=G.graph['path2id']
+    ng.graph['id2path']=G.graph['id2path']
 
-    for sample in G.graph['samples']:
-        assert(G.graph['sample2id'][sample]==ng.graph['sample2id'][sample])
+    for sample in G.graph['paths']:
+        assert(G.graph['path2id'][sample]==ng.graph['path2id'][sample])
 
     prune_nodes(ng,T)
     

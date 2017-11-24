@@ -13,14 +13,14 @@ def gplot(args):
     read_gfa(args.graph,None,None,G)
     
     if args.x==None and args.y==None:
-        args.x=G.graph['samples'][0]
-        args.y=G.graph['samples'][1]
+        args.x=G.graph['paths'][0]
+        args.y=G.graph['paths'][1]
     else:
-        if args.x not in G.graph['samples']:
-            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.x,G.graph['samples']))
+        if args.x not in G.graph['paths']:
+            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.x,G.graph['paths']))
             sys.exit(1)
-        if args.y not in G.graph['samples']:
-            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.y,G.graph['samples']))
+        if args.y not in G.graph['paths']:
+            logging.error("%s not contained in the specified graph. Samples that are: %s."%(args.y,G.graph['paths']))
             sys.exit(1)
     plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
 
@@ -91,7 +91,7 @@ def plot(args):
         mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
         
         sep=idx.nsep[0]
-        
+
         if args.rc:
             #get mmems for reverse orientation
             if args.sa64:
@@ -142,7 +142,8 @@ def plot(args):
     
     start=0
     end=sep
-    
+    qend=idx.n
+
     del idx
     
     if len(mmems)>args.maxmums:
@@ -194,6 +195,7 @@ def plot(args):
             )
         
     plt.xlim(start,end)
+    plt.ylim(0,qend-end)
     plt.title(" vs. ".join(args.fastas))
     if len(args.fastas)==2:
         plt.xlabel(args.fastas[0])
@@ -215,4 +217,4 @@ def plot(args):
         b2=os.path.basename(args.fastas[1])
         fn1=b1[0:args.fastas[0].rfind('.')] if b1.find('.')!=-1 else b1
         fn2=b2[0:args.fastas[1].rfind('.')] if b2.find('.')!=-1 else b2
-        plt.savefig(fn1+"_"+fn2+".png")
+        plt.savefig(fn1+"_"+fn2+"."+args.extension)

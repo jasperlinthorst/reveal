@@ -13,7 +13,7 @@ def extract_cmd(args):
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
     if args.all:
-        args.input=G.graph['samples']
+        args.input=G.graph['paths']
     
     try:
         i=0
@@ -46,11 +46,11 @@ def extract_cmd(args):
 def extract(G,sample):
     logging.debug("Extracting path: %s"%sample)
 
-    if sample not in G.graph['sample2id']:
-        logging.fatal("Unknown path: %s, graph contains: %s"%(sample, G.graph['sample2id'].keys()))
+    if sample not in G.graph['path2id']:
+        logging.fatal("Unknown path: %s, graph contains: %s"%(sample, G.graph['path2id'].keys()))
         sys.exit(1)
 
-    sid=G.graph['sample2id'][sample]
+    sid=G.graph['path2id'][sample]
     sg=[]
 
     for n1,n2,d in G.edges_iter(data=True):

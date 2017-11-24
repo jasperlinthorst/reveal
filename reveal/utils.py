@@ -3,6 +3,7 @@ import logging
 from intervaltree import Interval, IntervalTree
 import sys
 import os
+from math import log
 
 def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
@@ -71,7 +72,7 @@ def fasta_writer(fn,name_seq,lw=100):
             for i in range( (len(seq)/lw)+(len(seq) % lw > 0)):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
-def gapcost(pointa,pointb,model="sumofpairs"): #model is either sumofpairs or star
+def gapcost(pointa,pointb,model="sumofpairs",convex=True): #model is either sumofpairs or star
     assert(len(pointa)==len(pointb))
     
     if model=="star-avg":
@@ -80,15 +81,22 @@ def gapcost(pointa,pointb,model="sumofpairs"): #model is either sumofpairs or st
         return sorted([abs(pointa[i]-pointb[i]) for i in range(len(pointa))])[len(pointa)/2]
     elif model=="sumofpairs":
         p=0
-        if len(pointa)==1:
-            return abs(pointa[0]-pointb[0])
-        D=[pointa[i]-pointb[i] for i in range(len(pointa))]
+        # if len(pointa)==1:
+            # if convex:
+                # return log(abs(pointa[0]-pointb[0])+1)
+            # else:
+                # return abs(pointa[0]-pointb[0])
+
+        D=[abs(pointa[i]-pointb[i]) for i in range(len(pointa))]
         for i in range(len(D)): #all pairwise distances
             for j in range(i+1,len(D)):
-                p+=abs(D[i]-D[j])
+                if convex:
+                    p+=log(abs(D[i]-D[j])+1)
+                else:
+                    p+=abs(D[i]-D[j])
         return p
     else:
-        logging.warn("Uknown penalty model: %s."%model)
+        logging.warn("Unknown penalty model: %s."%model)
         return 0
 
 def rc(seq):
@@ -106,6 +114,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         logging.error("Install matplotlib to generate mumplot.")
         return
 
+    logging.debug("Generating plot for %s and %s."%(s1,s2))
     plt.xlabel(s1)
     plt.ylabel(s2)
     plt.title("REVEAL "+" ".join(sys.argv[1:]))
@@ -116,8 +125,11 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     miny=None
 
     #map names to ids
-    s1=G.graph['sample2id'][s1]
-    s2=G.graph['sample2id'][s2]
+    s1=G.graph['path2id'][s1]
+    s2=G.graph['path2id'][s2]
+
+    logging.debug("Samples in graph: %s"%G.graph['path2id'])
+    logging.debug("Generating plot for %s and %s, with minlength=%d."%(s1,s2,minlength))
 
     for node,data in G.nodes(data=True):
         if 'seq' in data:
@@ -129,26 +141,29 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         
         s1t=False
         s2t=False
+
         if s1 in data['offsets']:
             s1t=True
             if minx==None:
                 minx=data['offsets'][s1]
-            
             if data['offsets'][s1]+l > maxx:
                 maxx=data['offsets'][s1]+l
             if data['offsets'][s1] < minx:
                 minx=data['offsets'][s1]
-        
+        else:
+            continue
+
         if s2 in data['offsets']:
             s2t=True
             if miny==None:
                 miny=data['offsets'][s2]
-            
             if data['offsets'][s2]+l > maxy:
                 maxy=data['offsets'][s2]+l
             if data['offsets'][s2] < miny:
                 miny=data['offsets'][s2]
-        
+        else:
+            continue
+
         if s1t and s2t:
             plt.plot([data['offsets'][s1], data['offsets'][s1]+l], [data['offsets'][s2], data['offsets'][s2]+l], 'r-')
     
@@ -172,7 +187,6 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
 
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=True):
-
     f=open(gfafile,'r')
     sep=";"
     nmapping={} #temp mapping object for nodeids in gfa file
@@ -182,17 +196,17 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     i=0
     gnodeid=graph.number_of_nodes()+1
     
-    if 'samples' not in graph.graph:
-        graph.graph['samples']=list()
+    if 'paths' not in graph.graph:
+        graph.graph['paths']=list()
     
-    if 'id2sample' not in graph.graph:
-        graph.graph['id2sample']=dict()
+    if 'id2path' not in graph.graph:
+        graph.graph['id2path']=dict()
     
-    if 'sample2id' not in graph.graph:
-        graph.graph['sample2id']=dict()
+    if 'path2id' not in graph.graph:
+        graph.graph['path2id']=dict()
     else:
-        i=len(graph.graph['sample2id'])
-        assert(i not in graph.graph['id2sample'])
+        i=len(graph.graph['path2id'])
+        assert(i not in graph.graph['id2path'])
     
     if 'id2end' not in graph.graph:
         graph.graph['id2end']=dict()
@@ -266,24 +280,24 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             if sample.startswith("*"):
                 continue
 
-        if sample in graph.graph['samples']:
+        if sample in graph.graph['paths']:
             logging.fatal("ERROR: Graph already contains path for: %s"%sample)
             sys.exit(1)
         
-        graph.graph['samples'].append(sample)
+        graph.graph['paths'].append(sample)
         
-        if sample in graph.graph['sample2id']:
+        if sample in graph.graph['path2id']:
             logging.fatal("ERROR: Graph already contains path for: %s"%sample)
             sys.exit(1)
         
-        sid=len(graph.graph['sample2id'])
+        sid=len(graph.graph['path2id'])
         
-        if sid in graph.graph['id2sample']:
+        if sid in graph.graph['id2path']:
             logging.fatal("ERROR: Id %d already linked to a path in the graph."%sid)
             sys.exit(1)
         
-        graph.graph['sample2id'][sample]=sid
-        graph.graph['id2sample'][sid]=sample
+        graph.graph['path2id'][sample]=sid
+        graph.graph['id2path'][sid]=sample
 
         o=0
         path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
@@ -345,18 +359,18 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     if revcomp:
         genome2length=dict()
         #relabel the offsets, determine the length of all genomes in the graph, then l-pos
-        for sample in graph.graph['samples']:
+        for sample in graph.graph['paths']:
             maxp=0
             for node,data in graph.nodes(data=True):
-                if graph.graph['sample2id'][sample] in data['offsets']:
-                    if data['offsets'][graph.graph['sample2id'][sample]]+ (node[1]-node[0]) >maxp:
-                        maxp=data['offsets'][graph.graph['sample2id'][sample]]+(node[1]-node[0])
+                if graph.graph['path2id'][sample] in data['offsets']:
+                    if data['offsets'][graph.graph['path2id'][sample]]+ (node[1]-node[0]) >maxp:
+                        maxp=data['offsets'][graph.graph['path2id'][sample]]+(node[1]-node[0])
             genome2length[sample]=maxp
         
-        for sample in graph.graph['samples']:
+        for sample in graph.graph['paths']:
             for node,data in graph.nodes(data=True):
-                if graph.graph['sample2id'][sample] in data['offsets']:
-                    graph.node[node]['offsets'][graph.graph['sample2id'][sample]]=genome2length[sample]-(graph.node[node]['offsets'][graph.graph['sample2id'][sample]]+(node[1]-node[0]))
+                if graph.graph['path2id'][sample] in data['offsets']:
+                    graph.node[node]['offsets'][graph.graph['path2id'][sample]]=genome2length[sample]-(graph.node[node]['offsets'][graph.graph['path2id'][sample]]+(node[1]-node[0]))
         
         graph.reverse(copy=False)
 
@@ -396,7 +410,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     f.write('H\tVN:Z:1.0\tCL:Z:%s\n'%" ".join(sys.argv))
     
     sample2id=dict()
-    sample2id=G.graph['sample2id']
+    sample2id=G.graph['path2id']
 
     mapping={}
     
@@ -444,10 +458,10 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t0M\n")
     
     #write paths
-    for sample in G.graph['samples']:
+    for sample in G.graph['paths']:
         logging.debug("Writing path: %s"%sample)
 
-        sid=G.graph['sample2id'][sample]
+        sid=G.graph['path2id'][sample]
         subgraph=[]
         for e1,e2,d in G.edges(data=True):
             if sid in d['paths']:
@@ -491,8 +505,8 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
     G=G.copy()
     mapping={}
 
-    if 'samples' in G.graph:
-        totn=len(G.graph['samples'])
+    if 'paths' in G.graph:
+        totn=len(G.graph['paths'])
         logging.debug("Graph contains %d samples"%totn)
     else:
         totn=0
@@ -543,7 +557,7 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
             logging.debug("Partitioning connected component: %d"%sgi)
             sgn=[]
             g=G.subgraph(subset)
-            gn=G.graph['samples']
+            gn=G.graph['paths']
             for n in nx.topological_sort(g):
                 sgn.append(n)
                 if G.node[n]['n']==totn: #join/split node

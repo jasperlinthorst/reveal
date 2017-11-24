@@ -73,7 +73,6 @@ def main():
     parser_aln.add_argument("--ws", dest="wscore", type=int, default=1, help="Weight of score during chaining.")
     parser_aln.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
     parser_aln.add_argument("--maxmums", dest="maxmums", type=int, default=1000, help="Number of largest MUMs to consider for chaining (when 0 use all).")
-
     parser_aln.add_argument("--plot", dest="mumplot", action="store_true", default=False, help="Save a mumplot for the actual aligned chain of anchors (depends on matplotlib).")
     parser_aln.add_argument("-i", dest="interactive", action="store_true", default=False, help="Show an interactive visualisation of the mumplot (depends on matplotlib).")
     parser_aln.add_argument("--sa", dest="sa", default="", help="Specify a preconstructed suffix array to decouple suffix array construction.")
@@ -116,6 +115,7 @@ def main():
     parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("--maxmums", dest="maxmums", type=int, default=10000, help="Cap the number of MUMs to draw.")
     parser_plot.add_argument("--nogaps", dest="showgaps", action="store_false", default=True, help="Don't mark gapped sequence.")
+    parser_plot.add_argument("--extension", dest="extension", choices=["png","pdf","ps","eps","svg"], default="png", help="How to save the plot.")
     parser_plot.add_argument("-r", dest="region", default=None, help="Highlight interval (as \"<start>:<end>\") with respect to x-axis (first sequence).")
     parser_plot.set_defaults(func=plot.plot)
     
@@ -145,10 +145,10 @@ def main():
     parser_finish.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
     parser_finish.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
     parser_finish.add_argument("--order", dest="order", default="contigs", choices=["contigs","chains"], help="Determine the order for either contigs or chains. With \'chains\' large scale rearrangements within contigs can be undone in order to obtain colinear genomes.")
-    parser_finish.add_argument("--maxgapsize", dest="maxgapsize", type=int, default=1500, help="Maxgapsize between MUMs before breaking chain.")
+    parser_finish.add_argument("--mineventsize", dest="mineventsize", type=int, default=1500, help="Minimal size (in basepairs) of a rearrangement event that has to be transformed (set larger than typical transposon event).")
+    parser_finish.add_argument("--minchainsum", dest="minchainsum", type=int, default=None, help="Minimal sum of the length of the MUMs in a chain before its reported (if none .8 * MINEVENTSIZE).")
     parser_finish.add_argument("--maxmums", dest="maxmums", type=int, default=0, help="Max number of MUMs to consider for chaining (when 0 use all).")
     parser_finish.add_argument("--cutn", dest="cutn", type=int, default=1000, help="Cut contigs at N-stretches longer than this value, to force re-estimation of gapsizes (set to 0, to switch off).")
-    parser_finish.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000,help="Minimal sum of the length of the MUMs in a chain before its reported.")
     parser_finish.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
     parser_finish.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
     parser_finish.set_defaults(func=finish.finish)

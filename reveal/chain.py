@@ -26,13 +26,13 @@ def chain_cmd(args):
     idx.construct()
     
     G=nx.DiGraph()
-    G.graph['samples']=idx.samples
-    G.graph['sample2id']=dict()
-    G.graph['id2sample']=dict()
+    G.graph['paths']=idx.samples
+    G.graph['path2id']=dict()
+    G.graph['id2path']=dict()
 
-    for sid,sample in enumerate(G.graph['samples']):
-        G.graph['sample2id'][sample]=sid
-        G.graph['id2sample'][sid]=sample
+    for sid,sample in enumerate(G.graph['paths']):
+        G.graph['path2id'][sample]=sid
+        G.graph['id2path'][sid]=sample
     
     k=len(idx.samples)
     
@@ -129,12 +129,12 @@ def chain_cmd(args):
             G.node[node]['seq']=T[node[0]:node[0]+data['l']]
             for c in node:
                 intv=list(tree[c])[0]
-                G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=c-intv[0]
+                G.node[node]['offsets'][G.graph['path2id'][intv[2]]]=c-intv[0]
         else:
             if 'l' in data:
                 G.node[node]['seq']=T[node:node+data['l']]
             intv=list(tree[node])[0]
-            G.node[node]['offsets'][G.graph['sample2id'][intv[2]]]=node-intv[0]
+            G.node[node]['offsets'][G.graph['path2id'][intv[2]]]=node-intv[0]
         
         if 'aligned' in data:
             if data['aligned']==1:
@@ -144,7 +144,7 @@ def chain_cmd(args):
     print "Aligned",tot,"bases in",totn,"nodes. Nodes total:",G.number_of_nodes(),"Edges total:",G.number_of_edges()
     
     if args.mumplot:
-        plotgraph(G, G.graph['samples'][0], G.graph['samples'][1], interactive=args.interactive)
+        plotgraph(G, G.graph['paths'][0], G.graph['paths'][1], interactive=args.interactive)
     
     if args.output==None:
         pref=[]
@@ -157,8 +157,8 @@ def chain_cmd(args):
         args.output="_".join(pref)
     
     #add paths annotation to edges
-    for sample in G.graph['samples']:
-        sid=G.graph['sample2id'][sample]
+    for sample in G.graph['paths']:
+        sid=G.graph['path2id'][sample]
         sg=[]
         for node,data in G.nodes(data=True):
             if sid in data['offsets']:

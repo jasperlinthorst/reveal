@@ -103,12 +103,16 @@ def segment(mums):
             d[k].append(mum)
         else:
             d[k]=[mum]
+    
     best=0
     for part in d:
         z=sum([m[0] for m in d[part]])*len(part)
         if z>best:
-            best=part
-    return d[best]
+            best=z
+            partition=part
+    
+    logging.debug("Splitting input genomes: %s"%str(partition))
+    return d[partition]
 
 def lookup(mum):
     l,mmn,spd=mum
@@ -119,7 +123,7 @@ def lookup(mum):
     for pos in sp:
         node=iter(ts[pos]).next()
         ndata=G.node[node]
-        nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2sample'][o].startswith("*")])
+        nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2path'][o].startswith("*")])
         n+=len(nsamples)
         rel=pos-node[0]
         for k in nsamples:

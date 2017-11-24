@@ -13,7 +13,7 @@ def matches(args):
         idx=reveallib.index(sa=args.sa1, lcp=args.lcp1, cache=args.cache) #enable preconstruction of first SA and LCP array
     
     G=nx.DiGraph()
-    G.graph['samples']=[]
+    G.graph['paths']=[]
     t=IntervalTree()
     
     reffile=os.path.basename(args.reference)
@@ -24,7 +24,7 @@ def matches(args):
     if args.reference.endswith(".gfa"):
         read_gfa(args.reference,idx,t,G)
     else:
-        G.graph['samples'].append(reffile)
+        G.graph['paths'].append(reffile)
         for name,seq in fasta_reader(args.reference):
             ref2length[name]=len(seq)
             intv=idx.addsequence(seq)
@@ -37,7 +37,7 @@ def matches(args):
     if args.contigs.endswith(".gfa"):
         read_gfa(args.contigs,idx,t,G)
     else:
-        G.graph['samples'].append(ctgfile)
+        G.graph['paths'].append(ctgfile)
         for name,seq in fasta_reader(args.contigs):
             contig2length[name]=len(seq)
             intv=idx.addsequence(seq)
@@ -112,7 +112,7 @@ def matches(args):
         if args.reference.endswith(".gfa"):
             read_gfa(args.reference,idx,t,rcG)
         else:
-            rcG.graph['samples']=set([reffile])
+            rcG.graph['paths']=set([reffile])
             for name,seq in fasta_reader(args.reference):
                 intv=idx.addsequence(seq)
                 intv=Interval(intv[0],intv[1],name)
@@ -124,7 +124,7 @@ def matches(args):
         if args.contigs.endswith(".gfa"):
             read_gfa(args.contigs,idx,t,rcG,revcomp=True)
         else:
-            rcG.graph['samples']=set([ctgfile])
+            rcG.graph['paths']=set([ctgfile])
             for name,seq in fasta_reader(args.contigs):
                 intv=idx.addsequence(rc(seq))
                 intv=Interval(intv[0],intv[1],name)

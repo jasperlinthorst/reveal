@@ -211,13 +211,13 @@ def predecessorsfilter_iter(G,node):
         for pre in G.predecessors_iter(node):
             for i in G[pre][node]:
                 for p in G[pre][node][i]['paths']:
-                    if not G.graph['id2sample'][p].startswith("*"):
+                    if not G.graph['id2path'][p].startswith("*"):
                         yield pre
                         break
     else:
         for pre in G.predecessors_iter(node):
             for p in G[pre][node]['paths']:
-                if not G.graph['id2sample'][p].startswith("*"):
+                if not G.graph['id2path'][p].startswith("*"):
                     yield pre
                     break
 
@@ -226,13 +226,13 @@ def successorsfilter_iter(G,node):
         for suc in G.successors_iter(node):
             for i in G[node][suc]:
                 for p in G[node][suc][i]['paths']:
-                    if not G.graph['id2sample'][p].startswith("*"):
+                    if not G.graph['id2path'][p].startswith("*"):
                         yield suc
                         break
     else:
         for suc in G.successors_iter(node):
             for p in G[node][suc]['paths']:
-                if not G.graph['id2sample'][p].startswith("*"):
+                if not G.graph['id2path'][p].startswith("*"):
                     yield suc
                     break
 
@@ -461,7 +461,7 @@ def align_cmd(args):
     logging.info("Merging nodes...")
     T=idx.T
 
-    if len(G.graph['samples'])>2:
+    if len(G.graph['paths'])>2:
         prune_nodes(G,T)
 
     logging.info("Done.")
@@ -476,7 +476,7 @@ def align_cmd(args):
         totbases=idx.n-T.count('$')-T.count('N')
         for node,data in G.nodes(data=True):
             if data['aligned']!=0:
-                alignedbases+=(node.end-node.begin)*len([k for k in data['offsets'] if not G.graph['id2sample'][k].startswith("*")])
+                alignedbases+=(node.end-node.begin)*len([k for k in data['offsets'] if not G.graph['id2path'][k].startswith("*")])
                 alignednodes+=1
     else: #assume seq to graph
         totbases=idx.n-T.count('$')-T.count('N') # min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
@@ -499,12 +499,12 @@ def align_cmd(args):
     logging.info("Alignment graph written to: %s"%graph)
     
     if args.mumplot:
-        if len(G.graph['samples'])==2:
-            plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+        if len(G.graph['paths'])==2:
+            plotgraph(G,G.graph['paths'][0],G.graph['paths'][1],interactive=args.interactive)
         else:
             logging.info("Unable to make plot for graphs with more than 2 paths.")
     
-    #plotgraph(G,G.graph['samples'][0],G.graph['samples'][1],interactive=args.interactive)
+    #plotgraph(G,G.graph['paths'][0],G.graph['paths'][1],interactive=args.interactive)
 
 def align_genomes(args):
     logging.info("Loading input...")
@@ -522,9 +522,9 @@ def align_genomes(args):
     
     #G=nx.DiGraph()
     G=nx.MultiDiGraph()
-    G.graph['samples']=[]
-    G.graph['sample2id']=dict()
-    G.graph['id2sample']=dict()
+    G.graph['paths']=[]
+    G.graph['path2id']=dict()
+    G.graph['id2path']=dict()
     G.graph['id2end']=dict()
 
     o=0
@@ -550,22 +550,22 @@ def align_genomes(args):
             else:
                 read_gfa(sample,idx,t,G)
             
-            if len(G.graph['samples'])==0: #if not from reveal, might not have a header
+            if len(G.graph['paths'])==0: #if not from reveal, might not have a header
                 logging.info("No paths detected in GFA, assume one path per node.")
-                G.graph['samples'].append(os.path.basename(sample))
+                G.graph['paths'].append(os.path.basename(sample))
 
             logging.info("Done.")
         else: #consider it to be a fasta file
             logging.info("Reading fasta: %s ..." % sample)
             for name,seq in fasta_reader(sample):
-                sid=len(G.graph['samples'])
+                sid=len(G.graph['paths'])
                 name=name.replace(":","").replace(";","")
-                if name in G.graph['samples']:
+                if name in G.graph['paths']:
                     logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
                     sys.exit(1)
-                G.graph['samples'].append(name)
-                G.graph['sample2id'][name]=sid
-                G.graph['id2sample'][sid]=name
+                G.graph['paths'].append(name)
+                G.graph['path2id'][name]=sid
+                G.graph['id2path'][sid]=name
                 G.graph['id2end'][sid]=len(seq)
                 intv=idx.addsequence(seq.upper())
                 logging.debug("Adding interval: %s"%str(intv))
@@ -573,7 +573,7 @@ def align_genomes(args):
                 t.add(Intv)
                 G.add_node(Intv,offsets={sid:0},aligned=0)
     
-    logging.debug("Graph contains the following paths: %s"%G.graph['samples'])
+    logging.debug("Graph contains the following paths: %s"%G.graph['paths'])
 
     if not nx.is_directed_acyclic_graph(G):
         logging.info("*** Input is not a DAG! ...")
@@ -617,9 +617,9 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     G=nx.DiGraph()
     H=G
 
-    G.graph['samples']=[]
-    G.graph['sample2id']=dict()
-    G.graph['id2sample']=dict()
+    G.graph['paths']=[]
+    G.graph['path2id']=dict()
+    G.graph['id2path']=dict()
     G.graph['id2end']=dict()
     o=0
 
@@ -640,11 +640,11 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
             if intv[1]-intv[0]>0:
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
-                G.graph['sample2id'][name]=len(G.graph['samples'])
-                G.graph['id2sample'][len(G.graph['samples'])]=name
-                G.graph['id2end'][len(G.graph['samples'])]=len(seq)
-                G.graph['samples'].append(name)
-                G.add_node(Intv,offsets={G.graph['sample2id'][name]:0},aligned=0)
+                G.graph['path2id'][name]=len(G.graph['paths'])
+                G.graph['id2path'][len(G.graph['paths'])]=name
+                G.graph['id2end'][len(G.graph['paths'])]=len(seq)
+                G.graph['paths'].append(name)
+                G.add_node(Intv,offsets={G.graph['path2id'][name]:0},aligned=0)
 
         elif isinstance(aobj,str):
             if not os.path.isfile(aobj):
@@ -660,10 +660,10 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
                     if intv[1]-intv[0]>0:
                         Intv=Interval(intv[0],intv[1])
                         t.add(Intv)
-                        G.graph['sample2id'][name]=len(G.graph['samples'])
-                        G.graph['id2sample'][len(G.graph['samples'])]=name
-                        G.graph['id2end'][len(G.graph['samples'])]=len(seq)
-                        G.graph['samples'].append(os.path.basename(sample))
+                        G.graph['path2id'][name]=len(G.graph['paths'])
+                        G.graph['id2path'][len(G.graph['paths'])]=name
+                        G.graph['id2end'][len(G.graph['paths'])]=len(seq)
+                        G.graph['paths'].append(os.path.basename(sample))
                         G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
     
     if not nx.is_directed_acyclic_graph(G):

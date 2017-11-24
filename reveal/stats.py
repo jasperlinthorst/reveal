@@ -18,7 +18,7 @@ def stats(gfafile):
     stats=dict()
     G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
-    samples=G.graph['samples']
+    samples=G.graph['paths']
     nsamples=len(samples)
     
     stats["Graph"]=os.path.basename(gfafile)
@@ -53,14 +53,14 @@ def stats(gfafile):
             if len(data['offsets'])>nsgsamples:
                 nsgsamples=len(data['offsets'])
             for sid in data['offsets']:
-                sgsamples.add(G.graph['id2sample'][sid])
+                sgsamples.add(G.graph['id2path'][sid])
         
         stats["Composition of component %d"%sgi]=",".join(sgsamples)
 
         seqperngenomes=dict()
         
         i=1
-        for sample in sg.graph['samples']:
+        for sample in sg.graph['paths']:
             seqperngenomes[i]=0
             i+=1
         
