@@ -14,23 +14,10 @@ How it works:
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
 
-It also depends on the libdivsufsort 2.0.1 package.
+It uses libdivsufsort for suffix array construction and uses the Python packages networkx, intervaltree and matplotlib.
 
-
-1 - Build and install libdivsufsort 2.0.1  
-To build and install libdivsufsort you need to have CMAKE. After that's installed do the following:  
-
-- git clone https://github.com/y-256/libdivsufsort.git (or wget https://github.com/y-256/libdivsufsort/archive/master.zip)
-- cd libdivsufsort
-- mkdir build
-- cd build
-- cmake -DBUILD\_DIVSUFSORT64:BOOL=ON -DCMAKE\_BUILD\_TYPE="Release" -DCMAKE\_INSTALL\_PREFIX="/usr/local" ..
-- make install
-
-Libdivsufsort should now be installed into your default installation directory (most likely /usr/local/lib).  
-
-2 - Build and install REVEAL  
-If libdivsufsort is installed, REVEAL can be installed by executing the following command:
+1 - Build and install REVEAL  
+REVEAL can be installed by executing the following command:
 
 **python setup.py test install**
 
@@ -61,7 +48,7 @@ To generate a graph for more than two sequences you can either call:
 
 **reveal align tests/1a.fa tests/1b.fa tests/1c.fa**
 
-or progressively align a sequence to an existing gfa graph:
+or by aligning a sequence to an existing gfa graph:
 
 **reveal align 1a_1b.gfa tests/1c.fa**
 
