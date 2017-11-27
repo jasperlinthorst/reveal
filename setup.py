@@ -17,16 +17,16 @@ setup(name="reveal", version="0.1",
         ext_modules=[ \
                 #Extension("reveallib", ["reveal.c","interface.c","divsufsort/divsufsort.c","divsufsort/utils.c","divsufsort/sssort.c","divsufsort/trsort.c"], \
                 #                        libraries=['z','pthread'], \
-                #                        define_macros=[('REVEALDEBUG',1),('HAVE_CONFIG_H',1),('__STDC_CONSTANT_MACROS',1),('__STDC_FORMAT_MACROS',1),('__STDC_LIMIT_MACROS',1)], \
+                #                        define_macros=[('REVEALDEBUG',1),('_OPENMP',1),('HAVE_CONFIG_H',1),('__STDC_CONSTANT_MACROS',1),('__STDC_FORMAT_MACROS',1),('__STDC_LIMIT_MACROS',1)], \
                 #                        undef_macros=['NDEBUG'] ), \
 
                 Extension("reveallib", ["reveal.c","interface.c","divsufsort/divsufsort.c","divsufsort/utils.c","divsufsort/sssort.c","divsufsort/trsort.c"], \
-                                        libraries=['z','pthread'], \
+                                        libraries=['pthread'], \
                                         define_macros=[('HAVE_CONFIG_H',1),('__STDC_CONSTANT_MACROS',1),('__STDC_FORMAT_MACROS',1),('__STDC_LIMIT_MACROS',1)], \
                                         undef_macros=['NDEBUG'] ), \
 
                 Extension("reveallib64", ["reveal.c","interface.c","divsufsort/divsufsort.c","divsufsort/utils.c","divsufsort/sssort.c","divsufsort/trsort.c"], \
-                                        libraries=['z','pthread'], \
+                                        libraries=['pthread'], \
                                         define_macros = [('SA64',1),('BUILD_DIVSUFSORT64',1),('HAVE_CONFIG_H',1),('__STDC_CONSTANT_MACROS',1),('__STDC_FORMAT_MACROS',1), ('__STDC_LIMIT_MACROS',1)], \
                                         undef_macros=['NDEBUG'] ), \
                 ],
