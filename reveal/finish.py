@@ -63,7 +63,7 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             plt.xlim(0,ref2length[refname])
             plt.ylim(0,contig2length[ctgname])
             plt.show()
-            plt.close()
+            # plt.close()
 
 def finish(args):
     logging.debug("Extracting mums.")
@@ -77,9 +77,6 @@ def finish(args):
             else:
                 pref.append(bn)
         args.output="_".join(pref)
-
-    if args.minchainsum==None:
-        args.minchainsum=.5*args.mineventsize
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=2 if args.nproc>=2 else 1)
@@ -111,15 +108,55 @@ def finish(args):
     contig2length=dict()
     contig2seq=dict()
     
+    totl=0
     for name,seq in fasta_reader(args.contigs,cutN=args.cutn):
-        contig2length[name]=len(seq)
+        l=len(seq)
+        contig2length[name]=l
+        totl+=l
         contig2seq[name]=seq
 
     #combine matches
     mems=mums+rcmums
+
+    if len(mems)==0:
+        logging.error("No mums! Exit")
+        sys.exit()
+
+    if args.minlength==None:
+        args.minlength=1
+        #sort by length
+        mems=sorted(mems,key=lambda m: m[4],reverse=True)
+        #prevent use of too many mums
+        cov=0
+        for i,mem in enumerate(mems):
+            cov+=mem[4]
+            if cov/float(totl)>1:
+                cov-=mem[4]
+                break
+        if i<len(mems)-1:
+            mems=mems[:i]
+        logging.info("Auto determined min-mum-length to %d"%mems[-1][4])
+
+    ld=[mem[4] for mem in mems]
+    bpcovered=sum(ld)
+    bpncovered=float(totl)-bpcovered
+    avgcov=sum(ld)/float(totl)
+
+    if args.plot:
+        from matplotlib import pyplot as plt
+        from matplotlib import patches
+        #plot mum lengths
+        # plt.hist(ld,bins=range(0,100,1))
+        # plt.show()
+
+    if args.mineventsize==None: #auto set mineventsize
+        args.mineventsize=int((bpncovered/float(len(mems)))*totl)
+        logging.info("Auto determined mineventsize to %d"%args.mineventsize)
     
-    assert(len(mems)==len(mums)+len(rcmums))
-    
+    if args.minchainsum==None: #auto set minchainsum with 0.5x of the genome wide coverage
+        args.minchainsum=int((.5*avgcov)*args.mineventsize)
+        logging.info("Auto determined minchainsum to %d"%args.minchainsum)
+
     logging.info("Assembly consists of %d contigs."%len(contig2seq))
     
     logging.debug("Associating mums to contigs.")
@@ -138,9 +175,6 @@ def finish(args):
         finished=open(args.output+".fasta",'w')
         unplaced=open(args.output+".unplaced.fasta",'w')
     
-    if args.plot:
-        from matplotlib import pyplot as plt
-        from matplotlib import patches
     
     totsequnplaced=0
     totseqplaced=0
@@ -200,6 +234,10 @@ def finish(args):
                         # ref2ctg['unchained'][ctgname][ctgend:ctgbegin]=0
                     unused.append((ctgname,ci))
 
+    # if args.plot:
+        # logging.info("Plot chains before extend.")
+        # plotchains(ctg2mums,ctg2ref,contig2length,ref2length)
+
     #remove unused chains from the ctg2ref mapping
     if args.order=="chains": 
 
@@ -219,7 +257,7 @@ def finish(args):
         keys=sorted(defref2ctg)
         for ref in keys: #update the index of the chains, so that we can detect consecutive chains again
             if ref=='unchained' or ref=='unplaced':
-                # defref2ctg[ref]=ref2ctg[ref]
+                assert(False)
                 continue
             for name,i in unused:
                 ctgs=[]
@@ -241,6 +279,7 @@ def finish(args):
     addunchained(defref2ctg,defctg2ref,contig2length)
 
     if args.plot:
+        logging.info("Plot chains after extend.")
         plotchains(ctg2mums,defctg2ref,contig2length,ref2length)
 
     #build graph/fasta for the structural layout of the genome
@@ -864,11 +903,11 @@ def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,m
     
     return ref2ctg,ctg2ref
 
-def mapmumstocontig(mems,filtermums=False,mineventsize=1500,minchainsum=1000):
+def mapmumstocontig(mums,filtermums=False,mineventsize=1500,minchainsum=1000):
     ctg2mums=dict()
-    logging.debug("Mapping %d mums to contigs."%len(mems))
-    for mem in mems:
-        refchrom, refstart, ctg, ctgstart, l, n, o = mem
+    logging.debug("Mapping %d mums to contigs."%len(mums))
+    for mum in mums:
+        refchrom, refstart, ctg, ctgstart, l, n, o = mum
         refstart=int(refstart)
         ctgstart=int(ctgstart)
         l=int(l)
@@ -932,7 +971,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     
     mums=[]
     
-    for mum in idx.getmums(minlength):
+    for mum in idx.getmums(minlength if minlength!=None else 1):
         refstart=mum[2][0]
         ctgstart=mum[2][1]
         rnode=t[refstart].pop() #start position on match to node in graph
