@@ -139,7 +139,12 @@ def finish(args):
 
     ld=[mem[4] for mem in mems]
     bpcovered=sum(ld)
-    bpncovered=float(totl)-bpcovered
+
+    bpncovered=totl-bpcovered
+    if bpncovered<0:
+        logging.error("Over representation of MUMs, probably better to use larger -m.")
+        bpncovered=1
+        bpcovered
     avgcov=sum(ld)/float(totl)
 
     if args.plot:
@@ -148,10 +153,6 @@ def finish(args):
         #plot mum lengths
         # plt.hist(ld,bins=range(0,100,1))
         # plt.show()
-
-    if args.mineventsize==None: #auto set mineventsize
-        args.mineventsize=int((bpncovered/float(len(mems)))*totl)
-        logging.info("Auto determined mineventsize to %d"%args.mineventsize)
     
     if args.minchainsum==None: #auto set minchainsum with 0.5x of the genome wide coverage
         args.minchainsum=int((.5*avgcov)*args.mineventsize)
