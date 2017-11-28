@@ -422,7 +422,7 @@ void checkindex(RevealIndex* idx){
 
             if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
                 #ifdef SA64
-                fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
+                fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",(long long)i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
                 #else
                 fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
                 #endif
