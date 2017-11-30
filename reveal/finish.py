@@ -144,8 +144,8 @@ def finish(args):
     if bpncovered<0:
         logging.error("Over representation of MUMs, probably better to use larger -m.")
         bpncovered=1
-        bpcovered
-    avgcov=sum(ld)/float(totl)
+    
+    avgcov=bpcovered/float(totl)
 
     if args.plot:
         from matplotlib import pyplot as plt
@@ -153,7 +153,7 @@ def finish(args):
         #plot mum lengths
         # plt.hist(ld,bins=range(0,100,1))
         # plt.show()
-    
+
     if args.minchainsum==None: #auto set minchainsum with 0.5x of the genome wide coverage
         args.minchainsum=int((.5*avgcov)*args.mineventsize)
         logging.info("Auto determined minchainsum to %d"%args.minchainsum)

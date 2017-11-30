@@ -86,7 +86,11 @@ To construct an interactive (-i, for zooming purposes) mumplot of two fasta file
 
 **reveal plot contig1.fasta contig2.fasta -i**
 
-NOTE, you need to have matplotlib for this.
+Or to visualise a graph in a mumplot
+
+**reveal gplot 1a&#95;1b.gfa -i**
+
+NOTE that you need to have matplotlib installed for these commands.
 
 To extract a genome (name of the original fasta file) from the graph:
 

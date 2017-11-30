@@ -81,12 +81,6 @@ def gapcost(pointa,pointb,model="sumofpairs",convex=True): #model is either sumo
         return sorted([abs(pointa[i]-pointb[i]) for i in range(len(pointa))])[len(pointa)/2]
     elif model=="sumofpairs":
         p=0
-        # if len(pointa)==1:
-            # if convex:
-                # return log(abs(pointa[0]-pointb[0])+1)
-            # else:
-                # return abs(pointa[0]-pointb[0])
-
         D=[abs(pointa[i]-pointb[i]) for i in range(len(pointa))]
         for i in range(len(D)): #all pairwise distances
             for j in range(i+1,len(D)):

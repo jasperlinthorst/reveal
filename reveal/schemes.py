@@ -22,6 +22,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     ref=mums[0][2].keys()[0]
     logging.trace("Ref is %s"%ref)
     mums.append(right)
+
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
 
     sp2mum=dict()
@@ -150,7 +151,7 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
 
         if not precomputed:
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
-            mmums=[mum for mum in mums if len(mum[2])==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
+            mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
 
             if len(mmums)==0:
                 logging.debug("No MUMS that span all input genomes, segment genomes.")
@@ -164,6 +165,15 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
             relmums,mapping=maptooffsets(mmums)
+
+            logging.debug("Subset to same group of samples")
+            relmums.sort(key=lambda m: (m[1],m[0])) #sort by n, than l
+            relmums=[mum for mum in relmums if mum[2].keys()==relmums[-1][2].keys()] #subset to only those mums that apply to all genomes in the graph
+            
+            if len(relmums)==0:       
+                logging.debug("No MUMS that span all genomes that are in the graph, segment genomes.")        
+                relmums=segment(relmums)      
+                logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(relmums[0][2].keys(),len(relmums)))
             
             logging.debug("Left with %d mums"%len(relmums))
 
