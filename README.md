@@ -70,11 +70,13 @@ To obtain a graph-based representation that encodes the original as well as the 
 
 **reveal finish --order=chains reference.fasta draft.fasta --outputgraph**
 
-To extract variants from a graph run:
+To extract bubbles (a list of bubbles source/sink pairs and nodes within the bubble) from a graph run:
 
 **reveal bubbles 1a&#95;1b.gfa**
 
-This will print a list of bubbles source/sink pairs and nodes within the bubble, the different variants (SNPs, indels, highly variable alleles etc.) and their positions (with respect to the genome specified as a reference) and the actual varying alleles.
+Similar to bubbles, but will print the actual varying sequence.
+
+**reveal variants 1a&#95;1b.gfa**
 
 To realign parts of a graph (e.g. with different settings or after progressive alignment):
 
@@ -104,4 +106,4 @@ To merge multiple gfa graphs into a single gfa graph, while maintaining node-id 
 
 For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
 
-Under notebooks you can find some IPython notebooks that show some experiments for some typical usecases.
+Under notebooks you can find some IPython notebooks that show some experiments for typical usecases (not up-to-date(!)).
