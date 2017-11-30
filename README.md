@@ -1,5 +1,4 @@
-
-#REVEAL
+# REVEAL
 -----------------
 
 REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole genomes.
@@ -10,7 +9,7 @@ How it works:
 
 ![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/blob/master/reveal.gif)
 
-##INSTALL
+## INSTALL
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
 
@@ -25,8 +24,7 @@ To install without executing the unit tests:
 
 **python setup.py install**
 
-
-##RUN
+## RUN
 
 To validate whether everything is correctly installed you can run a test alignment from the tests directory, e.g. by executing the following command:
 
