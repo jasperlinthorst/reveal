@@ -256,6 +256,7 @@ class Bubble:
         self.G=G
         self.ordD=ordD
         self.simple=None
+        self.minsize=min([len(G.node[node]['seq']) for node in nodes])
     
     def issimple(self):
         if self.simple==None:

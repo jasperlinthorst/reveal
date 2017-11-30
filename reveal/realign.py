@@ -20,7 +20,7 @@ def realign_bubble_cmd(args):
     G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
     
-    if args.all:
+    if args.all or args.complex:
         G=realign_all(G,    minlength=args.minlength,
                             minn=args.minn,
                             wscore=args.wscore,
@@ -29,8 +29,14 @@ def realign_bubble_cmd(args):
                             seedsize=args.seedsize,
                             maxmums=args.maxmums,
                             gcmodel=args.gcmodel,
+                            complex=args.complex,
+                            minsize=args.minsize,
                             sa64=args.sa64)
     else:
+        if source==None or sink==None:
+            logging.error("Specify source sink pair")
+            sys.exit(1)
+
         G=realign_bubble(G,args.source,args.sink,minlength=args.minlength,
                                                  minn=args.minn,
                                                  wscore=args.wscore,
@@ -200,16 +206,25 @@ def realign_all(G,  minlength=20,
                     seedsize=None,
                     maxmums=None,
                     gcmodel="sumofpairs",
-                    sa64=False):
+                    sa64=False,
+                    minsize=None,
+                    complex=False):
 
     complexbubbles=dict()
     source2sink=dict()
     sink2source=dict()
     
+    if minsize==None:
+        minsize=minlength
+
     #detect all complex bubbles
     for b in bubbles.bubbles(G):
 
-        if b.issimple():
+        if complex:
+            if b.issimple():
+                continue
+
+        if b.minsize<minsize:
             continue
 
         pair=(b.source,b.sink)
@@ -232,7 +247,7 @@ def realign_all(G,  minlength=20,
         source2sink[pair[0]]=pair[1]
         sink2source[pair[1]]=pair[0]
      
-    #join complex bubbles that share a source/sink nodes
+    #join complex bubbles that share a source/sink node
     converged=False
     while not converged:
         converged=True
@@ -277,7 +292,7 @@ def realign_all(G,  minlength=20,
     logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     i=1
     for source,sink in distinctbubbles:
-        logging.info("Realigning bubble between <%s> and <%s> of size %d."%(source,sink,len(distinctbubbles[(source,sink)])))
+        logging.info("Realigning bubble between <%s> and <%s> of size (in nodes) %d."%(source,sink,len(distinctbubbles[(source,sink)])))
         G=realign_bubble(G,source,sink, maxmums=maxmums,
                                         seedsize=seedsize,
                                         gcmodel=gcmodel,
