@@ -110,7 +110,7 @@ def segment(mums):
         if z>best:
             best=z
             partition=part
-    
+
     logging.debug("Splitting input genomes: %s"%str(partition))
     return d[partition]
 
@@ -164,17 +164,7 @@ def graphmumpicker(mums,idx,precomputed=False,prevchain=[]):
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
             relmums,mapping=maptooffsets(mmums)
-
-            logging.debug("Subset to max available number of samples in set")
-            relmums.sort(key=lambda m: m[1]) #sort by n
             
-            relmums=[mum for mum in relmums if mum[2].keys()==relmums[-1][2].keys()] #subset to only those mums that apply to all genomes in the graph
-
-            if len(relmums)==0:
-                logging.debug("No MUMS that span all genomes that are in the graph, segment genomes.")
-                relmums=segment(relmums)
-                logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(relmums[0][2].keys(),len(relmums)))
-
             logging.debug("Left with %d mums"%len(relmums))
 
             if idx.leftnode!=None:
