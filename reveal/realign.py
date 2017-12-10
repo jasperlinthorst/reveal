@@ -33,7 +33,7 @@ def realign_bubble_cmd(args):
                             minsize=args.minsize,
                             sa64=args.sa64)
     else:
-        if source==None or sink==None:
+        if args.source==None or args.sink==None:
             logging.error("Specify source sink pair")
             sys.exit(1)
 
@@ -302,8 +302,7 @@ def realign_all(G,  minlength=20,
                                         maxlen=maxlen,
                                         wpen=wpen,
                                         sa64=sa64)
-        write_gfa(G,"",outputfile=str(i))
+        
         i+=1
     
     return G
-
