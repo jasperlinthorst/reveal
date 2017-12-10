@@ -1,5 +1,4 @@
 # REVEAL
------------------
 
 REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole genomes.
 
@@ -15,7 +14,6 @@ REVEAL is written in Python and C code. To build it, it needs Python version 2.7
 
 It uses libdivsufsort for suffix array construction and uses the Python packages networkx, intervaltree and matplotlib.
 
-1 - Build and install REVEAL  
 REVEAL can be installed by executing the following command:
 
 **python setup.py test install**
@@ -33,14 +31,6 @@ To validate whether everything is correctly installed you can run a test alignme
 If everything is correctly installed, a file called 1a\_1b.gfa should have been produced. This file contains a reference graph in GFA format (see [GFA](http://lh3.github.io/2014/07/19/a-proposal-of-the-grapical-fragment-assembly-format/)).
 
 Important parameters to consider when running a (multi) alignment are -m and -n. See subcommand help.
-
-In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
-
-**reveal align tests/1a.fa tests/1b.fa --gml**
-
-or run:
-
-**reveal convert 1a_1b.gfa**
 
 To generate a graph for more than two sequences you can either call:
 
@@ -64,7 +54,7 @@ To address large events (like translocations, inversions, but also misassemblies
 
 Have a look at the various parameters, especially: --mineventsize, --minchainsum and -m.
 
-To obtain a graph-based representation that encodes the original as well as the 'transformed' genome as separate paths through a graph, use the --outputgraph option. Note that these graphs may contain cycles, but can still be used in subsequent alignments using REVEAL. Paths in the graph prefixed with an asterisk (\*) correspond to the original (non-transformed) input genomes, which are ignored by REVEAL during graph traversal and mainly function as a way to record structural events in a multi-genome alignment. By default, only the contigs in which a structural rearrangements was detected are output as a \*-path in order to save space.
+To obtain a graph-based representation that encodes the original as well as the 'transformed' genome as separate paths through a graph, use the **--outputgraph** option. Note that these graphs may contain cycles, but can still be used in subsequent alignments using REVEAL. Paths in the graph prefixed with an asterisk (\*) correspond to the original (non-transformed) input genomes, which are ignored by REVEAL during graph traversal and mainly function as a way to record structural events in a multi-genome alignment. By default, only the contigs in which a structural rearrangements was detected are output as a \*-path in order to save space.
 
 **reveal finish --order=chains reference.fasta draft.fasta --outputgraph**
 
@@ -76,11 +66,15 @@ Similar to bubbles, but will print the actual varying sequence.
 
 **reveal variants 1a&#95;1b.gfa**
 
+To output statistics with respect to the number of nodes, bubbles, variants, aligned sequence etc.:
+
+**reveal stats 1a&#95;1b.gfa**
+
 To realign parts of a graph (e.g. with different settings or after progressive alignment):
 
 **reveal realign \<graph\> \<source-node\> \<sink-node\>**
 
-To construct an interactive (-i, for zooming purposes) mumplot of two fasta files (single contig for now...):
+To construct an interactive (-i, for zooming purposes) mumplot of two fasta files:
 
 **reveal plot contig1.fasta contig2.fasta -i**
 
@@ -90,9 +84,17 @@ Or to visualise a graph in a mumplot
 
 NOTE that you need to have matplotlib installed for these commands.
 
-To extract a genome (name of the original fasta file) from the graph:
+In case you want to inspect the graph with software like cytoscape or gephi, you can produce a graph in gml format by calling reveal as follows:
 
-**reveal extract \<graph\> \<genome\>**
+**reveal align tests/1a.fa tests/1b.fa --gml**
+
+or run:
+
+**reveal convert 1a_1b.gfa**
+
+To extract a genome/path from the graph:
+
+**reveal extract \<graph\> \<pathname\>**
 
 To reverse complement a graph:
 
@@ -105,6 +107,10 @@ To extract a subgraph of the graph, to for instance inspect a complex bubble str
 To merge multiple gfa graphs into a single gfa graph, while maintaining node-id space:
 
 **reveal merge \<graph1\> \<graph2\> ...  \<graphN\>**
+
+Or to do the opposite, split a graph by its connected components:
+
+**reveal split \<graph\>**
 
 For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
 
