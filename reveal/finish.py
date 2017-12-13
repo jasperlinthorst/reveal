@@ -973,8 +973,8 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     mums=[]
     
     for mum in idx.getmums(minlength if minlength!=None else 1):
-        refstart=mum[2][0]
-        ctgstart=mum[2][1]
+        refstart=mum[2][0][1]
+        ctgstart=mum[2][1][1]
         rnode=t[refstart].pop() #start position on match to node in graph
         cnode=t[ctgstart].pop()
         if revcomp:
