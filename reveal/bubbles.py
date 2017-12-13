@@ -29,7 +29,10 @@ def bubbles(G):
         alternativeEntrance={}
         previousEntrance={}
         ordD={}
+        
+        logging.debug("Topologically sort the graph.")
         ordD_=nx.topological_sort(G)
+        logging.debug("Done.")
         
         #construct candidates array
         for i,v in enumerate(ordD_):
@@ -138,11 +141,14 @@ def bubbles(G):
         sinknode=G.node[pair[1]]
         sinksamples=set(sinknode['offsets'].keys())
         
-        if sourcesamples!=sinksamples:
+        # if sourcesamples!=sinksamples:
             #logging.warn("Invalid bubble detected between node %s and node %s."%pair)
+            # continue
+
+        if len(bubblenodes)==2: #only source sink, no variation
             continue
 
-        yield Bubble(G,pair[0],pair[1],bubblenodes,ordD)
+        yield Bubble(G,pair[0],pair[1],nodes=bubblenodes,ordD=ordD)
 
 def bubbles_cmd(args):
     if len(args.graph)<1:
@@ -249,14 +255,33 @@ def variants_cmd(args):
         sys.stdout.write("\n")
 
 class Bubble:
-    def __init__(self,G,source,sink,nodes,ordD):
+    def __init__(self,G,source,sink,nodes=None,ordD=None):
         self.source=source
         self.sink=sink
-        self.nodes=nodes
         self.G=G
-        self.ordD=ordD
+
+        if ordD==None or nodes==None:
+            ordD_=nx.topological_sort(G)
+
+        if ordD!=None:
+            self.ordD=ordD
+        else:
+            self.ordD={}
+            for i,v in enumerate(ordD_):
+                self.ordD[v]=i
+        
+        if nodes!=None:
+            self.nodes=nodes
+        else:
+            self.nodes=ordD_[self.ordD[source]:self.ordD[sink]+1]
+
+        if len(self.nodes)==2:
+            raise InvalidBubble("Not a valid source sink pair as bubble")
+
         self.simple=None
-        self.minsize=min([len(G.node[node]['seq']) for node in nodes])
+
+        self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
+        self.seqsize=sum([len(G.node[node]['seq'])*len(G.node[node]['offsets']) for node in self.nodes[1:-1]])
     
     def issimple(self):
         if self.simple==None:
