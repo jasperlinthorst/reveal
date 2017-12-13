@@ -242,7 +242,8 @@ def chain(idx,offsets,minlength,depth,maxmums,recurse=True,uniq=True,gcmodel="su
     #add all nodes to the graph
     for mum in mums:
         # point=sorted(mum[2])
-        point=sorted(mum[2].values())
+        # point=sorted(mum[2].values())
+        point=sorted([sp for gid,sp in mum[2]])
         for i,p in enumerate(point):
             point[i]=offsets[i]+(point[i]-localoffsets[i]) #map positions back to toplevel T index
         point=tuple(point)

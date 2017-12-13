@@ -88,7 +88,8 @@ def plot(args):
         idx.construct()
         
         print "Extracting mums..."
-        mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
+        #mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
+        mmems=[(mem[0],mem[1],[sp for gid,sp in mem[2]],0) for mem in idx.getmums(args.minlength)]
         
         sep=idx.nsep[0]
 
@@ -120,7 +121,8 @@ def plot(args):
             vi=iter(qryintvs)
             v=vi.next()
             
-            tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
+            #tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
+            tmp=[(m[0],m[1],sorted([sp for gid,sp in m[2]])) for m in tmp] #make sure start positions are sorted
             tmp.sort(key=lambda l: l[2][1]) #sort by query pos
             
             nmmems=[]
