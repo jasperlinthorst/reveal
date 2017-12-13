@@ -4,6 +4,8 @@ from intervaltree import Interval, IntervalTree
 import sys
 import os
 from math import log
+import uuid
+import subprocess
 
 def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
@@ -62,6 +64,104 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
             else:
                 yield name,seq
 
+def msa2graph(aobjs,idoffset=0,msa='muscle'):
+    nn=idoffset
+    ng=nx.DiGraph()
+    ng.graph['paths']=[]
+    ng.graph['path2id']=dict()
+    ng.graph['id2path']=dict()
+    ng.graph['id2end']=dict()
+    
+    for name,seq in aobjs:
+        sid=len(ng.graph['paths'])
+        ng.graph['path2id'][name]=sid
+        ng.graph['id2path'][sid]=name
+        ng.graph['id2end'][sid]=len(seq)
+        ng.graph['paths'].append(name)
+    
+    #TODO: writing to a temporary file (for now), but this should ideally happen in memory
+    uid=uuid.uuid4().hex
+    fasta_writer(uid+".fasta",aobjs)
+
+    if msa=='muscle':
+        cmd="muscle -in %s.fasta -quiet"%uid
+    else:
+        logging.fatal("Unkown multiple sequence aligner: %s"%msa)
+        sys.exit(1)
+    
+    seqs=[""]*len(aobjs)
+    names=[""]*len(aobjs)
+
+    try:
+        for a in subprocess.check_output([cmd],shell=True).split(">")[1:]:
+            x=a.find('\n')
+            name=a[:x]
+            seq=a[x+1:].replace("\n","")
+            names[ng.graph['path2id'][name]]=name
+            seqs[ng.graph['path2id'][name]]=seq
+            logging.debug("MUSCLE %s: %s%s"%(name,seq[:200],'...'if len(seq)>200 else ''))
+    except Error as e:
+        logging.fatal("System call to %s failed: \"%s\""%(msa,e.output))
+
+    offsets={o:-1 for o in range(len(seqs))}
+    nid=nn
+    for i in xrange(len(seqs[0])):
+        col={}
+        nodes={}
+        for j in xrange(len(seqs)):
+            if seqs[j][i] in col:
+                col[seqs[j][i]].add(j)
+            else:
+                col[seqs[j][i]]=set([j])
+            if seqs[j][i]!='-':
+                offsets[j]+=1
+
+        for base in col:
+            if i==0:
+                if len(col[base])>0:
+                    ng.add_node(nid,seq=base,offsets={sid:offsets[sid] for sid in offsets if sid in col[base]})
+                    nodes[base]=nid
+                    nid+=1
+            else:
+                for pbase in pcol:
+                    overlap=pcol[pbase].intersection(col[base])
+                    
+                    if len(overlap)==0:
+                        continue
+                    elif len(overlap)==len(col[base])==len(pcol[pbase]):
+                        ng.node[pnodes[pbase]]['seq']+=base
+                        nodes[base]=pnodes[pbase]
+                    else:
+                        if base not in nodes: #if not already there
+                            ng.add_node(nid,seq=base,offsets=dict())
+                            nodes[base]=nid
+                            nid+=1
+                        for k in overlap:
+                            ng.node[nodes[base]]['offsets'][k]=offsets[k]
+                        ng.add_edge(pnodes[pbase],nodes[base],paths=overlap,oto='+',ofrom='+')
+        pnodes=nodes
+        pcol=col
+
+    #remove gaps from graph
+    remove=[]
+    for node,data in ng.nodes(data=True):
+        data['seq']=data['seq'].replace("-","")
+        if data['seq']=="":
+            remove.append(node)
+
+    for node in remove:
+        ine=ng.in_edges(node,data=True)
+        oute=ng.out_edges(node,data=True)
+        for in1,in2,ind in ine:
+            for out1,out2,outd in oute:
+                overlap=ind['paths'].intersection(outd['paths'])
+                if len(overlap)>=1:
+                    ng.add_edge(in1,out2,paths=overlap,ofrom='+',oto='+')
+
+    ng.remove_nodes_from(remove)
+    os.remove("%s.fasta"%uid)
+    return ng
+
 def fasta_writer(fn,name_seq,lw=100):
     seq=""
     with open(fn,'w') as ff:
@@ -99,6 +199,21 @@ def rc(seq):
         'S':'S','W':'W','B':'V','V':'B','D':'H','H':'D','N':'N',\
         'X':'X','-':'-'}
     return "".join([d[b] for b in reversed(seq)])
+
+#extract all combinations for 'non-unique max exact matches' and return list of mems as if they were unique
+def mem2mums(mem):
+    import itertools
+    l,n,spd=mem
+    spd=sorted(spd, key=lambda m:m[1])
+    pos=[[spd[0]]]
+    for i in range(1,len(spd)):
+        if spd[i-1][0]==spd[i][0]:
+            pos[-1].append(spd[i])
+        else:
+            pos.append([spd[i]])
+    mums=[]
+    for t in itertools.product(*pos):
+        yield (l,n,t)
 
 def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     try:
