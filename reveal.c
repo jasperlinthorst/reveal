@@ -94,11 +94,17 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
             continue;//not unique
         }
         //match is not a repeat and is maximally unique
+// #ifdef SA64
+//         PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
+// #else
+//         PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
+// #endif
 #ifdef SA64
-        PyObject *mum=Py_BuildValue("I,i,{i:L,i:L}",index->LCP[i],2,0,aStart,1,bStart);
+        PyObject *mum=Py_BuildValue("I,i,((i:L),(i:L))",index->LCP[i],2,0,aStart,1,bStart);
 #else
-        PyObject *mum=Py_BuildValue("I,i,{i:i,i:i}",index->LCP[i],2,0,aStart,1,bStart);
+        PyObject *mum=Py_BuildValue("I,i,((i:i),(i:i))",index->LCP[i],2,0,aStart,1,bStart);
 #endif
+
         if (PyList_Append(mums,mum)==0){
             Py_DECREF(mum);
         } else {
@@ -189,8 +195,182 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
     return 0;
 }
 
-PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
+int ismultimem(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
+    if (l>0){
+        int j;
+        memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
+        
+        if (((RevealIndex *) idx->main)->nsamples==2){ //dont need SO in case of only two samples
+            flag_so[(idx->SA[ub]>idx->nsep[0]) == (idx->SA[lb]>idx->nsep[0])]++;
+            // if ( (idx->SA[ub]>idx->nsep[0]) == (idx->SA[lb]>idx->nsep[0]) ){
+            //     return 0;
+            // }
+        } else {
+            for (j=lb; j<ub+1; j++) { //has to occur in all samples (but may exist more than once)
+                flag_so[idx->SO[idx->SA[j]]]++;
+            }
+        }
 
+        for (j=lb; j<ub; j++){ //check maximal
+            if (idx->SA[j]==0){
+                return 1; //success
+            }
+            if (idx->SA[j+1]==0){
+                return 1; //success
+            }
+            if (idx->T[idx->SA[j]-1]!=idx->T[idx->SA[j+1]-1] || idx->T[idx->SA[j]-1]=='N' || idx->T[idx->SA[j]-1]=='$' || islower(idx->T[idx->SA[j]-1])){ //#has to be maximal
+                return 1; //success
+            }
+        }
+    }
+    return 0;
+}
+
+PyObject * getmultimems(RevealIndex *index, PyObject *args, PyObject *keywds) {
+    lcp_t minl=0;
+    int minn=2;
+    static char *kwlist[] = {"minlength","minn", NULL};
+    
+    if (args!=NULL) {
+        if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ii", kwlist, &minl, &minn))
+            return NULL;
+    }
+    
+    PyObject * multimems;
+    multimems=PyList_New(0);
+    if (index==NULL){
+        fprintf(stderr,"No valid index object.\n");
+        return NULL;
+    }
+    RevealIndex * mainidx = (RevealIndex *) index->main;
+    int maxdepth=1000;
+    int *flag_so=calloc(mainidx->nsamples,sizeof *flag_so);
+    lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
+    lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
+    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
+    lcp_t i_lcp;
+    int depth=0;
+    saidx_t i,lb,i_lb,i_ub;
+    stack_lcp[0]=0;
+    stack_lb[0]=0;
+    stack_ub[0]=0;
+    for (i=1;i<index->n;i++){
+        lb = i-1;
+        assert(depth>=0);
+        while (index->LCP[i] < stack_lcp[depth]) {
+            stack_ub[depth]=i-1; //assign
+            i_lcp = stack_lcp[depth];
+            i_lb = stack_lb[depth];
+            i_ub = stack_ub[depth];
+            depth--;
+            int n=(i_ub-i_lb)+1;
+            
+            if (i_lcp>=minl){
+                if (n>=minn){
+                    if (ismultimem(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                        int c=0,ci=0;
+                        for (ci=0; ci<((RevealIndex *) index->main)->nsamples; ci++){
+                            if (flag_so[ci]>0){
+                                c++;
+                            }
+                        }
+                        if (c<minn){
+                            continue;
+                        }
+                        int x;
+                        PyObject *crdlst = PyTuple_New(n);
+                        for (x=0;x<n;x++) {
+#ifdef SA64
+                            PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
+#else
+                            PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
+#endif
+                            PyTuple_SetItem(crdlst, x, v);
+                        }
+                        PyObject *multimem=Py_BuildValue("I,i,O",i_lcp,c,crdlst);
+                        Py_DECREF(crdlst);
+                        PyList_Append(multimems,multimem);
+                        Py_DECREF(multimem);
+                    }
+                }
+            }
+
+            assert(depth>=0);
+            lb = i_lb;
+        }
+
+        if (index->LCP[i] > stack_lcp[depth]){
+            depth++;
+            if (depth>=maxdepth){
+                maxdepth=maxdepth+1000;
+                stack_lcp=realloc(stack_lcp,maxdepth * sizeof *stack_lcp);
+                if (stack_lcp==NULL){
+                    fprintf(stderr,"Failed to allocate memory for stack_lcp.\n");
+                    return NULL;
+                }
+                stack_lb=realloc(stack_lb,maxdepth * sizeof *stack_lb);
+                if (stack_lb==NULL){
+                    fprintf(stderr,"Failed to allocate memory for stack_lb.\n");
+                    return NULL;
+                }
+                stack_ub=realloc(stack_ub,maxdepth * sizeof *stack_ub);
+                if (stack_ub==NULL){
+                    fprintf(stderr,"Failed to allocate memory for stack_ub.\n");
+                    return NULL;
+                }
+            }
+            stack_lcp[depth]=index->LCP[i];
+            stack_lb[depth]=lb;
+            stack_ub[depth]=0; //initialize
+        }
+    }
+
+    while (depth>=0) {
+        stack_ub[depth]=index->n-1;
+        i_lcp = stack_lcp[depth];
+        i_lb = stack_lb[depth];
+        i_ub = stack_ub[depth];
+        depth--;
+        
+        int n=(i_ub-i_lb)+1;
+        if (i_lcp>=minl){
+            if (n>=minn){
+                if (ismultimem(index, i_lcp, i_lb, i_ub, flag_so)==1){
+                    int c=0,ci=0;
+                    for (ci=0; ci<((RevealIndex *) index->main)->nsamples; ci++){
+                        if (flag_so[ci]>0){
+                            c++;
+                        }
+                    }
+                    if (c<minn){
+                        continue;
+                    }
+                    int x;
+                    PyObject *crdlst = PyTuple_New(n);
+                    for (x=0;x<n;x++) {
+#ifdef SA64
+                        PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
+#else
+                        PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
+#endif
+                        PyTuple_SetItem(crdlst, x, v);
+                    }
+                    PyObject *multimem=Py_BuildValue("I,i,O",i_lcp,c,crdlst);
+                    Py_DECREF(crdlst);
+                    PyList_Append(multimems,multimem);
+                    Py_DECREF(multimem);
+                }
+            }
+        }
+    }
+    free(stack_lcp);
+    free(stack_lb);
+    free(stack_ub);
+    free(flag_so);
+    return multimems;
+}
+
+PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     lcp_t minl=0;
     int minn=2;
     static char *kwlist[] = {"minlength","minn", NULL};
@@ -215,7 +395,6 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
-    
     stack_lcp[0]=0;
     stack_lb[0]=0;
     stack_ub[0]=0;
@@ -234,17 +413,22 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
                 if (n<=mainidx->nsamples && n>=minn){
                     if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                         int x;
-                        PyObject *crdmap = PyDict_New();
+                        // PyObject *crdmap = PyDict_New();
+                        PyObject *crdmap = PyTuple_New(n);
                         for (x=0;x<n;x++) {
-                            PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
+                            // PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
-                            PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                            // PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
-                            PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                            // PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                            PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                            PyDict_SetItem(crdmap, s, v);
-                            Py_DECREF(s);
-                            Py_DECREF(v);
+                            PyTuple_SetItem(crdmap, x, v);
+
+                            // PyDict_SetItem(crdmap, s, v);
+                            // Py_DECREF(s);
+                            // Py_DECREF(v);
                         }
                         PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
                         Py_DECREF(crdmap);
@@ -257,6 +441,7 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             assert(depth>=0);
             lb = i_lb;
         }
+
         if (index->LCP[i] > stack_lcp[depth]){
             depth++;
             if (depth>=maxdepth){
@@ -295,17 +480,22 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
             if (n<=mainidx->nsamples && n>=minn){
                 if (ismultimum(index, i_lcp, i_lb, i_ub, flag_so)==1){
                     int x;
-                    PyObject *crdmap = PyDict_New();
+                    // PyObject *crdmap = PyDict_New();
+                    PyObject *crdmap = PyTuple_New(n);
                     for (x=0;x<n;x++) {
-                        PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
+                        // PyObject *s = Py_BuildValue("i", index->SO[index->SA[i_lb+x]]);
 #ifdef SA64
-                        PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                        // PyObject *v = Py_BuildValue("L", index->SA[i_lb+x]);
+                        PyObject *v = Py_BuildValue("(i,L)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #else
-                        PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                        // PyObject *v = Py_BuildValue("i", index->SA[i_lb+x]);
+                        PyObject *v = Py_BuildValue("(i,i)", index->SO[index->SA[i_lb+x]], index->SA[i_lb+x]);
 #endif
-                        PyDict_SetItem(crdmap, s, v);
-                        Py_DECREF(s);
-                        Py_DECREF(v);
+                        PyTuple_SetItem(crdmap, x, v);
+
+                        // PyDict_SetItem(crdmap, s, v);
+                        // Py_DECREF(s);
+                        // Py_DECREF(v);
                     }
                     PyObject *multimum=Py_BuildValue("I,i,O",i_lcp,n,crdmap);
                     Py_DECREF(crdmap);
@@ -569,7 +759,10 @@ void *aligner(void *arg) {
                 if (((RevealIndex *) idx->main)->nsamples>2){
                     PyObject *args = PyTuple_New(0);
                     PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", rw->minn);
+                    
                     multimums = getmultimums(idx,args,kwargs);
+                    // multimums = getmultimems(idx,args,kwargs);
+
                     Py_DECREF(kwargs);
                     Py_DECREF(args);
                 } else {
@@ -593,7 +786,7 @@ void *aligner(void *arg) {
                 precomputed=Py_True;
             }
 
-            PyObject *keywds = Py_BuildValue("{s:O}", "precomputed", precomputed, "prevchain", multimums);
+            PyObject *keywds = Py_BuildValue("{s:O, s:i}", "precomputed", precomputed, "minlength", rw->minl);
             // PyObject *keywds = Py_BuildValue("{s:O}", "prevchain", multimums);
             Py_DECREF(precomputed);
             // Py_DECREF(idx->skipmums);
@@ -660,13 +853,6 @@ void *aligner(void *arg) {
             }
 
             PyArg_ParseTuple(mumobject,"IiO", &mmum.l, &mmum.n, &spd);
-            sp=PyDict_Values(spd);
-
-            if (!PyList_Check(sp)) {
-                fprintf(stderr,"SP is not a list...\n");
-            }
-
-            // Py_DECREF(pickresult);
 
 #ifdef REVEALDEBUG
             fprintf(stderr,"Done.\n");
@@ -677,7 +863,8 @@ void *aligner(void *arg) {
 #endif
 
             for (i=0; i<mmum.n; i++){
-                PyObject * pos=PyList_GetItem(sp,i);
+                PyObject * tup=PyTuple_GetItem(spd,i);
+                PyObject * pos=PyTuple_GetItem(tup,1);
 
                 if (pos==NULL){
                     fprintf(stderr,"**** invalid results from mumpicker\n");
@@ -691,7 +878,7 @@ void *aligner(void *arg) {
 #endif
             }
 
-            Py_DECREF(sp);
+            // Py_DECREF(spd);
 
 #ifdef REVEALDEBUG
             fprintf(stderr,"Done.\n");
