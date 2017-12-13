@@ -331,7 +331,7 @@ def graphalign(index,mum):
         for node in nodes:
             logging.debug("%s"%str(node))
 
-        sp=spd.values()
+        sp=[sp for gid,sp in spd]
         for pos in sp:
             logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
@@ -533,7 +533,8 @@ def align_genomes(args):
     schemes.wscore=args.wscore
     schemes.wpen=args.wpen
     schemes.seedsize=args.seedsize
-    
+    schemes.pcutoff=args.pcutoff
+
     graph=False
     
     for i,sample in enumerate(args.inputfiles):
@@ -584,6 +585,7 @@ def align_genomes(args):
     # schemes.exp=args.exp
     schemes.ts=t
     schemes.G=G
+    
     logging.info("Constructing index...")
     idx.construct()
     
@@ -598,7 +600,7 @@ def align_genomes(args):
     
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,gcmodel="sumofpairs"):
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs"):
     #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
     #   - fasta filename
     #   - gfa filename
@@ -628,6 +630,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     schemes.seedsize=seedsize
     schemes.wpen=wpen
     schemes.wscore=wscore
+    schemes.pcutoff=pcutoff
 
     graph=False
     
