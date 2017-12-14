@@ -98,6 +98,7 @@ def main():
     parser_realign.add_argument("--simple", action="store_true", dest="simple", default=False, help="Trigger realignment for all simple bubbles.")
     parser_realign.add_argument("--minsize", dest="minsize", type=int, default=1, help="Only realign bubbles for which the smallest allele contains at least this many bases.")
     parser_realign.add_argument("--maxlen", dest="maxlen", type=int, default=10000000, help="Maximum length of the cumulative sum of all paths that run through the bubble.")
+    parser_realign.add_argument("--minlen", dest="minlen", type=int, default=0, help="Minimum length of the cumulative sum of all paths that run through the bubble.")
     parser_realign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
     parser_realign.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
     parser_realign.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")

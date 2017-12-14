@@ -27,6 +27,7 @@ def realign_bubble_cmd(args):
                             wscore=args.wscore,
                             wpen=args.wpen,
                             maxlen=args.maxlen,
+                            minlen=args.minlen,
                             seedsize=args.seedsize,
                             maxmums=args.maxmums,
                             gcmodel=args.gcmodel,
@@ -77,10 +78,14 @@ def realign_bubble(G,bubble,**kwargs):
     
     if sourcesamples!=sinksamples:
         logging.error("Specify proper source/sink pair.")
-        sys.exit(1)
+        return G
     
     if bubble.seqsize>kwargs['maxlen']:
         logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
+        return G
+
+    if len(bubble.nodes)==3:
+        logging.fatal("Indel bubble, no point realigning.")
         return G
     
     bubblenodes=bubble.nodes[1:-1]
@@ -210,7 +215,15 @@ def realign_all(G,  **kwargs):
             continue
 
         if b.seqsize>kwargs['maxlen']:
-            logging.debug("Skipping bubble %s, larger %d than maxlen=%d."%(str(b.nodes),b.maxsize,kwargs['maxsize']))
+            logging.debug("Skipping bubble %s, larger %d than maxlen=%d."%(str(b.nodes),b.seqsize,kwargs['maxlen']))
+            continue
+
+        if b.seqsize<kwargs['minlen']:
+            logging.debug("Skipping bubble %s, smaller %d than minlen=%d."%(str(b.nodes),b.seqsize,kwargs['minlen']))
+            continue
+
+        if len(b.nodes)==3:
+            logging.debug("Skipping bubble %s, indel, no point in realigning."%(str(b.nodes)))
             continue
 
         sourcesamples=set(G.node[b.source]['offsets'].keys())
