@@ -33,7 +33,7 @@ def bubbles(G):
         logging.debug("Topologically sort the graph.")
         ordD_=nx.topological_sort(G)
         logging.debug("Done.")
-        
+
         #construct candidates array
         for i,v in enumerate(ordD_):
             ordD[v]=i
@@ -162,7 +162,7 @@ def bubbles_cmd(args):
     sys.stdout.write("#source\tsink\tsubgraph\ttype\n")
     for b in bubbles(G):
         t=b.issimple()
-        sys.stdout.write("%d\t%d\t%s\t%s\n"%(b.source,b.sink,",".join([str(x) for x in b.nodes]), 'simple' if t else 'complex'))
+        sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source,b.sink,",".join([str(x) for x in b.nodes]), 'simple' if t else 'complex'))
 
         if not t:
             if args.exportcomplex:
@@ -234,7 +234,6 @@ def variants_cmd(args):
                     if seq!='-':
                         sys.stdout.write(">%s_%d\n"%(v.source,i))
                         sys.stdout.write("%s\n"%seq)
-            
             continue
         
         if args.reference in v.vpos:
@@ -246,13 +245,16 @@ def variants_cmd(args):
         if minflank<args.minflank:
             continue
 
-        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2path'][cds],v.vpos[cds],minflank,v.source,v.sink, v.vtype, ",".join(v.genotypes) ))
+        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2path'][cds],v.vpos[cds],minflank,v.source if type(v.source)!=str else '-',v.sink if type(v.sink)!=str else '-', v.vtype, ",".join(v.genotypes) ))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
             else:
                 sys.stdout.write("\t-")
         sys.stdout.write("\n")
+
+class InvalidBubble(Exception):
+    pass
 
 class Bubble:
     def __init__(self,G,source,sink,nodes=None,ordD=None):
@@ -273,13 +275,15 @@ class Bubble:
         if nodes!=None:
             self.nodes=nodes
         else:
+            if self.ordD[source]>=self.ordD[sink]:
+                raise InvalidBubble("Sink comes before Source, flip source and sink to form valid bubble.")
             self.nodes=ordD_[self.ordD[source]:self.ordD[sink]+1]
 
-        if len(self.nodes)==2:
+        if len(self.nodes)<=2:
             raise InvalidBubble("Not a valid source sink pair as bubble")
 
         self.simple=None
-
+        
         self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
         self.seqsize=sum([len(G.node[node]['seq'])*len(G.node[node]['offsets']) for node in self.nodes[1:-1]])
     
