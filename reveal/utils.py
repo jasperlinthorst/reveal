@@ -71,14 +71,14 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
     ng.graph['path2id']=dict()
     ng.graph['id2path']=dict()
     ng.graph['id2end']=dict()
-    
+
     for name,seq in aobjs:
         sid=len(ng.graph['paths'])
         ng.graph['path2id'][name]=sid
         ng.graph['id2path'][sid]=name
         ng.graph['id2end'][sid]=len(seq)
         ng.graph['paths'].append(name)
-    
+
     #TODO: writing to a temporary file (for now), but this should ideally happen in memory
     uid=uuid.uuid4().hex
     fasta_writer(uid+".fasta",aobjs)
@@ -159,6 +159,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
                     ng.add_edge(in1,out2,paths=overlap,ofrom='+',oto='+')
 
     ng.remove_nodes_from(remove)
+    
     os.remove("%s.fasta"%uid)
     return ng
 
@@ -295,6 +296,42 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         plt.savefig("%s_%s.png"%(s1[:s1.rfind('.')],s2[:s2.rfind('.')]))
 
 
+def read_fasta(fasta, index, tree, graph):
+    logging.info("Reading fasta: %s ..." % fasta)
+    if 'paths' not in graph.graph:
+        graph.graph['paths']=list()
+    
+    if 'id2path' not in graph.graph:
+        graph.graph['id2path']=dict()
+    
+    if 'path2id' not in graph.graph:
+        graph.graph['path2id']=dict()
+    
+    if 'id2end' not in graph.graph:
+        graph.graph['id2end']=dict()
+
+    for name,seq in fasta_reader(fasta):
+        sid=len(graph.graph['paths'])
+        name=name.replace(":","").replace(";","")
+        if name in graph.graph['paths']:
+            logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
+            sys.exit(1)
+        graph.graph['paths'].append(name)
+        graph.graph['path2id'][name]=sid
+        graph.graph['id2path'][sid]=name
+        graph.graph['id2end'][sid]=len(seq)
+        intv=index.addsequence(seq.upper())
+        logging.debug("Adding interval: %s"%str(intv))
+        Intv=Interval(intv[0],intv[1])
+        tree.add(Intv)
+        startnode=uuid.uuid4().hex
+        endnode=uuid.uuid4().hex
+        graph.add_node(startnode,offsets={sid:0},endpoint=True)
+        graph.add_node(Intv,offsets={sid:0},aligned=0)
+        graph.add_node(endnode,offsets={sid:len(seq)},endpoint=True)
+        graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
+        graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
+
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=True):
     f=open(gfafile,'r')
     sep=";"
@@ -321,7 +358,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.graph['id2end']=dict()
 
     for line in f:
-    
+        
         if line.startswith('H'):
             pass
         
@@ -380,6 +417,9 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         logging.fatal("No paths defined in GFA, exit.")
         sys.exit(1)
 
+    startnodes=set()
+    endnodes=set()
+
     for line in paths:
         cols=line.rstrip().split("\t")
         sample=cols[1]
@@ -409,14 +449,15 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.graph['id2path'][sid]=sample
 
         o=0
+        
         path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
+        
+        # graph.add_edge("start",nmapping[int(path[0][0])],paths=set([sid]),oto='+',ofrom='+')
+        # graph.add_edge(nmapping[int(path[-1][0])],"end",paths=set([sid]),oto='+',ofrom='+')
 
         for pi,gfn in enumerate(path):
             nid,orientation=gfn
             node=nmapping[int(nid)]
-
-            # graph.graph['sample2path'][sample].append((node,orientation))
-
             graph.node[node]['offsets'][sid]=o
 
             if 'seq' in graph.node[node]:
@@ -450,6 +491,16 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             pnid=nid
             porientation=orientation
         
+        start=uuid.uuid4().hex
+        graph.add_node(start,offsets={sid:0},endpoint=True)
+        graph.add_edge(start,nmapping[int(path[0][0])],paths={sid})
+        startnodes.add(start)
+
+        end=uuid.uuid4().hex
+        graph.add_node(end,offsets={sid:o},endpoint=True)
+        graph.add_edge(nmapping[int(path[-1][0])],end,paths={sid})
+        endnodes.add(end)
+
         graph.graph['id2end'][sid]=o
     
     #remove nodes and edges that are not associated to any path
@@ -457,13 +508,93 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     for n1,n2,d in graph.edges_iter(data=True):
         if d['paths']==set(): #edge that is not traversed by any of the paths
             remove.append((n1,n2))
-    graph.remove_edges_from(remove)
+    if len(remove)>0:
+        logging.info("Removing %d edges from the graph as they are not used."%len(remove))
+        print remove
+        graph.remove_edges_from(remove)
 
     remove=[]
     for n,d in graph.nodes_iter(data=True):
-        if graph.node[n]['offsets']=={}: #edge that is not traversed by any of the paths
+        if graph.node[n]['offsets']=={}: #node that is not traversed by any of the paths
             remove.append(n)
-    graph.remove_nodes_from(remove)
+    if len(remove)>0:
+        logging.info("Removing %d nodes from the graph as they are not used."%len(remove))
+        print remove
+        graph.remove_nodes_from(remove)
+
+    #merge all start/end nodes for every connected component in the graph
+    for comp in nx.connected_components(graph.to_undirected()):
+        startmerge=set()
+        endmerge=set()        
+        for node in comp:
+            if node in startnodes:
+                startmerge.add(node)
+            if node in endnodes:
+                endmerge.add(node)
+
+        if len(endmerge)>0:
+            endnode=uuid.uuid4().hex            
+            graph.add_node(endnode,offsets={},seq="",endpoint=True) #add dummy node for end of each sequence in the subgraph
+            
+            for node in endmerge: #copy offset values
+                for k in graph.node[node]['offsets']:
+                    graph.node[endnode]['offsets'][k]=graph.node[node]['offsets'][k]
+                #reconnect
+                pred=set()
+                predids=set()
+                for pnode in graph.predecessors_iter(node):
+                    if not graph.has_edge(pnode,endnode):
+                        if type(graph)==nx.MultiDiGraph:
+                            graph.add_edge(pnode,endnode,paths=graph[pnode][node][0]['paths'],ofrom='+',oto='+')
+                        else:
+                            graph.add_edge(pnode,endnode,paths=graph[pnode][node]['paths'],ofrom='+',oto='+')
+                    else:
+                        if type(graph)==nx.MultiDiGraph:
+                            for p in graph[pnode][node][0]['paths']:
+                                graph[pnode][endnode][0]['paths'].add(p)
+                        else:
+                            for p in graph[pnode][node]['paths']:
+                                graph[pnode][endnode]['paths'].add(p)
+        
+        if len(startmerge)>0:
+            startnode=uuid.uuid4().hex            
+            graph.add_node(startnode,offsets={},seq="",endpoint=True) #add dummy node for start of each sequence in the subgraph
+
+            for node in startmerge: #copy offset values
+                for k in graph.node[node]['offsets']:
+                    graph.node[startnode]['offsets'][k]=graph.node[node]['offsets'][k]
+                #reconnect
+                pred=set()
+                predids=set()
+                for nnode in graph.successors_iter(node):
+                    if not graph.has_edge(startnode,nnode):
+                        if type(graph)==nx.MultiDiGraph:
+                            graph.add_edge(startnode,nnode,paths=graph[node][nnode][0]['paths'],ofrom='+',oto='+')
+                        else:
+                            graph.add_edge(startnode,nnode,paths=graph[node][nnode]['paths'],ofrom='+',oto='+')
+                    else:
+                        if type(graph)==nx.MultiDiGraph:
+                            for p in graph[node][nnode][0]['paths']:
+                                graph[startnode][nnode][0]['paths'].add(p)
+                        else:
+                            for p in graph[node][nnode]['paths']:
+                                graph[startnode][nnode]['paths'].add(p)
+
+        graph.remove_nodes_from(list(startmerge)+list(endmerge))
+
+            # for end in endnodes:
+            #     for sid in graph.node[end]['offsets']:
+            #         graph.node[endnode]['offsets'][sid]=graph.node[end]['offsets'][sid]
+            #     graph.add_edge(end,endnode,paths=sids.intersection(set(graph.node[end]['offsets'].keys())),ofrom='+',oto='+')
+
+
+        # if len(startnodes)>0:
+        #     startnode=uuid.uuid4().hex
+        #     graph.add_node(startnode,offsets={},seq="",endpoint=True) #add dummy node for start of each sequence in the subgraph
+        #     for start in startnodes:
+        #         for sid in graph.node[start]['offsets']:
+        #             graph.node[startnode]['offsets'][sid]=0
+        #         graph.add_edge(startnode,start,paths=sids.intersection(set(graph.node[start]['offsets'].keys())),ofrom='+',oto='+')
 
     if revcomp:
         genome2length=dict()
@@ -533,6 +664,8 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         logging.fatal("Unsupported graph type: %s"%type(G))
         sys.exit(1)
 
+    iterator=[node for node in iterator if type(node)!=str] #exclude start/end node
+
     for i,node in enumerate(iterator): #iterate once to get a mapping of ids to intervals
         mapping[node]=i+1 #one-based for vg
 
@@ -557,6 +690,8 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         f.write("\n")
         
         for to in G[node]:
+            if 'endpoint' in G.node[to]:
+                continue
             if type(G)==nx.MultiDiGraph:
                 for edgeid in G[node][to]:
                     f.write("L\t"+str(mapping[node])+"\t"+G[node][to][edgeid]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to][edgeid]['oto']+"\t0M\n")
@@ -580,22 +715,28 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         if len(subgraph)>0:
             sg=nx.DiGraph(subgraph)
 
-            if (len([c for c in nx.connected_components(sg.to_undirected())] )!=1):
-                write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
+            for node in sg.nodes():
+                assert(len(sg[node])<2)
+
+            # if (len([c for c in nx.connected_components(sg.to_undirected())] )!=1):
+            #     write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
 
             nodepath=nx.topological_sort(sg)
+
+            if type(nodepath[0])==str and type(nodepath[-1])==str:
+                nodepath=nodepath[1:-1]
+
             pn=nodepath[0]
             for n in nodepath[1:]:
                 #assert(n in G[pn]) #path is unconnected in graph! Something went wrong..
-
                 if n not in G[pn]:
                     logging.error("Path %s spells a path that is not supported by the graph %s->%s!"%(sample,str(mapping[n]),str(mapping[pn])))
-                    write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
+                    # write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
                     break
                 else:
                     path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
                 
-                if n==nodepath[-1]:
+                if n==nodepath[-1]: #if last node
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                 pn=n
         else: #Maybe just a single node, strictly not a path..
@@ -645,7 +786,8 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
         
         for key in d:
             v=d[key]
-            if not isinstance(v,str) and not isinstance(v,int):
+
+            if type(v)!=str and type(v)!=int:
                 G.node[n][key]=str(v)
         
         if 'seq' not in G.node[n]:

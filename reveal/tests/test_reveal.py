@@ -84,7 +84,7 @@ class TestReveal(TestCase):
         lines=v.split('\n')
         self.assertTrue(len(lines)>0)
         self.assertTrue(lines[0].startswith("#"))
-        TestReveal.pair=lines[-2].split("\t")[:2]
+        TestReveal.pair=lines[-3].split("\t")[:2]
     
     @with_setup(setup, teardown)
     def test09_variants_cmd(self):
