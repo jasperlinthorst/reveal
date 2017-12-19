@@ -115,6 +115,8 @@ def stats(gfafile):
         chainlengthbp=0
         
         for node,data in sg.nodes(data=True):
+            if type(node)==str: #skip start and end nodes
+                continue
             offsets=data['offsets']
             l=len(data['seq'])
             if len(offsets)==nsgsamples:
