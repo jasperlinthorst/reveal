@@ -17,9 +17,9 @@ except:
 
 def breaknode(node,pos,l):
     att=G.node[node]
-    
-    in_edges=G.in_edges(node,data=True)
-    out_edges=G.out_edges(node,data=True)
+
+    in_edges=[(e[0],e[2]) for e in G.in_edges(node,data=True)]
+    out_edges=[(e[1],e[2]) for e in G.out_edges(node,data=True)]
 
     mn=Interval(pos,pos+l)
     other=set()
@@ -53,7 +53,7 @@ def breaknode(node,pos,l):
         pospaths=allpaths
     else:
         if len(in_edges)>0:
-            for fro,to,d in in_edges:
+            for fro,d in in_edges:
                 if d['oto']=='-':
                     negstrand=True
                     for p in d['paths']:
@@ -63,7 +63,7 @@ def breaknode(node,pos,l):
                     for p in d['paths']:
                         pospaths.add(p)
         if len(out_edges)>0:
-            for fro,to,d in out_edges:
+            for to,d in out_edges:
                 if d['ofrom']=='-':
                     negstrand=True
                     for p in d['paths']:
@@ -111,17 +111,14 @@ def breaknode(node,pos,l):
 
     G.remove_node(node)                     #update Graph
     t.remove(node)                          #update intervaltree
-    for fro,to,d in in_edges:
-        #assert(not G.has_edge(fro,pn))
-        #assert(not G.has_edge(pn,fro))
+
+    for fro,d in in_edges:
         if d['oto']=="+":
             G.add_edge(fro,pn,**d)
         else:
             G.add_edge(fro,sn,**d)
 
-    for fro,to,d in out_edges:
-        #assert(not G.has_edge(sn,to))
-        #assert(not G.has_edge(to,sn))
+    for to,d in out_edges:
         if d['ofrom']=="+":
             G.add_edge(sn,to,**d)
         else:
@@ -133,7 +130,7 @@ def breaknode(node,pos,l):
     return mn,other #return merge node
 
 def mergenodes(mns,mark=True):
-    logging.trace("Merging nodes %s"%str(mns))
+    # logging.trace("Merging nodes %s"%str(mns))
     
     global o
     ri=0
@@ -173,7 +170,7 @@ def mergenodes(mns,mark=True):
         if type(G)==nx.MultiDiGraph:
             for e0,e1,k,d in G.in_edges(mn,keys=True,data=True):
                 for _e0,_e1,_k,_d in G.in_edges(refnode,keys=True,data=True):
-                    if _e0==e0 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
+                    if type(_e0)==type(e0) and _e0==e0 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
                         for p in d['paths']:
                             G[_e0][_e1][_k]['paths'].add(p)
                         break
@@ -182,7 +179,7 @@ def mergenodes(mns,mark=True):
 
             for e0,e1,k,d in G.out_edges(mn,keys=True,data=True):
                 for _e0,_e1,_k,_d in G.out_edges(refnode,keys=True,data=True):
-                    if _e1==e1 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
+                    if type(_e1)==type(e1) and _e1==e1 and _d['oto']==d['oto'] and _d['ofrom']==d['ofrom']: #edge already exists, merge paths
                         for p in d['paths']:
                             G[_e0][_e1][_k]['paths'].add(p)
                         break
@@ -208,14 +205,14 @@ def mergenodes(mns,mark=True):
 
 def predecessorsfilter_iter(G,node):
     if type(G)==nx.MultiDiGraph:
-        for pre in G.predecessors_iter(node):
+        for pre in G.predecessors(node):
             for i in G[pre][node]:
                 for p in G[pre][node][i]['paths']:
                     if not G.graph['id2path'][p].startswith("*"):
                         yield pre
                         break
     else:
-        for pre in G.predecessors_iter(node):
+        for pre in G.predecessors(node):
             for p in G[pre][node]['paths']:
                 if not G.graph['id2path'][p].startswith("*"):
                     yield pre
@@ -223,26 +220,18 @@ def predecessorsfilter_iter(G,node):
 
 def successorsfilter_iter(G,node):
     if type(G)==nx.MultiDiGraph:
-        for suc in G.successors_iter(node):
+        for suc in G.successors(node):
             for i in G[node][suc]:
                 for p in G[node][suc][i]['paths']:
                     if not G.graph['id2path'][p].startswith("*"):
                         yield suc
                         break
     else:
-        for suc in G.successors_iter(node):
+        for suc in G.successors(node):
             for p in G[node][suc]['paths']:
                 if not G.graph['id2path'][p].startswith("*"):
                     yield suc
                     break
-
-def predecessors_iter(G,node):
-    for n in G.predecessors_iter(node):
-        yield n
-
-def successors_iter(G,node):
-    for n in G.successors_iter(node):
-        yield n
 
 def bfs(G, source, reverse=False, ignore=set()):
     if reverse:
@@ -257,9 +246,9 @@ def bfs(G, source, reverse=False, ignore=set()):
             child = next(children)
             if child not in visited:
                 visited.add(child)
-                if not(G.node[child].has_key('aligned')):
-                    queue.append((child, neighbors(G,child)))
-                    yield child,0
+                if 'aligned' not in G.node[child]:
+                    assert(type(child)==str) #has to be start or end node
+                    yield child,2
                 elif (G.node[child]['aligned']==0):
                     queue.append((child, neighbors(G,child)))
                     yield child,0
@@ -280,11 +269,17 @@ def segmentgraph(node,nodes):
     
     #forward search
     endpoints=set()
+    fwdmerge=set()
     for c,t in bfs(G,node):
         if t==0:
             trailing.add(c)
-        else:
+        elif t==1 or t==2:
             endpoints.add(c)
+            if t==2:
+                fwdmerge.add(c)
+        else:
+            logging.error("Node traversal failed, encountered: %s"%str((c,t)))
+            sys.exit(1)
     
     #reverse search for each endpoint
     if len(endpoints)>1:
@@ -296,11 +291,17 @@ def segmentgraph(node,nodes):
     
     #backward search
     endpoints=set()
+    bwdmerge=set()
     for c,t in bfs(G,node,reverse=True):
         if t==0:
             leading.add(c)
-        else:
+        elif t==1 or t==2:
             endpoints.add(c)
+            if t==2:
+                bwdmerge.add(c)
+        else:
+            logging.error("Node traversal failed, encountered: %s"%str((c,t)))
+            sys.exit(1)
     
     #reverse search for each endpoint
     if len(endpoints)>1:
@@ -311,12 +312,11 @@ def segmentgraph(node,nodes):
         leading=leading.intersection(reverse_leading)
     
     leading = set([(i.begin,i.end) for i in leading if isinstance(i,Interval)]).intersection(nodes) #TODO: remove "if isinstance(i,Interval)]"
-
     trailing = set([(i.begin,i.end) for i in trailing if isinstance(i,Interval)]).intersection(nodes)
     
     rest = nodes - (leading | trailing)
     
-    return leading, trailing, rest, (node.begin,node.end)
+    return leading, trailing, rest
 
 def graphalign(index,mum):
     try:
@@ -326,13 +326,14 @@ def graphalign(index,mum):
         isize=index.n
         mns=[]
         topop=[]
-
         logging.debug("Nodes in subgraph:")
         for node in nodes:
             logging.debug("%s"%str(node))
 
         sp=[sp for gid,sp in spd]
+        matching=set()
         for pos in sp:
+            matching.add((pos,pos+l))
             logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
             assert(old.end-old.begin>=l)
@@ -346,21 +347,21 @@ def graphalign(index,mum):
         
         mn=mergenodes(mns)
         msamples=set(G.node[Interval(mn[0],mn[1])]['offsets'].keys())
-        logging.trace("Merging samples: %s"%str(msamples))
-        logging.trace("Nodes before segmenting: %s"%nodes)
+        # logging.trace("Merging samples: %s"%str(msamples))
+        # logging.trace("Nodes before segmenting: %s"%nodes)
 
         intervals=segmentgraph(mn,nodes)
-        leading,trailing,rest,merged=intervals
+        leading,trailing,rest=intervals
 
-        logging.trace("Leading nodes after segmenting: %s"%leading)
-        logging.trace("Trailing nodes after segmenting: %s"%trailing)
-        logging.trace("Parallel nodes after segmenting: %s"%rest)
+        # logging.trace("Leading nodes after segmenting: %s"%leading)
+        # logging.trace("Trailing nodes after segmenting: %s"%trailing)
+        # logging.trace("Parallel nodes after segmenting: %s"%rest)
 
-        logging.debug("Merged interval: %s"%str(merged))
+        logging.debug("Merged interval: %s"%str(mn))
         logging.debug("Number of leading intervals: %d"%len(leading))
         logging.debug("Number of trailing intervals: %d"%len(trailing))
         logging.debug("Number of parallel intervals: %d"%len(rest))
-        logging.trace("Number of nodes in the entire graph: %d"%G.number_of_nodes())
+        # logging.trace("Number of nodes in the entire graph: %d"%G.number_of_nodes())
         newleftnode=mn
         newrightnode=mn
 
@@ -374,7 +375,7 @@ def graphalign(index,mum):
                 newleftnode=index.leftnode
                 break
 
-        return leading,trailing,rest,merged,newleftnode,newrightnode
+        return leading,trailing,matching,rest,mn,newleftnode,newrightnode
 
     except Exception:
         print traceback.format_exc()
@@ -385,61 +386,60 @@ def prune_nodes(G,T):
     converged=False
     while not(converged):
         converged=True
-        for node,data in G.nodes_iter(data=True):
+        for node,data in G.nodes(data=True):
             if node not in G:
                 continue
             for run in [0,1]:
-                if 'aligned' in data:
-                    if data['aligned']!=0:
-                        if run==0:
-                            if type(G)==nx.MultiDiGraph:
-                                neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                            else:
-                                neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                if type(node)==str or data['aligned']!=0:
+                    if run==0:
+                        if type(G)==nx.MultiDiGraph:
+                            neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
                         else:
-                            if type(G)==nx.MultiDiGraph:
-                                neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                            else:
-                                neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                        seqs={}
-                        for nei in neis:
-                            if 'seq' not in G.node[nei]:
-                                if not isinstance(nei,Interval):
-                                    continue
-                                seq=T[nei.begin:nei.end]
-                            else:
-                                seq=G.node[nei]['seq']
-                            if seq in seqs:
-                                seqs[seq].append(nei)
-                            else:
-                                seqs[seq]=[nei]
+                            neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                    else:
+                        if type(G)==nx.MultiDiGraph:
+                            neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                        else:
+                            neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                    seqs={}
+                    for nei in neis:
+                        if 'seq' not in G.node[nei]:
+                            if not isinstance(nei,Interval):
+                                continue
+                            seq=T[nei.begin:nei.end]
+                        else:
+                            seq=G.node[nei]['seq']
+                        if seq in seqs:
+                            seqs[seq].append(nei)
+                        else:
+                            seqs[seq]=[nei]
 
-                        for key in seqs.keys():
-                            group=seqs[key]
-                            if len(group)>1:
-                                merge=True
-                                for v in group:
-                                    if run==0:
-                                        if type(G)==nx.MultiDiGraph:
-                                            if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                                merge=False
-                                                break
-                                        else:
-                                            if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                                merge=False
-                                                break
+                    for key in seqs.keys():
+                        group=seqs[key]
+                        if len(group)>1:
+                            merge=True
+                            for v in group:
+                                if run==0:
+                                    if type(G)==nx.MultiDiGraph:
+                                        if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                            merge=False
+                                            break
                                     else:
-                                        if type(G)==nx.MultiDiGraph:
-                                            if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                                merge=False
-                                                break
-                                        else:
-                                            if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                                merge=False
-                                                break
-                                if merge:
-                                    mergenodes(group,mark=True)
-                                    converged=False
+                                        if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                            merge=False
+                                            break
+                                else:
+                                    if type(G)==nx.MultiDiGraph:
+                                        if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                            merge=False
+                                            break
+                                    else:
+                                        if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                            merge=False
+                                            break
+                            if merge:
+                                mergenodes(group,mark=True)
+                                converged=False
 
 def align_cmd(args):
     if len(args.inputfiles)<=1:
@@ -475,13 +475,13 @@ def align_cmd(args):
     if idx.nsamples>2: #was multi-alignment
         totbases=idx.n-T.count('$')-T.count('N')
         for node,data in G.nodes(data=True):
-            if data['aligned']!=0:
+            if 'aligned' in data and data['aligned']!=0:
                 alignedbases+=(node.end-node.begin)*len([k for k in data['offsets'] if not G.graph['id2path'][k].startswith("*")])
                 alignednodes+=1
     else: #assume seq to graph
         totbases=idx.n-T.count('$')-T.count('N') # min([(idx.n-1)-(idx.nsep[0]+1),idx.nsep[0]])
         for node,data in G.nodes(data=True):
-            if data['aligned']!=0:
+            if 'aligned' in data and data['aligned']!=0:
                 l=node.end-node.begin
                 alignedbases+=(l*2)
                 alignednodes+=1
@@ -522,10 +522,6 @@ def align_genomes(args):
     
     #G=nx.DiGraph()
     G=nx.MultiDiGraph()
-    G.graph['paths']=[]
-    G.graph['path2id']=dict()
-    G.graph['id2path']=dict()
-    G.graph['id2end']=dict()
 
     o=0
     schemes.maxmums=args.maxmums
@@ -542,7 +538,7 @@ def align_genomes(args):
 
         if sample.endswith(".gfa"):
             graph=True
-            #TODO: now applies to all graphs! probably want to have this graph specific if at all...
+
             logging.info("Reading graph: %s ..." % sample)
             if i==0:
                 read_gfa(sample,idx,t,G,minsamples=args.minsamples,
@@ -550,29 +546,9 @@ def align_genomes(args):
                                         targetsample=args.targetsample)
             else:
                 read_gfa(sample,idx,t,G)
-            
-            if len(G.graph['paths'])==0: #if not from reveal, might not have a header
-                logging.info("No paths detected in GFA, assume one path per node.")
-                G.graph['paths'].append(os.path.basename(sample))
 
-            logging.info("Done.")
         else: #consider it to be a fasta file
-            logging.info("Reading fasta: %s ..." % sample)
-            for name,seq in fasta_reader(sample):
-                sid=len(G.graph['paths'])
-                name=name.replace(":","").replace(";","")
-                if name in G.graph['paths']:
-                    logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
-                    sys.exit(1)
-                G.graph['paths'].append(name)
-                G.graph['path2id'][name]=sid
-                G.graph['id2path'][sid]=name
-                G.graph['id2end'][sid]=len(seq)
-                intv=idx.addsequence(seq.upper())
-                logging.debug("Adding interval: %s"%str(intv))
-                Intv=Interval(intv[0],intv[1])
-                t.add(Intv)
-                G.add_node(Intv,offsets={sid:0},aligned=0)
+            read_fasta(sample,idx,t,G)
     
     logging.debug("Graph contains the following paths: %s"%G.graph['paths'])
 
@@ -582,7 +558,6 @@ def align_genomes(args):
     for n1,n2,data in G.edges(data=True):
         assert('paths' in data)
 
-    # schemes.exp=args.exp
     schemes.ts=t
     schemes.G=G
     
@@ -598,12 +573,41 @@ def align_genomes(args):
         logging.info("Constructing graph-based multi-alignment...")
         idx.align(schemes.graphmumpicker,graphalign,threads=args.threads,wpen=args.wpen,wscore=args.wscore,minl=args.minlength,minn=args.minn)
     
+    # from multiprocessing import Process
+    # from Queue import Queue
+    # main=idx #make sure we keep the main ref count, since it has the reference to T
+    # q=Queue()
+    # q.put(idx)
+    # while not q.empty():
+    #     idx=q.get()
+    #     if len(args.inputfiles)>2:
+    #         multimums=idx.getmultimums(minlength=args.minlength, minn=args.minn)
+    #     else:
+    #         multimums=idx.mums(args.minlength)
+    #     if len(multimums)==0:
+    #         continue
+    #     ret=schemes.graphmumpicker(multimums,idx)
+    #     if ret==None:
+    #         continue
+    #     else:
+    #         splitmum,skipleft,skipright=ret
+    #     ret=graphalign(idx,splitmum)
+    #     if ret==None:
+    #         continue
+    #     else:
+    #         leading,trailing,matching,rest,merged,newleftnode,newrightnode=ret
+    #     ilead,itrail,ipar=idx.splitindex(leading,trailing,matching,rest,merged,newleftnode,newrightnode,skipleft,skipright)
+    #     if ilead!=None and ilead.n>1:
+    #         q.put(ilead)
+    #     if itrail!=None and itrail.n>1:
+    #         q.put(itrail)
+    #     if ipar!=None and ipar.n>1:
+    #         q.put(ipar)
+
     return G,idx
 
 def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs"):
-    #seq should be a list of objects that can be (multi-) aligned by reveal, following possibilities:
-    #   - fasta filename
-    #   - gfa filename
+    #seq should be a list of objects that can be (multi-) aligned by reveal:
     #   - tuple of the form (name,seq)
     
     #global variables to simplify callbacks from c extension
@@ -617,7 +621,7 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
         idx=reveallib.index()
     
     G=nx.DiGraph()
-    H=G
+    # H=G
 
     G.graph['paths']=[]
     G.graph['path2id']=dict()
@@ -634,40 +638,50 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
 
     graph=False
     
+    startnode=uuid.uuid4().hex
+    G.add_node(startnode)
+    endnode=uuid.uuid4().hex
+    G.add_node(endnode)
+
     for aobj in aobjs:
         if isinstance(aobj,tuple):
-            assert(len(aobj)==2)
             name,seq=aobj
             idx.addsample(name)
             intv=idx.addsequence(seq.upper())
             if intv[1]-intv[0]>0:
                 Intv=Interval(intv[0],intv[1])
                 t.add(Intv)
+                sid=len(G.graph['paths'])
                 G.graph['path2id'][name]=len(G.graph['paths'])
-                G.graph['id2path'][len(G.graph['paths'])]=name
-                G.graph['id2end'][len(G.graph['paths'])]=len(seq)
+                G.graph['id2path'][sid]=name
+                G.graph['id2end'][sid]=len(seq)
                 G.graph['paths'].append(name)
-                G.add_node(Intv,offsets={G.graph['path2id'][name]:0},aligned=0)
+                G.add_node(Intv,offsets={sid:0},aligned=0)
+                G.add_edge(startnode,Intv,paths={sid},ofrom='+',oto='+')
+                G.add_edge(Intv,endnode,paths={sid},ofrom='+',oto='+')
 
-        elif isinstance(aobj,str):
-            if not os.path.isfile(aobj):
-                logging.fatal("Not a file, expecting fasta or gfa file.")
-                return
-            idx.addsample(os.path.basename(aobj))
-            if aobj.endswith(".gfa"):
-                read_gfa(aobj,idx,t,G,targetsample=targetsample,maxsamples=maxsamples)
-                graph=True
-            else: #assume a file in fastaformat
-                for name,seq in fasta_reader(sample):
-                    intv=idx.addsequence(seq.upper())
-                    if intv[1]-intv[0]>0:
-                        Intv=Interval(intv[0],intv[1])
-                        t.add(Intv)
-                        G.graph['path2id'][name]=len(G.graph['paths'])
-                        G.graph['id2path'][len(G.graph['paths'])]=name
-                        G.graph['id2end'][len(G.graph['paths'])]=len(seq)
-                        G.graph['paths'].append(os.path.basename(sample))
-                        G.add_node(Intv,offsets={os.path.basename(sample):0},aligned=0)
+        # elif isinstance(aobj,str):
+        #     if not os.path.isfile(aobj):
+        #         logging.fatal("Not a file, expecting fasta or gfa file.")
+        #         return
+        #     idx.addsample(os.path.basename(aobj))
+        #     if aobj.endswith(".gfa"):
+        #         read_gfa(aobj,idx,t,G,targetsample=targetsample,maxsamples=maxsamples)
+        #         graph=True
+        #     else: #assume a file in fastaformat
+        #         for name,seq in fasta_reader(sample):
+        #             intv=idx.addsequence(seq.upper())
+        #             if intv[1]-intv[0]>0:
+        #                 Intv=Interval(intv[0],intv[1])
+        #                 t.add(Intv)
+        #                 sid=len(G.graph['paths'])
+        #                 G.graph['path2id'][name]=len(G.graph['paths'])
+        #                 G.graph['id2path'][sid]=name
+        #                 G.graph['id2end'][sid]=len(seq)
+        #                 G.graph['paths'].append(name)
+        #                 G.add_node(Intv,offsets={sid:0},aligned=0)
+        #                 G.add_edge(startnode,Intv,paths={sid})
+        #                 G.add_edge(endnode,Intv,paths={sid})
     
     if not nx.is_directed_acyclic_graph(G):
         logging.error("*** Input is not a DAG! Not supported.")
@@ -679,8 +693,10 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
     idx.construct()
     
     idx.align(schemes.graphmumpicker,graphalign,threads=threads,wpen=wpen,wscore=wscore,minl=minlength,minn=minn)
-    
+
     prune_nodes(G,idx.T)
 
-    return G,idx
+    G.remove_node(startnode)
+    G.remove_node(endnode)
 
+    return G,idx

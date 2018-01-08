@@ -5,13 +5,13 @@ import sys
 def bubbles(G):
     def entrance(G,v):
         for c in G.successors(v):
-            if len(G.predecessors(c))==1:
+            if len(list(G.predecessors(c)))==1:
                 return True
         return False 
 
     def exit(G,v):
         for p in G.predecessors(v):
-            if len(G.successors(p))==1:
+            if len(list(G.successors(p)))==1:
                 return True
         return False
     
@@ -31,7 +31,7 @@ def bubbles(G):
         ordD={}
         
         logging.debug("Topologically sort the graph.")
-        ordD_=nx.topological_sort(G)
+        ordD_=list(nx.topological_sort(G))
         logging.debug("Done.")
 
         #construct candidates array
@@ -263,7 +263,7 @@ class Bubble:
         self.G=G
 
         if ordD==None or nodes==None:
-            ordD_=nx.topological_sort(G)
+            ordD_=list(nx.topological_sort(G))
 
         if ordD!=None:
             self.ordD=ordD
@@ -297,12 +297,12 @@ class Bubble:
             pres.discard(self.source)
             
             for suc in sucs:
-                if len(self.G.successors(suc))!=1 or self.G.successors(suc)[0]!=self.sink:
+                if len(list(self.G.successors(suc)))!=1 or list(self.G.successors(suc))[0]!=self.sink:
                     self.simple=False
                     return self.simple
             
             for pre in pres:
-                if len(self.G.predecessors(pre))!=1 or self.G.predecessors(pre)[0]!=self.source:
+                if len(list(self.G.predecessors(pre)))!=1 or list(self.G.predecessors(pre))[0]!=self.source:
                     self.simple=False
                     return self.simple
             
@@ -323,7 +323,7 @@ class Variant(Bubble):
         self.vpos=dict() #key is sample, value is position within sample
         self.size=1 #length of the largest allele
         
-        gt=self.G.successors(self.source)
+        gt=list(self.G.successors(self.source))
         gt.sort(key=lambda l: self.ordD[l])
 
         if self.issimple():

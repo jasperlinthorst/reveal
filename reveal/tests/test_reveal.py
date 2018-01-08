@@ -35,6 +35,7 @@ class TestReveal(TestCase):
 
     def test01_seqpair_align(self):
         G,idx=align.align([("1","ACTGATGTAGCTAGCTA"),("2","ACTAGCTAGCTAGTCAG")],minlength=1)
+        print G
         self.assertTrue(isinstance(G, nx.DiGraph))
         self.assertTrue(G.number_of_nodes()>2)
         self.assertTrue(G.number_of_edges()>2)
@@ -127,7 +128,7 @@ class TestReveal(TestCase):
     @with_setup(setup, teardown)
     def test13_realign_cmd(self):
         print self.pair
-        sys.argv=['reveal','realign','1a_1b_1c.gfa',self.pair[0],self.pair[1],'-n2'] #should cause a complex bubble
+        sys.argv=['reveal','realign','1a_1b_1c.gfa','--all','-n2']
         reveal.main()
         self.assertTrue(os.path.exists('1a_1b_1c.realigned.gfa'))
     

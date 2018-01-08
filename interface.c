@@ -374,6 +374,7 @@ static PyMethodDef reveal_methods[] = {
     { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
     { "getmultimems", (PyCFunction) getmultimems, METH_VARARGS|METH_KEYWORDS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
+    { "splitindex", (PyCFunction) splitindex, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
 

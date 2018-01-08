@@ -32,7 +32,6 @@ logging.logThreads = 0
 logging.Logger.trace = lambda inst, msg, *args, **kwargs: inst.log(logging.TRACE, msg, *args, **kwargs)
 logging.trace = lambda msg, *args, **kwargs: logging.log(logging.TRACE, msg, *args, **kwargs)
 
-
 def main():
     desc="""
     Type 'reveal <positional_argument> --help' for help on a specific subcommand.\n
@@ -92,7 +91,7 @@ def main():
     parser_realign.add_argument("source", nargs='?', default=None, type=int, help='Source node.')
     parser_realign.add_argument("sink", nargs='?', default=None, type=int, help='Sink node.')
     parser_realign.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to realign bubbles.")
-    parser_realign.add_argument("--muscle", dest="muscle", action="store_true", default=False, help="Use muscle multiple sequence alignment for realignment (expects 'muscle' to be accessible through the commandline).")
+    parser_realign.add_argument("--method", dest="method", choices=["reveal","muscle","probcons","msaprobs"], default="reveal", help="Use custom multiple sequence alignment method for alignment of bubbles (expects methods to be accessible through the commandline).")
     parser_realign.add_argument("-o", dest="outfile", type=str, default=None, help="File to which realigned graph is to be written.")
     parser_realign.add_argument("--all", action="store_true", dest="all", default=False, help="Trigger realignment for all bubbles.")
     parser_realign.add_argument("--complex", action="store_true", dest="complex", default=False, help="Trigger realignment for all complex bubbles.")
@@ -100,13 +99,14 @@ def main():
     parser_realign.add_argument("--minsize", dest="minsize", type=int, default=1, help="Only realign bubbles for which the smallest allele contains at least this many bases.")
     parser_realign.add_argument("--maxlen", dest="maxlen", type=int, default=100000, help="Maximum length of the cumulative sum of all paths that run through the bubble.")
     parser_realign.add_argument("--minlen", dest="minlen", type=int, default=0, help="Minimum length of the cumulative sum of all paths that run through the bubble.")
-    parser_realign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
-    parser_realign.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples.")
-    parser_realign.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
-    parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme.")
-    parser_realign.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme.")
-    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size (when 0 don't seed).")
-    parser_realign.add_argument("--maxmums", dest="maxmums", type=int, default=1000, help="Number of largest MUMs to consider for chaining (when 0 use all).")
+    parser_realign.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match (only applies when method is reveal).")
+    parser_realign.add_argument("-n", dest="minn", type=int, default=2, help="Only align graph on exact matches that occur in at least this many samples (only applies when method is reveal).")
+    parser_realign.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment (only applies when method is reveal).")
+    parser_realign.add_argument("--wp", dest="wpen", type=int, default=1, help="Multiply penalty for a MUM by this number in scoring scheme (only applies when method is reveal).")
+    parser_realign.add_argument("--ws", dest="wscore", type=int, default=1, help="Multiply length of MUM by this number in scoring scheme (only applies when method is reveal).")
+    parser_realign.add_argument("--seedsize", dest="seedsize", type=int, default=10000, help="Skip recursion for chained mums larger than this size (when 0 don't seed) (only applies when method is reveal).")
+    parser_realign.add_argument("--maxmums", dest="maxmums", type=int, default=1000, help="Number of largest MUMs to consider for chaining (when 0 use all) (only applies when method is reveal).")
+    
     parser_realign.set_defaults(func=realign.realign_bubble_cmd)
 
     parser_extract.add_argument('graph', nargs=1, help='gfa file specifying the graph from which the genome should be extracted.')

@@ -85,6 +85,10 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
 
     if msa=='muscle':
         cmd="muscle -in %s.fasta -quiet"%uid
+    elif msa=='probcons':
+        cmd="probcons %s.fasta"%uid
+    elif msa=='msaprobs':
+        cmd="msaprobs %s.fasta"%uid
     else:
         logging.fatal("Unkown multiple sequence aligner: %s"%msa)
         sys.exit(1)
@@ -93,15 +97,16 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
     names=[""]*len(aobjs)
 
     try:
-        for a in subprocess.check_output([cmd],shell=True).split(">")[1:]:
+        DEVNULL = open(os.devnull, 'wb')
+        for a in subprocess.check_output([cmd],shell=True,stderr=DEVNULL).split(">")[1:]:
             x=a.find('\n')
             name=a[:x]
             seq=a[x+1:].replace("\n","")
             names[ng.graph['path2id'][name]]=name
             seqs[ng.graph['path2id'][name]]=seq
-            logging.debug("MUSCLE %s: %s%s"%(name,seq[:200],'...'if len(seq)>200 else ''))
-    except Error as e:
+    except Exception as e:
         logging.fatal("System call to %s failed: \"%s\""%(msa,e.output))
+        return
 
     offsets={o:-1 for o in range(len(seqs))}
     nid=nn
@@ -145,9 +150,16 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
     #remove gaps from graph
     remove=[]
     for node,data in ng.nodes(data=True):
+        incroffset=False
+        if data['seq'][0]=='-':
+            incroffset=True
+
         data['seq']=data['seq'].replace("-","")
         if data['seq']=="":
             remove.append(node)
+        elif incroffset:
+            for sid in data['offsets']:
+                data['offsets'][sid]+=1
 
     for node in remove:
         ine=ng.in_edges(node,data=True)
@@ -159,7 +171,8 @@ def msa2graph(aobjs,idoffset=0,msa='muscle'):
                     ng.add_edge(in1,out2,paths=overlap,ofrom='+',oto='+')
 
     ng.remove_nodes_from(remove)
-    
+
+    # write_gml(ng,"")
     os.remove("%s.fasta"%uid)
     return ng
 
@@ -452,9 +465,6 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         
         path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
         
-        # graph.add_edge("start",nmapping[int(path[0][0])],paths=set([sid]),oto='+',ofrom='+')
-        # graph.add_edge(nmapping[int(path[-1][0])],"end",paths=set([sid]),oto='+',ofrom='+')
-
         for pi,gfn in enumerate(path):
             nid,orientation=gfn
             node=nmapping[int(nid)]
@@ -505,7 +515,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     
     #remove nodes and edges that are not associated to any path
     remove=[]
-    for n1,n2,d in graph.edges_iter(data=True):
+    for n1,n2,d in graph.edges(data=True):
         if d['paths']==set(): #edge that is not traversed by any of the paths
             remove.append((n1,n2))
     if len(remove)>0:
@@ -514,7 +524,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.remove_edges_from(remove)
 
     remove=[]
-    for n,d in graph.nodes_iter(data=True):
+    for n,d in graph.nodes(data=True):
         if graph.node[n]['offsets']=={}: #node that is not traversed by any of the paths
             remove.append(n)
     if len(remove)>0:
@@ -522,10 +532,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         print remove
         graph.remove_nodes_from(remove)
 
-    #merge all start/end nodes for every connected component in the graph
+    #merge start/end nodes per connected component in the graph
     for comp in nx.connected_components(graph.to_undirected()):
         startmerge=set()
-        endmerge=set()        
+        endmerge=set()
         for node in comp:
             if node in startnodes:
                 startmerge.add(node)
@@ -542,7 +552,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 #reconnect
                 pred=set()
                 predids=set()
-                for pnode in graph.predecessors_iter(node):
+                for pnode in graph.predecessors(node):
                     if not graph.has_edge(pnode,endnode):
                         if type(graph)==nx.MultiDiGraph:
                             graph.add_edge(pnode,endnode,paths=graph[pnode][node][0]['paths'],ofrom='+',oto='+')
@@ -557,7 +567,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                                 graph[pnode][endnode]['paths'].add(p)
         
         if len(startmerge)>0:
-            startnode=uuid.uuid4().hex            
+            startnode=uuid.uuid4().hex
             graph.add_node(startnode,offsets={},seq="",endpoint=True) #add dummy node for start of each sequence in the subgraph
 
             for node in startmerge: #copy offset values
@@ -566,7 +576,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 #reconnect
                 pred=set()
                 predids=set()
-                for nnode in graph.successors_iter(node):
+                for nnode in graph.successors(node):
                     if not graph.has_edge(startnode,nnode):
                         if type(graph)==nx.MultiDiGraph:
                             graph.add_edge(startnode,nnode,paths=graph[node][nnode][0]['paths'],ofrom='+',oto='+')
@@ -654,12 +664,12 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
 
     mapping={}
     
-    if type(G)==nx.DiGraph:
+    if type(G)==nx.DiGraph or type(G)==nx.classes.graphviews.SubDiGraph:
         iterator=nx.topological_sort(G)
-        logging.debug("Writing gfa in topological order (%d)."%len(iterator))
-    elif type(G)==nx.MultiDiGraph:
+        logging.debug("Writing gfa in topological order.")
+    elif type(G)==nx.MultiDiGraph or type(G)==nx.classes.graphviews.SubMultiDiGraph:
         iterator=G.nodes()
-        logging.debug("Writing gfa in random order (%d)."%len(iterator))
+        logging.debug("Writing gfa in random order.")
     else:
         logging.fatal("Unsupported graph type: %s"%type(G))
         sys.exit(1)
@@ -706,13 +716,16 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         logging.debug("Writing path: %s"%sample)
 
         sid=G.graph['path2id'][sample]
+
         subgraph=[]
         for e1,e2,d in G.edges(data=True):
             if sid in d['paths']:
-                subgraph.append((e1,e2,d))
+                if type(e1)!=str and type(e2)!=str: #string nodes are dummy start/stop nodes, ignore
+                    subgraph.append((e1,e2,d))
 
         path=[]
         if len(subgraph)>0:
+
             sg=nx.DiGraph(subgraph)
 
             for node in sg.nodes():
@@ -721,7 +734,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
             # if (len([c for c in nx.connected_components(sg.to_undirected())] )!=1):
             #     write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
 
-            nodepath=nx.topological_sort(sg)
+            nodepath=list(nx.topological_sort(sg))
 
             if type(nodepath[0])==str and type(nodepath[-1])==str:
                 nodepath=nodepath[1:-1]
@@ -740,10 +753,11 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                 pn=n
         else: #Maybe just a single node, strictly not a path..
-            for node,data in G.nodes_iter(data=True):
-                if sid in data['offsets']:
+            for node,data in G.nodes(data=True):
+                if sid in data['offsets'] and type(node)!=str:
                     path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
             if len(path)==0: #not just a single node, sample not part of the graph, dont write path
+                logging.error("Sample %s not part of the graph."%sid)
                 continue
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")

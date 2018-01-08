@@ -164,7 +164,7 @@ def chain_cmd(args):
             if sid in data['offsets']:
                 sg.append(node)
         subgraph=G.subgraph(sg)
-        topsort=nx.topological_sort(subgraph)
+        topsort=list(nx.topological_sort(subgraph))
         pnode=topsort[0]
         for node in topsort[1:]:
             if 'paths' in G[pnode][node]:
@@ -289,7 +289,8 @@ def chain(idx,offsets,minlength,depth,maxmums,recurse=True,uniq=True,gcmodel="su
     while v!=p1:
         bestpath.append(v)
         G.node[v]['aligned']=1
-        v=G.predecessors(v)[0]
+        for v in G.predecessors(v):
+            break
 
     bestpath.append(p1)
     

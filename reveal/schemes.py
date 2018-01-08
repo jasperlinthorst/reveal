@@ -13,16 +13,19 @@ import logging
 import utils
 import traceback
 from utils import mem2mums
+import numpy as np
+
 # from matplotlib import pyplot as plt
 
 def chain(mums,left,right,gcmodel="sumofpairs"):
     if len(mums)==0:
         return []
+
     logging.debug("Number of anchors before chaining: %d",len(mums))
     
     #use one coordinate system for sorting
     ref=mums[0][2].keys()[0]
-    logging.trace("Ref is %s"%ref)
+    # logging.trace("Ref is %s"%ref)
     mums.append(right)
     mums.sort(key=lambda mum: mum[2][ref]) #sort by reference dimension
 
@@ -31,7 +34,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         sp2mum[mum[2][ref]]=mum
 
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-    logging.trace("Initial cost is: %d"%minscore)
+    # logging.trace("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
     end=right[2][ref]
@@ -82,6 +85,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                     best=amum
 
         link[mum[2][ref]]=best[2][ref]
+
         score[mum[2][ref]]=w
 
         processed.append(mum)
@@ -156,6 +160,7 @@ def maptooffsets(mums):
     return relmums,mapping
 
 splitchain="largest"
+maxdepth=None
 # pcutoff=0.01
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
@@ -163,6 +168,11 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             return
 
         if not precomputed:
+
+            if maxdepth!=None:
+                if idx.depth>maxdepth:
+                    return
+
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
 
@@ -193,6 +203,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             mmums=tmp
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
+
             relmums,mapping=maptooffsets(mmums) #and convert tuple to dict for fast lookup in chaining
 
             logging.debug("Subset to same group of samples")
@@ -223,13 +234,8 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     spd[sid]=G.graph['id2end'][sid]
                 right=(0,0,spd)
 
-            o=1
-            for p in left[2]:
-                o=o*(right[2][p]-left[2][p])
-                assert(o>0)
-
-            if minlength==0: #autodetermine significant subset
-                relmums=[mum for mum in relmums if 1-((1-((.25**(mum[1]-1))**mum[0]))**o)<pcutoff] #subset to only significant mums
+            # if minlength==0: #autodetermine significant subset
+                # relmums=[mum for mum in relmums if 1-((1-((.25**(mum[1]-1))**mum[0]))**o)<pcutoff] #subset to only significant mums
             
             if len(relmums)==0:
                 logging.debug("No more significant MUMs.")
@@ -281,8 +287,21 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             splitmum=mapping[tuple(splitmum[2].values())]
 
             if minlength==0:
-                p=1-((1-((.25**(splitmum[1]-1))**splitmum[0]))**o)
+                
+                o=1
+                for p in left[2]:
+                    o=o*(right[2][p]-left[2][p])
+
+                l=splitmum[0]
+                n=splitmum[1]
+                p=((.25**(n-1)))**l #probability of observing this match by random chance
+
+                if p>0:
+                    p=1-np.exp(np.log(1-p) * o) #correct for the number of tests we actually did
+                    
+                # p=1-((1-((.25**(n-1))**l))**o)
                 if p>pcutoff:
+                    logging.info("P-value for: %s (n=%d l=%d o=%d) is %.4g"%(str(splitmum),n,l,o,p))
                     return
         else:
             logging.debug("Selecting MUM from precomputed chain")
@@ -292,7 +311,6 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             skipright=chainedmums[(len(chainedmums)/2)+1:]
         
         logging.debug("Best MUM has length: %d"%splitmum[0])
-        logging.trace("Best MUM from chain: %s"%str(splitmum))
         
         logging.debug("Skipleft: %d"%len(skipleft))
         logging.debug("Skipright: %d"%len(skipright))

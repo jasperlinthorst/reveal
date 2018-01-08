@@ -37,7 +37,7 @@ def realign_bubble_cmd(args):
                             simple=args.simple,
                             all=args.all,
                             minsize=args.minsize,
-                            muscle=args.muscle,
+                            method=args.method,
                             nproc=args.nproc,
                             sa64=args.sa64)
     else:
@@ -47,7 +47,20 @@ def realign_bubble_cmd(args):
 
         b=bubbles.Bubble(G,args.source,args.sink)
 
-        ng,path2start,path2end=realign_bubble(G,b,
+        nn=max([node for node in G.nodes() if type(node)==int])+1
+
+        bnodes=list(set(b.nodes)-set([b.source,b.sink]))
+        sg=G.subgraph(bnodes)
+
+        offsets=dict()
+        for sid in G.node[bubble.source]['offsets']:
+            offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+        
+        sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+        sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+        paths=sourcesamples.intersection(sinksamples)
+        
+        res=realign_bubble(sg,b,offsets,paths,
                                 minlength=args.minlength,
                                 minn=args.minn,
                                 wscore=args.wscore,
@@ -56,16 +69,19 @@ def realign_bubble_cmd(args):
                                 seedsize=args.seedsize,
                                 maxmums=args.maxmums,
                                 gcmodel=args.gcmodel,
-                                muscle=args.muscle,
+                                method=args.method,
                                 sa64=args.sa64)
-        
-        G=replace_bubble(G,b,ng,path2start,path2end)
+
+        if res!=None:
+            ng,path2start,path2end=res
+            G,nn=replace_bubble(G,b,ng,path2start,path2end,nn)
 
     if args.outfile==None:
         fn=args.graph[0].replace(".gfa",".realigned.gfa")
     else:
         fn=args.outfile
     
+    # write_gml(G,"")
     write_gfa(G,"",outputfile=fn)
 
 
@@ -86,10 +102,10 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     ng=nx.relabel_nodes(ng,mapping)
 
     for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph
-        G.add_node(node,data)
+        G.add_node(node,**data)
 
     for edge in ng.edges(data=True):
-        G.add_edge(*edge)
+        G.add_edge(edge[0],edge[1],**edge[2])
 
     for sid in path2start:
         # startnode=path2start[sid][0]
@@ -110,47 +126,36 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     return G,nn
 
 
-def realign_bubble(sg,bubble,**kwargs):
+def realign_bubble(sg,bubble,offsets,paths,**kwargs):
     
     source=bubble.source
     sink=bubble.sink
 
-    sourcesamples=set(sg.node[source]['offsets'].keys())
-    sinksamples=set(sg.node[sink]['offsets'].keys())
-        
     if bubble.seqsize>kwargs['maxlen']:
         logging.fatal("Bubble (%s,%s) is too big. Increase --maxlen."%(source,sink))
-        return None
+        return
 
     if len(bubble.nodes)==3:
         logging.fatal("Indel bubble, no point realigning.")
-        return None
-    
-    bubblenodes=bubble.nodes[1:-1]
-
-    sourceoffsets=dict()
-    for sid in sg.node[source]['offsets']:
-        sourceoffsets[sid]=sg.node[source]['offsets'][sid]+len(sg.node[source]['seq'])
-
-    sg.remove_node(source)
-    sg.remove_node(sink)
+        return
 
     d={}
     aobjs=[]
     
     #extract all paths
-    for sid in sourcesamples.intersection(sinksamples): #should be equal..
-        # seq=extract(sg,G.graph['id2path'][sid])
+    for sid in paths:
         seq=extract(sg,sg.graph['id2path'][sid])
         if len(seq)>0:
             aobjs.append((sg.graph['id2path'][sid],seq))
-            # aobjs.append((G.graph['id2path'][sid],seq))
 
     for name,seq in aobjs:
         logging.debug("IN %s: %s%s"%(name,seq[:200],'...'if len(seq)>200 else ''))
 
-    if kwargs['muscle']: #use muscle multiple sequence aligner to align bubble
-        ng=msa2graph(aobjs,msa="muscle")
+    if kwargs['method']!="reveal": #use custom multiple sequence aligner to refine bubble structure
+        ng=msa2graph(aobjs,msa=kwargs['method'])
+        if ng==None:
+            logging.fatal("MSA using %s for bubble: %s - %s failed."%(kwargs['method'],source,sink))
+            return
     else: #use reveal with different settings
         ng,idx=align(aobjs, minlength=kwargs['minlength'],
                             minn=kwargs['minn'],
@@ -161,7 +166,8 @@ def realign_bubble(sg,bubble,**kwargs):
                             gcmodel=kwargs['gcmodel'],
                             sa64=kwargs['sa64'])
         T=idx.T
-        prune_nodes(ng,T)
+        
+        # prune_nodes(ng,T)
         seq2node(ng,T) #transfer sequence to node attributes
 
     #map edge atts back to original graph
@@ -201,7 +207,7 @@ def realign_bubble(sg,bubble,**kwargs):
 
         corrected=dict()
         for sid in data['offsets']:
-            corrected[sid]=data['offsets'][sid]+sourceoffsets[sid]
+            corrected[sid]=data['offsets'][sid]+offsets[sid]
 
         ng.node[node]['offsets']=corrected
     
@@ -225,7 +231,7 @@ def realign_all(G,  **kwargs):
             if not b.issimple():
                 logging.debug("Skipping bubble %s, not simple."%str(b.nodes))
                 continue
-        
+
         if b.minsize<kwargs['minsize']:
             logging.warn("Skipping bubble %s, smaller %d than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
             continue
@@ -266,24 +272,45 @@ def realign_all(G,  **kwargs):
         try:
             for bubble in distinctbubbles:
                 logging.info("Submitting realign bubble between <%s> and <%s>, cumulative size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.seqsize,len(bubble.nodes)-2))
-                sg=G.subgraph(bubble.nodes)
-                results.append((bubble,pool.apply_async(realign_bubble,(sg,bubble),kwargs)))
+                bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+                sg=G.subgraph(bnodes).copy()
+                
+                offsets=dict()
+                for sid in G.node[bubble.source]['offsets']:
+                    offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+
+                sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+                sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+                paths=sourcesamples.intersection(sinksamples)
+
+                results.append((bubble,pool.apply_async(realign_bubble,(sg,bubble,offsets,paths),kwargs)))
         except KeyboardInterrupt:
             pool.terminate()
         else:
             pool.close()
         pool.join()
-
         for bubble,r in results:
             logging.info("Retrieving bubble realign results for bubble: %s - %s."%(bubble.source,bubble.sink))
             ng,path2start,path2end=r.get()
             G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
     else:
-
         for bubble in distinctbubbles:
             logging.info("Realigning bubble between <%s> and <%s>, cumulative size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.seqsize,len(bubble.nodes)-2))
-            sg=G.subgraph(bubble.nodes)
-            ng,path2start,path2end=realign_bubble(sg,bubble, **kwargs)
-            G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+            sg=G.subgraph(bnodes)
+            
+            offsets=dict()
+            for sid in G.node[bubble.source]['offsets']:
+                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
 
+            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+            paths=sourcesamples.intersection(sinksamples)
+
+            res=realign_bubble(sg,bubble,offsets,paths, **kwargs)
+            if res==None:
+                continue
+            else:
+                ng,path2start,path2end=res
+                G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
     return G
