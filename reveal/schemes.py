@@ -160,7 +160,8 @@ def maptooffsets(mums):
     return relmums,mapping
 
 splitchain="largest"
-maxdepth=None
+maxdepth=None #stop recursion when max depth is reached
+maxsize=None #stop recursion when all fragments in a bubble are smaller then maxsize
 # pcutoff=0.01
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
@@ -168,10 +169,28 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             return
 
         if not precomputed:
-
             if maxdepth!=None:
                 if idx.depth>maxdepth:
                     return
+
+            if maxsize!=None:
+                rpaths=[p for p in G.graph['paths'] if not p.startswith('*')]
+
+                if idx.leftnode==None:
+                    lo={G.graph['path2id'][p]: 0 for p in rpaths}
+                else:
+                    lo={k: G.node[idx.leftnode]['offsets'][k]+(idx.leftnode[1]-idx.leftnode[0]) for k in G.node[idx.leftnode]['offsets']}
+                
+                if idx.rightnode==None:
+                    ro={G.graph['path2id'][p]: G.graph['id2end'][G.graph['path2id'][p]] for p in rpaths}
+                else:
+                    ro=G.node[idx.rightnode]['offsets']
+
+                for k in set(lo.keys()) & set(ro.keys()):
+                    if ro[k]-lo[k]>maxsize:
+                        break
+                else:
+                    return #no break, so all fragments in bubbles are smaller than maxsize
 
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
