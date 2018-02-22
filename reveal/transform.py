@@ -588,17 +588,16 @@ def transform(args):
             G.graph['paths']=[sample for sample in G.graph['paths'] if sample in ctgswithevents or not sample.startswith("*")]
 
     if 'unchained' in defref2ctg:
-        logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
-        for name in defref2ctg['unchained']:
-            # for start,end,i in defref2ctg['unchained'][name]:
-            for start,end in defref2ctg['unchained'][name]:
-                logging.info("%s%s (start=%d,end=%d,length=%d,total-contig-length=%d)"%('*' if end-start!=contig2length[name] else '', name,start,end,end-start,contig2length[name]))
-
-                if args.outputtype=='fasta':
-                    unplaced.write(">%s[%d:%d]\n"%(name,start,end))
-                    unplaced.write("%s\n"%contig2seq[name][start:end])
-                
-                totsequnplaced+=end-start
+        if len(defref2ctg['unchained'])>0:
+            logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
+            for name in defref2ctg['unchained']:
+                # for start,end,i in defref2ctg['unchained'][name]:
+                for start,end in defref2ctg['unchained'][name]:
+                    logging.info("%s%s (start=%d,end=%d,length=%d,total-contig-length=%d)"%('*' if end-start!=contig2length[name] else '', name,start,end,end-start,contig2length[name]))
+                    if args.outputtype=='fasta':
+                        unplaced.write(">%s[%d:%d]\n"%(name,start,end))
+                        unplaced.write("%s\n"%contig2seq[name][start:end])
+                    totsequnplaced+=end-start
     
     if not args.split and args.outputtype=='fasta':
         finished.close()
@@ -1414,6 +1413,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 #on reference
                 if mem[0]<refstart and mem[0]+mem[2]>refstart:
                     # mem=(mem[0],mem[1],refstart-mem[0],mem[3],mem[4])
+                    # print "update left overlapping reference",mem,(mem[0],mem[1],refstart-mem[0],mem[3])
                     mem=(mem[0],mem[1],refstart-mem[0],mem[3])
                     #check if now it is contained on ctg domain of the chain
                     if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
@@ -1422,6 +1422,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 #on contig
                 if mem[1]<ctgstart and mem[1]+mem[2]>ctgstart:
                     # mem=(mem[0],mem[1],ctgstart-mem[1],mem[3],mem[4])
+                    # print "update left overlapping ctg",mem,(mem[0],mem[1],ctgstart-mem[1],mem[3])
                     mem=(mem[0],mem[1],ctgstart-mem[1],mem[3])
                     #check if now it is contained on reference domain of the chain
                     if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
@@ -1432,6 +1433,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 if mem[0]<refend and mem[0]+mem[2]>refend:
                     t=refend-mem[0]
                     # mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3],mem[4])
+                    # print "update right overlapping ref",mem,(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
                     mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
                     #check if now it is contained on ctg domain of the chain
                     if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
@@ -1441,6 +1443,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 if mem[1]<ctgend and mem[1]+mem[2]>ctgend:
                     t=ctgend-mem[1]
                     # mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3],mem[4])
+                    # print "update right overlapping ctg",mem,(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
                     mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
                     #check if now it is contained on reference domain of the chain
                     if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
