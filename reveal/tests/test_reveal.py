@@ -2,7 +2,7 @@ from unittest import TestCase
 from nose.tools import with_setup
 from StringIO import StringIO
 
-from reveal import reveal,align,utils
+from reveal import reveal,rem,utils
 
 import networkx as nx
 import sys
@@ -11,7 +11,7 @@ import os
 def teardown():
     os.remove("1a_1b.gfa")
     os.remove("1c_1d.gfa")
-    #os.remove("1a_1b_1c.gfa")
+    os.remove("1a_1b_1c.gfa")
     os.remove("1c_1a_1b.gfa")
     os.remove("1a_1b_1c_1d.gfa")
     os.remove("123a_123b.gfa")
@@ -34,7 +34,7 @@ class TestReveal(TestCase):
         sys.stdout=bakout
 
     def test01_seqpair_align(self):
-        G,idx=align.align([("1","ACTGATGTAGCTAGCTA"),("2","ACTAGCTAGCTAGTCAG")],minlength=1)
+        G,idx=rem.align([("1","ACTGATGTAGCTAGCTA"),("2","ACTAGCTAGCTAGTCAG")],minlength=1)
         print G
         self.assertTrue(isinstance(G, nx.DiGraph))
         self.assertTrue(G.number_of_nodes()>2)
@@ -42,37 +42,37 @@ class TestReveal(TestCase):
     
     @with_setup(setup, teardown)
     def test02_fastapair_align_cmd(self):
-        sys.argv=['reveal','align','tests/1a.fa','tests/1b.fa']
+        sys.argv=['reveal','rem','tests/1a.fa','tests/1b.fa']
         reveal.main()
         self.assertTrue(os.path.exists("1a_1b.gfa"))
     
     @with_setup(setup, teardown)
     def test03_64_fastapair_align_cmd(self):
-        sys.argv=['reveal','--64','align','tests/1c.fa','tests/1d.fa']
+        sys.argv=['reveal','rem','--64','tests/1c.fa','tests/1d.fa']
         reveal.main()
         self.assertTrue(os.path.exists("1c_1d.gfa"))
     
     @with_setup(setup, teardown)
     def test04_fastamulti_align_cmd(self):
-        sys.argv=['reveal','align','tests/1a.fa','tests/1b.fa','tests/1c.fa']
+        sys.argv=['reveal','rem','tests/1a.fa','tests/1b.fa','tests/1c.fa']
         reveal.main()
         self.assertTrue(os.path.exists("1a_1b_1c.gfa"))
     
     @with_setup(setup, teardown)
     def test05_graph2graph_align_cmd(self):
-        sys.argv=['reveal','align','1a_1b.gfa','1c_1d.gfa']
+        sys.argv=['reveal','rem','1a_1b.gfa','1c_1d.gfa']
         reveal.main()
         self.assertTrue(os.path.exists("1a_1b_1c_1d.gfa"))
     
     @with_setup(setup, teardown)
     def test06_fasta2graph_align_cmd(self):
-        sys.argv=['reveal','align','tests/1c.fa','1a_1b.gfa']
+        sys.argv=['reveal','rem','tests/1c.fa','1a_1b.gfa']
         reveal.main()
         self.assertTrue(os.path.exists("1c_1a_1b.gfa"))
 
     @with_setup(setup, teardown)
     def test07_multifastapair_align_cmd(self):
-        sys.argv=['reveal','align','tests/123a.fa','tests/123b.fa','-m1000']
+        sys.argv=['reveal','rem','tests/123a.fa','tests/123b.fa','-m1000']
         reveal.main()
         self.assertTrue(os.path.exists("123a_123b.gfa"))
     
@@ -126,9 +126,9 @@ class TestReveal(TestCase):
         os.remove("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa")
 
     @with_setup(setup, teardown)
-    def test13_realign_cmd(self):
+    def test13_refine_cmd(self):
         print self.pair
-        sys.argv=['reveal','realign','1a_1b_1c.gfa','--all','-n2']
+        sys.argv=['reveal','refine','1a_1b_1c.gfa','--all','-n2']
         reveal.main()
         self.assertTrue(os.path.exists('1a_1b_1c.realigned.gfa'))
     
@@ -194,5 +194,3 @@ class TestReveal(TestCase):
     
     def test21_plot_cmd(self):
         pass
-
-
