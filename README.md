@@ -4,10 +4,6 @@ REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole gen
 
 Preprint can be found here: [Scalable multi whole-genome alignment using recursive exact matching](http://www.biorxiv.org/content/early/2015/07/17/022715)
 
-How it works:
-
-![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/blob/master/reveal.gif)
-
 ## LATEST CHANGES
 
 - New subcommands: rem, transform, refine and unzip (to substitute align, finish and realign)
@@ -139,4 +135,7 @@ Or to do the opposite, split a graph by its connected components:
 
 For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
 
-Under notebooks you can find some IPython notebooks that show some experiments for typical usecases (not up-to-date(!)).
+How it works:
+
+![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/blob/master/reveal.gif)
+
