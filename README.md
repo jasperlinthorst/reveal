@@ -41,6 +41,8 @@ By default reveal will try to anchor the alignment by simultaneously aligning al
 
 **reveal align tests/1a.fa tests/1b.fa --order=sequential --chunksize=5 | sh**
 
+All commands in the shell script that are in between the comment lines can be run in parallel in case you're running on a compute cluster.
+
 There are other subcommands for reveal, for which some are used by the generated shell script:
 
 To generate an anchor graph using the recursive exact matching approach for more than two sequences you can either call:
