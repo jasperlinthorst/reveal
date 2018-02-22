@@ -816,7 +816,8 @@ initreveallib(void)
     Py_INCREF(&RevealIndexType);
     PyModule_AddObject(m, "index", (PyObject *)&RevealIndexType);
     
-    RevealError = PyErr_NewException("Reveal.error", NULL, NULL);
+    char errname[]="Reveal.error";
+    RevealError = PyErr_NewException(errname, NULL, NULL);
     Py_INCREF(RevealError);
     PyModule_AddObject(m, "error", RevealError);
 }

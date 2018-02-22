@@ -620,9 +620,6 @@ void checkindex(RevealIndex* idx){
     }
 }
 
-
-
-
 void bubble_sort(RevealIndex* idx, PyObject* matching_intervals){
 
     lcp_t tmpLCP;
@@ -717,7 +714,7 @@ void *aligner(void *arg) {
         if (hasindex==1) {
 
 #ifdef REVEALDEBUG
-            //fprintf(stderr,"Initial.\n");
+            // fprintf(stderr,"Initial.\n");
             //checkindex(idx);
             fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
             fprintf(stderr,"samples=%d\n",idx->nsamples);
@@ -1178,7 +1175,9 @@ void *aligner(void *arg) {
             time(&t0);
             fprintf(stderr,"Splitting SA... ");
 #endif
+
             split(idx, D, i_leading, i_trailing, i_parallel);
+
 #ifdef REVEALDEBUG
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
@@ -1186,7 +1185,7 @@ void *aligner(void *arg) {
 
 #ifdef REVEALDEBUG
             time(&t0);
-            fprintf(stderr,"Bubble sorting leading SA... ");
+            fprintf(stderr,"Marking intervals in T...");
 #endif
             
             //mark corresponding intervals in T
@@ -1196,9 +1195,28 @@ void *aligner(void *arg) {
                 }
             }
 
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"done.\n");
+#endif
+
+
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"Bubble sorting leading SA...");
+#endif
+
+            pthread_mutex_lock(&python);
+            gstate=PyGILState_Ensure();
+
             if (leadingn>0){
                 bubble_sort(i_leading, matching_intervals);
             }
+
+#ifdef REVEALDEBUG
+            time(&t0);
+            fprintf(stderr,"done.\n");
+#endif
 
 #ifdef REVEALDEBUG
             time(&t1);
@@ -1227,8 +1245,8 @@ void *aligner(void *arg) {
                 idx->LCP=NULL;
             }
             
-            pthread_mutex_lock(&python);
-            gstate=PyGILState_Ensure();
+            // pthread_mutex_lock(&python);
+            // gstate=PyGILState_Ensure();
             
             Py_DECREF(result);
             Py_DECREF(idx); //trigger gc for subindex
