@@ -29,7 +29,23 @@ def bubbles(G):
         alternativeEntrance={}
         previousEntrance={}
         ordD={}
-        
+            
+        if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
+            logging.debug("Converting MultiDigraph to DiGraph, before bubble extraction.")
+            
+            orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
+            refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
+
+            es=[]
+            for e0,e1,d in G.edges(data=True):
+                # if len(d['paths'])==len(d['paths'] & orgpaths):
+                if len(d['paths'] & refpaths)==0: #edge that exclusively represents structural event 
+                    #structural event, think of way to represent these as well
+                    pass
+                else:
+                    es.append((e0,e1,d))
+            G=nx.DiGraph(es)
+
         logging.debug("Topologically sort the graph.")
         ordD_=list(nx.topological_sort(G))
         logging.debug("Done.")
@@ -74,11 +90,10 @@ def bubbles(G):
         return ordD,ordD_,sspairs
     
     def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs):
+        
         if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
             del candidates[-1]
             return
-        
-        #print "reporting supbub",vstart,vexit
 
         si=previousEntrance[vexit[0]]
         
@@ -89,12 +104,21 @@ def bubbles(G):
         s=ordD_[si]
         while ordD[s] >= ordD[vstart[0]]:
             valid = validatesuperbubble(s, vexit[0], ordD, ordD_, outchild, outparent, previousEntrance, G)
-            if valid==s or valid==alternativeEntrance[s] or valid==-1:
+            
+            if (valid==s):
                 break
+
+            if (valid==alternativeEntrance[s]):
+                break
+
+            if valid==-1:
+                break
+
             alternativeEntrance[s] = valid
             s = valid
 
         del candidates[-1]
+
         if (valid == s):
             sspairs.append((s, vexit[0]))
             while (candidates[-1][0] is not s):
@@ -155,14 +179,17 @@ def bubbles_cmd(args):
         logging.fatal("Specify a gfa file to extract bubbles.")
         return
     
-    G=nx.DiGraph()
+    G=nx.MultiDiGraph()
     read_gfa(args.graph[0],None,"",G)
     
     allcomplexnodes=[]
     sys.stdout.write("#source\tsink\tsubgraph\ttype\n")
     for b in bubbles(G):
         t=b.issimple()
-        sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source,b.sink,",".join([str(x) for x in b.nodes]), 'simple' if t else 'complex'))
+        sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source if type(b.source)!=str else '<start>',
+                                            b.sink if type(b.sink)!=str else '<end>',
+                                            ",".join([str(x) for x in b.nodes if type(x)!=str]),
+                                            'simple' if t else 'complex'))
 
         if not t:
             if args.exportcomplex:
@@ -208,7 +235,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tminflanksize\tsource\tsink\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos\tminflanksize\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -245,7 +272,13 @@ def variants_cmd(args):
         if minflank<args.minflank:
             continue
 
-        sys.stdout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s"%(G.graph['id2path'][cds],v.vpos[cds],minflank,v.source if type(v.source)!=str else '-',v.sink if type(v.sink)!=str else '-', v.vtype, ",".join(v.genotypes) ))
+        sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"%(G.graph['id2path'][cds],v.vpos[cds],minflank,
+                                                                v.source if type(v.source)!=str else '<start>',
+                                                                v.sink if type(v.sink)!=str else '<end>', 
+                                                                G.node[v.source]['seq'][-20:] if v.source in G else '-', 
+                                                                G.node[v.sink]['seq'][:20] if v.sink in G else '-',
+                                                                v.vtype, 
+                                                                ",".join(v.genotypes) ))
         for sample in gori:
             if sample in v.calls:
                 sys.stdout.write("\t%s"%v.calls[sample])
@@ -284,8 +317,26 @@ class Bubble:
 
         self.simple=None
         
-        self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
-        self.seqsize=sum([len(G.node[node]['seq'])*len(G.node[node]['offsets']) for node in self.nodes[1:-1]])
+        #TODO: use source/sink offsets to calculate this!!
+
+
+        self.paths=set(G.node[self.source]['offsets'].keys()) & set(G.node[self.sink]['offsets'].keys())
+
+        if 'seq' in G.node[self.source]:
+            l=len(G.node[self.source]['seq'])
+        else:
+            l=(self.source[1]-self.source[0])
+
+        self.allelesizes=[G.node[self.sink]['offsets'][p]-(G.node[self.source]['offsets'][p]+l) for p in self.paths]
+
+        self.minsize=min(self.allelesizes)
+        # self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
+
+        # self.maxsize=max([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
+        self.maxsize=max(self.allelesizes)
+
+        self.cumsize=sum(self.allelesizes)
+        # self.cumsize=sum([len(G.node[node]['seq'])*len(G.node[node]['offsets']) for node in self.nodes[1:-1]])
     
     def issimple(self):
         if self.simple==None:
@@ -310,7 +361,48 @@ class Bubble:
             
             return self.simple
         else:
-            return self.simple 
+            return self.simple
+
+    #returns the amount the left and right margin for indel positioning
+    def getwiggle(self,minwiggle=0):
+        if self.issimple():
+
+            if self.G.has_edge(self.source,self.sink):
+                #how far can we move this bubble to the right?
+
+                if 'seq' in self.G.node[self.sink]:
+                    sink=self.G.node[self.sink]['seq']
+                else:
+                    sink=""
+
+                if 'seq' in self.G.node[self.source]:
+                    source=self.G.node[self.source]['seq']
+                else:
+                    source=""
+
+                vs=[self.G.node[n]['seq']+sink for n in self.nodes[1:-1]]
+                lvs=[len(s) for s in vs]+[len(sink)]
+                i=0
+                while i<min(lvs) and sink[i]==vs[0][i]:
+                    for v in vs[1:]:
+                        if not v[i]==sink[i]:
+                            break
+                    i+=1
+                
+                vs=[source+self.G.node[n]['seq'] for n in self.nodes[1:-1]]
+                lvs=[len(s) for s in vs]+[len(source)]
+                j=1
+                while j<=min(lvs) and source[-j]==vs[0][-j]:
+                    for v in vs[1:]:
+                        if not v[-j]==source[-j]:
+                            break
+                    j+=1
+
+                return (minwiggle+j-1,minwiggle+i) #tuple with margin on the left and margin on the right
+        
+        return (minwiggle,minwiggle)
+
+        # return (0,0)
 
 class Variant(Bubble):
     def __init__(self,bubble):
@@ -371,11 +463,3 @@ class Variant(Bubble):
                 self.calls[bubble.G.graph['id2path'][sampleid]]=i
                 #tmpsource.discard(sample)
                 tmpsource.discard(sampleid)
-
-    def isinversion(self):
-        if self.vtype=='undefined':
-            return 'maybe'
-            pass
-        else:
-            return False
-    
