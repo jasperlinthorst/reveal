@@ -61,9 +61,12 @@ def extract(G,sample):
         subgraph=nx.DiGraph(sg)
         seq=""
         path=list(nx.topological_sort(subgraph))
-        subgraph.add_edge(0,path[0],ofrom='+',oto='+')
 
+        inito=subgraph[path[0]][subgraph[path[0]].keys()[0]]['ofrom']
+
+        subgraph.add_edge(0,path[0],ofrom='+',oto=inito)
         pnode=0
+
         for node in path:
             o=subgraph[pnode][node]['oto']
             if o=="+":
