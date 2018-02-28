@@ -22,7 +22,7 @@ setup(name="reveal", version="0.1",
                 #                         undef_macros=['NDEBUG'] ), \
 
                 Extension("probconslib", ["probcons/Probcons.cc"], \
-                                       define_macros=[('NumInsertStates',1),('VERSION',1.12)], \
+                                       define_macros=[('NumInsertStates',2),('VERSION',1.12)], \
                                        undef_macros=['NDEBUG'] ), \
 
                 Extension("reveallib", ["reveal.c","interface.c","divsufsort/divsufsort.c","divsufsort/utils.c","divsufsort/sssort.c","divsufsort/trsort.c"], \

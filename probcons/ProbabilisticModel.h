@@ -58,14 +58,14 @@ class ProbabilisticModel {
     for (int i = 0; i < NumInsertStates; i++){
       transMat[0][2*i+1] = gapOpen[2*i];
       transMat[0][2*i+2] = gapOpen[2*i+1];
-      // transMat[0][0] -= (gapOpen[2*i] + gapOpen[2*i+1]);
+      transMat[0][0] -= (gapOpen[2*i] + gapOpen[2*i+1]);
       assert (transMat[0][0] > 0);
       transMat[2*i+1][2*i+1] = gapExtend[2*i];
       transMat[2*i+2][2*i+2] = gapExtend[2*i+1];
-      transMat[2*i+1][2*i+2] = 0;
-      transMat[2*i+2][2*i+1] = 0;
-      transMat[2*i+1][0] = 1;// - gapExtend[2*i];
-      transMat[2*i+2][0] = 1;// - gapExtend[2*i+1];
+      transMat[2*i+1][2*i+2] = 0.0073673674;
+      transMat[2*i+2][2*i+1] = 0.0073673674;
+      transMat[2*i+1][0] = 1 - gapExtend[2*i];
+      transMat[2*i+2][0] = 1 - gapExtend[2*i+1];
     }
 
     // create initial and transition probability matrices
