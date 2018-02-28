@@ -82,8 +82,8 @@ def transform(args):
     pool = Pool(processes=2 if args.nproc>=2 else 1)
     signal.signal(signal.SIGINT, original_sigint_handler)
     try:
-        async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
-        async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn}) # tuple of args for foo
+        async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
+        async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
     except KeyboardInterrupt:
         pool.terminate()
     else:
@@ -122,19 +122,21 @@ def transform(args):
         logging.error("No mums! Exit")
         sys.exit()
 
-    if args.minlength==None:
-        args.minlength=1
-        #sort by length
-        mems=sorted(mems,key=lambda m: m[4],reverse=True)
-        #prevent use of too many mums
-        cov=0
-        for i,mem in enumerate(mems):
-            cov+=mem[4]
-            if cov/float(totl)>1:
-                break
-        if i<len(mems)-1:
-            mems=mems[:i+1]
-        logging.info("Auto determined min-mum-length to %d for cov. of %f"%(mems[-1][4],cov/float(totl)))
+    #if args.minlength==None:
+    #    args.minlength=1
+
+    #sort by length
+    mems=sorted(mems,key=lambda m: m[4],reverse=True)
+    #prevent use of too many mums
+    cov=0
+    for i,mem in enumerate(mems):
+        cov+=mem[4]
+        if cov/float(totl)>1:
+            break
+
+    if i<len(mems)-1:
+        mems=mems[:i+1]
+        logging.info("Over representation of MUMs, auto determined min-mum-length to %d for cov. of %f"%(mems[-1][4],cov/float(totl)))
 
     ld=[mem[4] for mem in mems]
     bpcovered=sum(ld)
@@ -191,6 +193,8 @@ def transform(args):
     defref2ctg=dict()
     unused=[]
 
+
+
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=args.nproc)
     signal.signal(signal.SIGINT, original_sigint_handler)
@@ -206,6 +210,7 @@ def transform(args):
     else:
         pool.close()
     pool.join()
+
 
     #retrieve multi-process results
     for ref in ref2ctg:
@@ -983,7 +988,7 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     
     mums=[]
     
-    for mum in idx.getmums(minlength if minlength!=None else 1):
+    for mum in idx.getmums(minlength if minlength!=0 else 1):
         refstart=mum[2][0][1]
         ctgstart=mum[2][1][1]
         rnode=t[refstart].pop() #start position on match to node in graph

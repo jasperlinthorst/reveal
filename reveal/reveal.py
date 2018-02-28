@@ -63,6 +63,7 @@ def main():
     parser_aln.add_argument("--minconf", dest="minconf", type=float, default=0, choices=range(0,101), metavar="[0-100]", help="Use cutoff on confidence values during refinement of the graph.")
     parser_aln.add_argument("--nounzip", dest="unzip", action="store_false", default=True, help="Do not unzip bubbles before refining.")
     parser_aln.add_argument("--notransform", dest="transform", action="store_false", default=True, help="Do not use transform to account for structural events or draft assemblies. Assume colinear alignment of complete genomes.")
+    parser_aln.add_argument("--novariants", dest="variants", action="store_false", default=True, help="Do not output bubbles as variants.")
     parser_aln.set_defaults(func=align.align)
 
     parser_rem = subparsers.add_parser('rem',prog="reveal rem", description="Use recursive exact matching to obtain a graph from multiple input genomes or other graphs.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
@@ -162,7 +163,7 @@ def main():
     parser_transform.add_argument('reference', help='(Multi-)fasta reference sequence.')
     parser_transform.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
     parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
-    parser_transform.add_argument("-m", dest="minlength", type=int, default=None, help="Min length of maximal exact matches for considering (if not set, use the set of largest MUMs for which the genome wide coverage is below 1).")
+    parser_transform.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of maximal exact matches for considering (if set to 0, try to extract all MUMs).")
     parser_transform.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
     parser_transform.add_argument("--noextend", dest="extend", default=True, action="store_false", help="Don't extend chains to contig ends.")
     parser_transform.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to do MUM extraction (max: 2 proc) and mapping (max: number of contigs) in parallel (increases mem usage!).")
