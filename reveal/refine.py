@@ -438,7 +438,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
         import probconslib
         logging.debug("Using probcons (in memory)")
         pl=probconslib.probcons()
-        aln=pl.align(aobjs,consistency=0,refinement=0,pretraining=0)
+        aln=pl.align(aobjs,consistency=2,refinement=100,pretraining=0)
         seqs=[""]*len(aobjs)
         names=[""]*len(aobjs)
         for name,seq in aln[0]:
