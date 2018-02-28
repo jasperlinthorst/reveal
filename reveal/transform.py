@@ -78,25 +78,31 @@ def transform(args):
                 pref.append(bn)
         args.output="_".join(pref)
 
-    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    pool = Pool(processes=2 if args.nproc>=2 else 1)
-    signal.signal(signal.SIGINT, original_sigint_handler)
-    try:
-        async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
-        async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
-    except KeyboardInterrupt:
-        pool.terminate()
-    else:
+
+    if args.nproc>1:
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        pool = Pool(processes=2 if args.nproc>=2 else 1)
+        signal.signal(signal.SIGINT, original_sigint_handler)
+        try:
+            async_result1 = pool.apply_async(getmums, (args.reference,args.contigs), {'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
+            async_result2 = pool.apply_async(getmums, (args.reference,args.contigs), {'revcomp':True,'sa64':args.sa64,'minlength':args.minlength,'cutN':args.cutn})
+        except:
+            pool.terminate()
+            sys.exit(1)
+        
         pool.close()
-    pool.join()
+        pool.join()
 
-    logging.debug("Done.")
+        logging.debug("Retrieving results...")
+        mums = async_result1.get()
+        logging.debug("Done. MUMS in normal orientation: %d."%len(mums))
 
-    mums = async_result1.get()
-    logging.debug("MUMS in normal orientation: %d"%len(mums))
-
-    rcmums = async_result2.get()
-    logging.debug("MUMS in reverse complemented orientation: %d"%len(rcmums))
+        logging.debug("Retrieving RC results...")
+        rcmums = async_result2.get()
+        logging.debug("Done. MUMS in reverse complemented orientation: %d."%len(rcmums))
+    else:
+        mums=getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn)
+        rcmums=getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn)
 
     reffile=os.path.basename(args.reference)
     ctgfile=os.path.basename(args.contigs)
@@ -116,9 +122,9 @@ def transform(args):
         contig2seq[name]=seq
 
     #combine matches
-    mems=mums+rcmums
+    mums=mums+rcmums
 
-    if len(mems)==0:
+    if len(mums)==0:
         logging.error("No mums! Exit")
         sys.exit()
 
@@ -126,19 +132,21 @@ def transform(args):
     #    args.minlength=1
 
     #sort by length
-    mems=sorted(mems,key=lambda m: m[4],reverse=True)
+    logging.debug("Sorting %d MUMs by size..."%len(mums))
+    mums=sorted(mums,key=lambda m: m[4],reverse=True)
+    logging.debug("Done.")
     #prevent use of too many mums
     cov=0
-    for i,mem in enumerate(mems):
+    for i,mem in enumerate(mums):
         cov+=mem[4]
         if cov/float(totl)>1:
             break
 
-    if i<len(mems)-1:
-        mems=mems[:i+1]
-        logging.info("Over representation of MUMs, auto determined min-mum-length to %d for cov. of %f"%(mems[-1][4],cov/float(totl)))
+    if i<len(mums)-1:
+        mums=mums[:i+1]
+        logging.info("Over representation of MUMs, auto determined min-mum-length to %d for cov. of %f"%(mums[-1][4],cov/float(totl)))
 
-    ld=[mem[4] for mem in mems]
+    ld=[mem[4] for mem in mums]
     bpcovered=sum(ld)
 
     bpncovered=totl-bpcovered
@@ -163,7 +171,7 @@ def transform(args):
     
     logging.debug("Associating mums to contigs.")
     #relate mums to contigs
-    ctg2mums=mapmumstocontig(mems,filtermums=args.filtermums,mineventsize=args.mineventsize)    
+    ctg2mums=mapmumstocontig(mums,filtermums=args.filtermums,mineventsize=args.mineventsize)    
 
     logging.debug("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
@@ -725,9 +733,9 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
 
     results=[]
     for ref in mums:
-        mems=mums[ref]
+        rmums=mums[ref]
 
-        candidatepaths=mempathsbothdirections(mems,contiglength,n=maxmums,mineventsize=mineventsize,minchainsum=minchainsum)
+        candidatepaths=mempathsbothdirections(rmums,contiglength,n=maxmums,mineventsize=mineventsize,minchainsum=minchainsum)
         for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
             if len(path)>0:
                 paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
@@ -953,36 +961,36 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     else:
         idx=reveallib.index()
     
-    G=nx.DiGraph() #dummy for now
+    # G=nx.DiGraph() #dummy for now
     t=IntervalTree()
     
     reffile=os.path.basename(reference)
     ctgfile=os.path.basename(query)
     
     idx.addsample(reffile)
-    if reference.endswith(".gfa"): #dummy for now
-        logging.error("Not yet supported.")
-        read_gfa(reference,idx,t,G)
-    else:
-        for name,seq in fasta_reader(reference):
-            intv=idx.addsequence(seq)
-            intv=Interval(intv[0],intv[1],name)
-            t.add(intv)
+    # if reference.endswith(".gfa"): #dummy for now
+    #     logging.error("Not yet supported.")
+    #     read_gfa(reference,idx,t,G)
+    # else:
+    for name,seq in fasta_reader(reference):
+        intv=idx.addsequence(seq)
+        intv=Interval(intv[0],intv[1],name)
+        t.add(intv)
     
     idx.addsample(ctgfile)
-    if query.endswith(".gfa"): #dummy for now
-        logging.error("Not yet supported.")
-        read_gfa(query,idx,t,G,revcomp=revcomp)
-    else:
-        for name,seq in fasta_reader(query,cutN=cutN):
-            if revcomp:
-                rcseq=rc(seq)
-                intv=idx.addsequence(rcseq)
-            else:
-                intv=idx.addsequence(seq)
-            
-            intv=Interval(intv[0],intv[1],name)
-            t.add(intv)
+    # if query.endswith(".gfa"): #dummy for now
+    #     logging.error("Not yet supported.")
+    #     read_gfa(query,idx,t,G,revcomp=revcomp)
+    # else:
+    for name,seq in fasta_reader(query,cutN=cutN):
+        if revcomp:
+            rcseq=rc(seq)
+            intv=idx.addsequence(rcseq)
+        else:
+            intv=idx.addsequence(seq)
+        
+        intv=Interval(intv[0],intv[1],name)
+        t.add(intv)
     
     idx.construct()
     
@@ -999,200 +1007,205 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
         else:
             mums.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0))
     
+    if revcomp:
+        logging.debug("Extracted %d, 3'-5' MUMs."%len(mums))
+    else:
+        logging.debug("Extracted %d, 5'-3' MUMs."%len(mums))
+
     return mums
 
-def filtercontainedmumsboth(mems):
-    #filter mems before trying to form chains
-    before=len(mems)
-    mems.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmems=[]
+def filtercontainedmumsboth(mums):
+    #filter mums before trying to form chains
+    before=len(mums)
+    mums.sort(key=lambda m: m[0]) #sort by reference position
+    filteredmums=[]
     prefstart=0
     prefend=0
-    for mem in mems:
+    for mem in mums:
         refstart=mem[0]
         refend=mem[0]+mem[2]
         if refend<prefend and prefstart<refstart: #ref contained
-            filteredmems.append(mem+[1])
+            filteredmums.append(mem+[1])
             continue
         else:
-            filteredmems.append(mem+[0])
+            filteredmums.append(mem+[0])
             prefend=refend
             prefstart=prefstart
     
-    filteredmems.sort(key=lambda m: m[1]) #sort by qry position
-    mems=[]
+    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
+    mums=[]
     pqrystart=0
     pqryend=0
-    for mem in filteredmems:
+    for mem in filteredmums:
         qrystart=mem[1]
         qryend=mem[1]+mem[2]
         if qryend<pqryend and pqrystart<qrystart and mem[5]==1: #qry and ref contained
             continue
         else:
-            mems.append(mem[:5])
+            mums.append(mem[:5])
             pqryend=qryend
             pqrystart=pqrystart
     
-    after=len(mems)
+    after=len(mums)
     
     logging.info("Filtered mums from %d to %d."%(before,after))
     
-    return mems
+    return mums
 
-def filtercontainedmumsratio(mems,ratio=.1):
-    #filter mems before trying to form chains
+def filtercontainedmumsratio(mums,ratio=.1):
+    #filter mums before trying to form chains
 
-    mems.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmems=[]
+    mums.sort(key=lambda m: m[0]) #sort by reference position
+    filteredmums=[]
     prefstart=0
     prefend=0
-    for mem in mems:
+    for mem in mums:
         refstart=mem[0]
         refend=mem[0]+mem[2]
         if refend<prefend and prefstart<refstart: #ref contained
             if float(refend-refstart)/float(prefend-prefstart)<ratio:
                 continue
 
-        filteredmems.append(mem)
+        filteredmums.append(mem)
         prefend=refend
         prefstart=refstart
         pmem=mem
     
-    filteredmems.sort(key=lambda m: m[1]) #sort by qry position
-    mems=[]
+    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
+    mums=[]
     pqrystart=0
     pqryend=0
-    for mem in filteredmems:
+    for mem in filteredmums:
         qrystart=mem[1]
         qryend=mem[1]+mem[2]
         if qryend<pqryend and pqrystart<qrystart: #qry contained
             if float(qryend-qrystart)/float(pqryend-pqrystart)<ratio:
                 continue
-        mems.append(mem)
+        mums.append(mem)
         pqryend=qryend
         pqrystart=qrystart
         pmem=mem
     
-    return mems
+    return mums
 
-def filtermumsrange(mems,mineventsize=1500,minchainsum=1000):#minchainlength=1500):
-    #filter mems before trying to form chains
+def filtermumsrange(mums,mineventsize=1500,minchainsum=1000):#minchainlength=1500):
+    #filter mums before trying to form chains
     
-    logging.debug("Number of mems before filtering: %d"%len(mems))
+    logging.debug("Number of mums before filtering: %d"%len(mums))
 
-    mems.sort(key=lambda m: m[0]) #sort by reference position
+    mums.sort(key=lambda m: m[0]) #sort by reference position
 
-    filteredmems=[]
+    filteredmums=[]
 
-    for i in xrange(len(mems)):
-        if mems[i][2]>=minchainsum:#minchainlength:
-            filteredmems.append(mems[i])
+    for i in xrange(len(mums)):
+        if mums[i][2]>=minchainsum:#minchainlength:
+            filteredmums.append(mums[i])
             continue
         
-        if len(mems)<=1:
+        if len(mums)<=1:
             continue
         
-        refstart=mems[i][0]
-        refend=mems[i][0]+mems[i][2]
+        refstart=mums[i][0]
+        refend=mums[i][0]+mums[i][2]
         
         if i==0: #first
-            nrefstart=mems[i+1][0]
-            nrefend=mems[i+1][0]+mems[i+1][2]
+            nrefstart=mums[i+1][0]
+            nrefend=mums[i+1][0]+mums[i+1][2]
             if abs(refend-nrefstart)>mineventsize:
                 continue
             else:
-                filteredmems.append(mems[i])
-        elif i==len(mems)-1: #last
-            prefstart=mems[i-1][0]
-            prefend=mems[i-1][0]+mems[i-1][2]
+                filteredmums.append(mums[i])
+        elif i==len(mums)-1: #last
+            prefstart=mums[i-1][0]
+            prefend=mums[i-1][0]+mums[i-1][2]
             if abs(refstart-prefend)>mineventsize:
                 continue
             else:
-                filteredmems.append(mems[i])
+                filteredmums.append(mums[i])
         else:
-            prefstart=mems[i-1][0]
-            prefend=mems[i-1][0]+mems[i-1][2]
-            nrefstart=mems[i+1][0]
-            nrefend=mems[i+1][0]+mems[i+1][2]
+            prefstart=mums[i-1][0]
+            prefend=mums[i-1][0]+mums[i-1][2]
+            nrefstart=mums[i+1][0]
+            nrefend=mums[i+1][0]+mums[i+1][2]
             if abs(refstart-prefend)>mineventsize and abs(refend-nrefstart)>mineventsize:
                 continue
             else:
-                filteredmems.append(mems[i])
+                filteredmums.append(mums[i])
     
-    filteredmems.sort(key=lambda m: m[1]) #sort by qry position
-    mems=[]
+    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
+    mums=[]
 
-    for i in xrange(len(filteredmems)):
-        if filteredmems[i][2]>=minchainsum:#minchainlength:
-            mems.append(filteredmems[i])
+    for i in xrange(len(filteredmums)):
+        if filteredmums[i][2]>=minchainsum:#minchainlength:
+            mums.append(filteredmums[i])
             continue
         
-        if len(filteredmems)<=1:
+        if len(filteredmums)<=1:
             continue
         
-        qrystart=filteredmems[i][1]
-        qryend=filteredmems[i][1]+filteredmems[i][2]
+        qrystart=filteredmums[i][1]
+        qryend=filteredmums[i][1]+filteredmums[i][2]
         
         if i==0: #first
-            nqrystart=filteredmems[i+1][1]
-            nqryend=filteredmems[i+1][1]+filteredmems[i+1][2]
+            nqrystart=filteredmums[i+1][1]
+            nqryend=filteredmums[i+1][1]+filteredmums[i+1][2]
             if abs(qryend-nqrystart)>mineventsize:
                 continue
             else:
-                mems.append(filteredmems[i])
-        elif i==len(filteredmems)-1: #last
-            pqrystart=filteredmems[i-1][1]
-            pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
+                mums.append(filteredmums[i])
+        elif i==len(filteredmums)-1: #last
+            pqrystart=filteredmums[i-1][1]
+            pqryend=filteredmums[i-1][1]+filteredmums[i-1][2]
             if abs(qrystart-pqryend)>mineventsize:
                 continue
             else:
-                mems.append(filteredmems[i])
+                mums.append(filteredmums[i])
         else:
-            pqrystart=filteredmems[i-1][1]
-            pqryend=filteredmems[i-1][1]+filteredmems[i-1][2]
-            nqrystart=filteredmems[i+1][1]
-            nqryend=filteredmems[i+1][1]+filteredmems[i+1][2]
+            pqrystart=filteredmums[i-1][1]
+            pqryend=filteredmums[i-1][1]+filteredmums[i-1][2]
+            nqrystart=filteredmums[i+1][1]
+            nqryend=filteredmums[i+1][1]+filteredmums[i+1][2]
             if abs(qrystart-pqryend)>mineventsize and abs(qryend-nqrystart)>mineventsize:
                 continue
             else:
-                mems.append(filteredmems[i])
+                mums.append(filteredmums[i])
     
-    logging.debug("Number of mems after filtering: %d"%len(mems))
+    logging.debug("Number of mums after filtering: %d"%len(mums))
     
-    return mems
+    return mums
 
-def filtercontainedmums(mems):
-    #filter mems before trying to form chains
+def filtercontainedmums(mums):
+    #filter mums before trying to form chains
 
-    mems.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmems=[]
+    mums.sort(key=lambda m: m[0]) #sort by reference position
+    filteredmums=[]
     prefstart=0
     prefend=0
-    for mem in mems:
+    for mem in mums:
         refstart=mem[0]
         refend=mem[0]+mem[2]
         if refend<prefend and prefstart<refstart: #ref contained
             continue
         else:
-            filteredmems.append(mem)
+            filteredmums.append(mem)
             prefend=refend
             prefstart=prefstart
     
-    filteredmems.sort(key=lambda m: m[1]) #sort by qry position
-    mems=[]
+    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
+    mums=[]
     pqrystart=0
     pqryend=0
-    for mem in filteredmems:
+    for mem in filteredmums:
         qrystart=mem[1]
         qryend=mem[1]+mem[2]
         if qryend<pqryend and pqrystart<qrystart: #qry contained
             continue
         else:
-            mems.append(mem)
+            mums.append(mem)
             pqryend=qryend
             pqrystart=pqrystart
 
-    return mems
+    return mums
 
 def bestctgpath(ctgs):
     ctgs.sort(key=lambda c: c[3])
@@ -1260,18 +1273,18 @@ def bestctgpath(ctgs):
     
     return path[::-1]
 
-def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=1000,wscore=1,wpen=1,all=True):
-    nmums=len(mems)
-    if nmums>n and n!=0: #take only n largest mems
+def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=1000,wscore=1,wpen=1,all=True):
+    nmums=len(mums)
+    if nmums>n and n!=0: #take only n largest mums
         logging.info("Too many mums (%d), taking the %d largest."%(nmums,n))
-        mems.sort(key=lambda mem: mem[2],reverse=True) #sort by size
-        mems=mems[:n] #take the n largest
+        mums.sort(key=lambda mem: mem[2],reverse=True) #sort by size
+        mums=mums[:n] #take the n largest
     
-    if len(mems)==0:
+    if len(mums)==0:
         return []
 
-    c=sum([m[2] for m in mems])
-    logging.debug("Number of anchors: %d",len(mems))
+    c=sum([m[2] for m in mums])
+    logging.debug("Number of anchors: %d",len(mums))
     logging.debug("Sum of anchors: %d", c)
     logging.debug("Length of contig: %d", ctglength)
     logging.debug("Cov ratio: %s"% (c/float(ctglength)) )
@@ -1280,10 +1293,10 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
      
     paths=[]
     
-    #extract the best path, remove mems that are part of or start/end within the range of the best path, until no more mems remain
-    while len(mems)>0:
+    #extract the best path, remove mums that are part of or start/end within the range of the best path, until no more mums remain
+    while len(mums)>0:
         
-        mems.sort(key=lambda mem: mem[0]+mem[2]) #sort by reference position
+        mums.sort(key=lambda mem: mem[0]+mem[2]) #sort by reference position
         
         init=(None, None, 0, 0, 0, 0)
         link=dict()
@@ -1296,7 +1309,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
         endpoints=[]
         rcendpoints=[]
         pointtomem=dict()
-        for mem in mems:
+        for mem in mums:
             # if mem[4]==0:
             if mem[3]==0:
                 p=(mem[0]+mem[2],mem[1]+mem[2])
@@ -1312,7 +1325,7 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
         rcmemtree=kdtree(rcendpoints,2)
         maxscore=0
         
-        for mem in mems:
+        for mem in mums:
             best=init
             w=wscore*mem[2]
             
@@ -1401,18 +1414,18 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 assert(ctgstart>ctgend)
                 ctgstart,ctgend=ctgend,ctgstart #flip
             
-            #TODO: can be sped up by looking up mems from kdtree!
-            umems=[]
-            for mem in mems:
+            #TODO: can be sped up by looking up mums from kdtree!
+            umums=[]
+            for mem in mums:
                 
-                #filter mems that were contained in the extracted chain
+                #filter mums that were contained in the extracted chain
                 if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
                     continue
 
                 if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
                     continue
                 
-                #update mems that were overlapping the ends of the chain, such that we obtain a non-overlapping segmentation of the query sequence
+                #update mums that were overlapping the ends of the chain, such that we obtain a non-overlapping segmentation of the query sequence
                 
                 #update left overlapping reference
                 #on reference
@@ -1456,9 +1469,9 @@ def mempathsbothdirections(mems,ctglength,n=15000,mineventsize=1500,minchainsum=
                 
                 assert(mem[2]>0)
                 
-                umems.append(mem)
+                umums.append(mem)
 
-            mems=umems
+            mums=umums
         else:
             break
     
