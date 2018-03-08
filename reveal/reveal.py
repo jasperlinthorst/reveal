@@ -25,6 +25,7 @@ import stats
 import split
 import align
 import unzip
+import chop
 
 import logging
 #add custom loglevel TRACE
@@ -91,6 +92,7 @@ def main():
     parser_rem.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
     parser_rem.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
     parser_rem.add_argument("--maxbubblesize", dest="maxsize", type=int, default=None, help="Apply recursion until largest allele within a bubble is smaller than this size.")
+    parser_rem.add_argument("--nocontigs", dest="contigs", default=True, action="store_false", help="Don't treat multi-fasta files as contigs, use every sequence as a target.")
     parser_rem.set_defaults(func=rem.align_cmd)
 
     parser_unzip = subparsers.add_parser('unzip',prog="reveal unzip", description="Opens up bubbles to account for uncertainty of indel placement and edge-wander. Specify --source and --sink to unzip a specific bubble.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
@@ -100,6 +102,14 @@ def main():
     parser_unzip.add_argument("--source", dest="source", type=int, default=None, help="Source for specific bubble.")
     parser_unzip.add_argument("--sink", dest="sink", type=int, default=None, help="Sink for specific bubble.")
     parser_unzip.set_defaults(func=unzip.unzip)
+
+    parser_chop = subparsers.add_parser('chop',prog="reveal chop", description="Uses the chop algorithm to obtain a flat (fasta) representation of the graph to enable the mapping of reads to the graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_chop.add_argument("graph", nargs=1, help='Graph in gfa format which has to be chopped.')
+    parser_chop.add_argument("-k", dest="k", type=int, default=100, help="Max length of the reads that need to be mapped to the graph.")
+    parser_chop.add_argument("-o", "--output", dest="output", default=None, help="Prefix for the resulting flattened graph in fasta format.")
+    parser_chop.add_argument("--width", dest="lw", type=int, default=100, help="Line width for fasta output.")
+    parser_chop.add_argument("--check", dest="check", default=False, action="store_true", help="Check if all k-length substrings of the input haplotype are covered in the flat representation.")
+    parser_chop.set_defaults(func=chop.chop_cmd)
 
     parser_refine = subparsers.add_parser('refine', prog="reveal refine", description="Refine bubbles in the graph by multiple sequence alignment.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_refine.add_argument("graph", nargs=1, help='Graph in gfa format for which bubbles should be realigned.')
