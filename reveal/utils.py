@@ -1,7 +1,6 @@
 import networkx as nx
 import logging
 
-
 #OVERRIDE intervaltree to bug in incorrect __eq__ function
 import intervaltree
 class IntervalPatched(intervaltree.Interval):    
@@ -213,8 +212,9 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         plt.savefig("%s_%s.png"%(s1,s2))
 
 
-def read_fasta(fasta, index, tree, graph):
+def read_fasta(fasta, index, tree, graph, contigs=True):
     logging.info("Reading fasta: %s ..." % fasta)
+    
     if 'paths' not in graph.graph:
         graph.graph['paths']=list()
     
@@ -227,27 +227,52 @@ def read_fasta(fasta, index, tree, graph):
     if 'id2end' not in graph.graph:
         graph.graph['id2end']=dict()
 
-    for name,seq in fasta_reader(fasta):
-        sid=len(graph.graph['paths'])
-        name=name.replace(":","").replace(";","")
-        if name in graph.graph['paths']:
-            logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
-            sys.exit(1)
-        graph.graph['paths'].append(name)
-        graph.graph['path2id'][name]=sid
-        graph.graph['id2path'][sid]=name
-        graph.graph['id2end'][sid]=len(seq)
-        intv=index.addsequence(seq.upper())
-        logging.debug("Adding interval: %s"%str(intv))
-        Intv=Interval(intv[0],intv[1])
-        tree.add(Intv)
-        startnode=uuid.uuid4().hex
-        endnode=uuid.uuid4().hex
-        graph.add_node(startnode,offsets={sid:0},endpoint=True)
-        graph.add_node(Intv,offsets={sid:0},aligned=0)
-        graph.add_node(endnode,offsets={sid:len(seq)},endpoint=True)
-        graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
-        graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
+    if contigs:
+        index.addsample(os.path.basename(fasta))
+        for name,seq in fasta_reader(fasta):
+            sid=len(graph.graph['paths'])
+            name=name.replace(":","").replace(";","")
+            if name in graph.graph['paths']:
+                logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
+                sys.exit(1)
+            graph.graph['paths'].append(name)
+            graph.graph['path2id'][name]=sid
+            graph.graph['id2path'][sid]=name
+            graph.graph['id2end'][sid]=len(seq)
+            intv=index.addsequence(seq.upper())
+            logging.debug("Adding interval: %s"%str(intv))
+            Intv=Interval(intv[0],intv[1])
+            tree.add(Intv)
+            startnode=uuid.uuid4().hex
+            endnode=uuid.uuid4().hex
+            graph.add_node(startnode,offsets={sid:0},endpoint=True)
+            graph.add_node(Intv,offsets={sid:0},aligned=0)
+            graph.add_node(endnode,offsets={sid:len(seq)},endpoint=True)
+            graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
+            graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
+    else: #treat every sequence in the multifasta as a target
+        for name,seq in fasta_reader(fasta):
+            index.addsample(name)
+            sid=len(graph.graph['paths'])
+            name=name.replace(":","").replace(";","")
+            if name in graph.graph['paths']:
+                logging.fatal("Fasta with this name: \"%s\" is already contained in the graph."%name)
+                sys.exit(1)
+            graph.graph['paths'].append(name)
+            graph.graph['path2id'][name]=sid
+            graph.graph['id2path'][sid]=name
+            graph.graph['id2end'][sid]=len(seq)
+            intv=index.addsequence(seq.upper())
+            logging.debug("Adding interval: %s"%str(intv))
+            Intv=Interval(intv[0],intv[1])
+            tree.add(Intv)
+            startnode=uuid.uuid4().hex
+            endnode=uuid.uuid4().hex
+            graph.add_node(startnode,offsets={sid:0},endpoint=True)
+            graph.add_node(Intv,offsets={sid:0},aligned=0)
+            graph.add_node(endnode,offsets={sid:len(seq)},endpoint=True)
+            graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
+            graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=True):
     f=open(gfafile,'r')
@@ -275,7 +300,6 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.graph['id2end']=dict()
 
     for line in f:
-        
         if line.startswith('H'):
             pass
         
@@ -314,9 +338,13 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         
         elif line.startswith('P'): #traverse paths to add offset values
             paths.append(line)
-    
+
     for line in edges:
         e=line.strip().split("\t")
+
+        if type(graph)==nx.DiGraph and (e[2]!='+' or e[4]!='+'):
+            continue #skip these edges if we only want a directed acyclic graph
+
         #assert(not graph.has_edge(nmapping[int(e[1])],nmapping[int(e[3])]))
         #assert(not graph.has_edge(nmapping[int(e[3])],nmapping[int(e[1])]))
         tags=dict()
@@ -328,11 +356,15 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 key,ttype,value=tag.split(':')
                 tags[key.lower()]=value
         tags['paths']=set()
+
         graph.add_edge(nmapping[int(e[1])],nmapping[int(e[3])],**tags)
-    
+
     if len(paths)==0:
         logging.fatal("No paths defined in GFA, exit.")
         sys.exit(1)
+
+    if index==None:
+        graph.graph['noffset']=max([v for v in nmapping.values() if type(v)==int])+1
 
     startnodes=set()
     endnodes=set()
@@ -342,8 +374,8 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         sample=cols[1]
         
         if type(graph)==nx.DiGraph:
-            logging.debug("DiGraph as input, so exclude *-paths.")
             if sample.startswith("*"):
+                logging.debug("DiGraph as input, so exclude path: %s"%sample)
                 continue
 
         if sample in graph.graph['paths']:
@@ -414,7 +446,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.add_node(end,offsets={sid:o},endpoint=True)
         graph.add_edge(nmapping[int(path[-1][0])],end,paths={sid},ofrom=path[-1][1],oto='+')
         endnodes.add(end)
-
+        
         graph.graph['id2end'][sid]=o
     
     #remove nodes and edges that are not associated to any path
@@ -423,19 +455,31 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         if d['paths']==set(): #edge that is not traversed by any of the paths
             remove.append((n1,n2))
     if len(remove)>0:
-        logging.debug("Removing %d edges from the graph as they are not traversed."%len(remove))
+        logging.debug("Removing %d edges from the graph as they are not traversed..."%len(remove))
         graph.remove_edges_from(remove)
+        logging.debug("Done.")
 
     remove=[]
     for n,d in graph.nodes(data=True):
         if graph.node[n]['offsets']=={}: #node that is not traversed by any of the paths
             remove.append(n)
     if len(remove)>0:
-        logging.debug("Removing %d nodes from the graph as they are not traversed."%len(remove))
+        logging.debug("Removing %d nodes from the graph as they are not traversed..."%len(remove))
         graph.remove_nodes_from(remove)
+        logging.debug("Done.")
+
+    logging.debug("Converting to undirected graph...")
+    Gu=graph.to_undirected()
+    logging.debug("Done.")
+
+    logging.debug("Extracting connected components...")
+    conncomp=nx.connected_components(Gu)
+    logging.debug("Done.")
 
     #merge start/end nodes per connected component in the graph
-    for comp in nx.connected_components(graph.to_undirected()):
+    for i,comp in enumerate(conncomp):
+        logging.debug("Inspecting connected component: %d (%d)"%(i,len(comp)))
+
         startmerge=set()
         endmerge=set()
         for node in comp:
@@ -485,6 +529,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                                 graph[startnode][nnode]['paths'].add(p)
 
         graph.remove_nodes_from(list(startmerge)+list(endmerge))
+        logging.debug("Done.")
 
     if revcomp:
         genome2length=dict()
@@ -509,8 +554,7 @@ def write_fasta(G,T,outputfile="reference.fasta"):
     f=open(outputfile,'wb')
     for i,node in enumerate(nx.topological_sort(G)):
         if isinstance(node,str):
-            if node=='start' or node=='end':
-                continue
+            continue
         i+=1
         data=G.node[node]
         seq=""
@@ -556,8 +600,12 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
 
     iterator=[node for node in iterator if type(node)!=str] #exclude start/end node
 
-    for i,node in enumerate(iterator): #iterate once to get a mapping of ids to intervals
-        mapping[node]=i+1 #one-based for vg
+    if remap:
+        for i,node in enumerate(iterator): #iterate once to get a mapping of ids to intervals
+            mapping[node]=i+1
+    else:
+        for node in iterator: #quick and dirty..
+            mapping[node]=node
 
     for i,node in enumerate(iterator):
         i+=1
@@ -584,12 +632,14 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 continue
             if type(G)==nx.MultiDiGraph:
                 for edgeid in G[node][to]:
-                    f.write("L\t"+str(mapping[node])+"\t"+G[node][to][edgeid]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to][edgeid]['oto']+"\t0M\n")
+                    if 'cigar' in G[node][to][edgeid]:
+                        cigar=G[node][to][edgeid]['cigar']
+                    f.write("L\t"+str(mapping[node])+"\t"+G[node][to][edgeid]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to][edgeid]['oto']+"\t"+(G[node][to][edgeid]['cigar'] if 'cigar' in G[node][to][edgeid] else "0M")+"\n")
             else:
                 if 'ofrom' in G[node][to] and 'oto' in G[node][to]:
-                    f.write("L\t"+str(mapping[node])+"\t"+G[node][to]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to]['oto']+"\t0M\n")
+                    f.write("L\t"+str(mapping[node])+"\t"+G[node][to]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to]['oto']+"\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
                 else: #if not there, assume same orientation
-                    f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t0M\n")
+                    f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
     
     #write paths
     for sample in G.graph['paths']:
@@ -603,6 +653,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     subgraph.append((e1,e2,d))
 
         path=[]
+        cigarpath=[]
         if len(subgraph)>0:
 
             sg=nx.DiGraph(subgraph)
@@ -631,19 +682,22 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     break
                 else:
                     path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
+                    cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
                 
                 if n==nodepath[-1]: #if last node
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
+                    cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
                 pn=n
-        else: #Maybe just a single node, strictly not a path..
+        elif len(subgraph)==1: #Maybe just a single node, strictly not a path..
             for node,data in G.nodes(data=True):
                 if sid in data['offsets'] and type(node)!=str:
                     path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
-            if len(path)==0: #not just a single node, sample not part of the graph, dont write path
-                logging.error("Sample %s not part of the graph."%sid)
-                continue
+        else:
+            #if len(path)==0: #not just a single node, sample not part of the graph, dont write path
+            logging.debug("Sample %s not part of the graph."%sid)
+            continue
 
-        f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(["0M"]*len(path))+"\n")
+        f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(cigarpath)+"\n")
     
     f.close()
 

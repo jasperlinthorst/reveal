@@ -337,7 +337,7 @@ def graphalign(index,mum):
         matching=set()
         for pos in sp:
             matching.add((pos,pos+l))
-            logging.debug("Lookup node for sp=%d"%pos)
+            # logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
             assert(old.end-old.begin>=l)
             mn,other=breaknode(old,pos,l)
@@ -448,10 +448,6 @@ def prune_nodes(G,T=""):
                                 converged=False
 
 def align_cmd(args):
-    if len(args.inputfiles)<=1:
-        logging.fatal("Specify at least 2 (g)fa files for creating a reference graph.")
-        return
-    
     G,idx=align_genomes(args)
     
     if args.output==None:
@@ -480,13 +476,6 @@ def align_cmd(args):
     
     totnodes=G.number_of_nodes()
 
-
-
-
-
-
-
-
     #TODO: start, report identity per sample that was aligned, this does not make sense...
     if idx.nsamples>2: #was multi-alignment
         totbases=idx.n-T.count('$')-T.count('N')
@@ -504,16 +493,6 @@ def align_cmd(args):
     
     logging.info("%s (%.2f%% identity, %d bases out of %d aligned, %d nodes out of %d aligned)."%("-".join([os.path.basename(f) for f in args.inputfiles]), (alignedbases/(float(totbases)))*100,alignedbases,totbases,alignednodes,totnodes))
     #TODO: end
-
-
-
-
-
-
-
-
-
-
 
     logging.info("Writing graph...")
     if args.gml:
@@ -563,9 +542,9 @@ def align_genomes(args):
     graph=False
     
     for i,sample in enumerate(args.inputfiles):
-        idx.addsample(os.path.basename(sample))
-
+        
         if sample.endswith(".gfa"):
+            idx.addsample(os.path.basename(sample))
             graph=True
 
             logging.info("Reading graph: %s ..." % sample)
@@ -577,9 +556,15 @@ def align_genomes(args):
                 read_gfa(sample,idx,t,G)
 
         else: #consider it to be a fasta file
-            read_fasta(sample,idx,t,G)
+            read_fasta(sample,idx,t,G,contigs=args.contigs)
     
     logging.debug("Graph contains the following paths: %s"%G.graph['paths'])
+
+    logging.debug("Index contains the following samples: %s"%idx.samples)
+
+    if len(idx.samples)<=1:
+        logging.fatal("Specify at least 2 targets to construct alignment. In case of multi-fasta, consider the --nocontigs flag.")
+        sys.exit(1)
 
     if not nx.is_directed_acyclic_graph(G):
         logging.info("*** Input is not a DAG! ...")
