@@ -103,10 +103,11 @@ def main():
     parser_unzip.add_argument("--sink", dest="sink", type=int, default=None, help="Sink for specific bubble.")
     parser_unzip.set_defaults(func=unzip.unzip)
 
-    parser_chop = subparsers.add_parser('chop',prog="reveal chop", description="Uses the chop algorithm to obtain a flat (fasta) representation of the graph to enable the mapping of reads to the graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_chop = subparsers.add_parser('chop',prog="reveal chop", description="Uses the chop algorithm to introduce overlap (of length k-1) onto the edges of the graph such that reads of length k can be mapped on to the graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_chop.add_argument("graph", nargs=1, help='Graph in gfa format which has to be chopped.')
     parser_chop.add_argument("-k", dest="k", type=int, default=100, help="Max length of the reads that need to be mapped to the graph.")
-    parser_chop.add_argument("-o", "--output", dest="output", default=None, help="Prefix for the resulting flattened graph in fasta format.")
+    parser_chop.add_argument("-o", "--output", dest="output", default=None, help="Prefix for the resulting overlap graph and fasta file.")
+    parser_chop.add_argument("--fasta", dest="fasta", default=False, action="store_true", help="Write node sequence to a fasta file, for read mapping.")
     parser_chop.add_argument("--width", dest="lw", type=int, default=100, help="Line width for fasta output.")
     parser_chop.add_argument("--check", dest="check", default=False, action="store_true", help="Check if all k-length substrings of the input haplotype are covered in the flat representation.")
     parser_chop.set_defaults(func=chop.chop_cmd)
