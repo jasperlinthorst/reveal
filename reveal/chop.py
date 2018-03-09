@@ -26,20 +26,28 @@ def chop_cmd(args):
 
     chop(G,k=args.k)
     
+    logging.debug("Merging node sequence...")
     for node in G.nodes():
         G.node[node]['seq']=G.node[node]['prefix']+G.node[node]['seq']+G.node[node]['suffix']
+    logging.debug("Done.")
 
+    logging.debug("Write overlap graph...")
     utils.write_gfa(G,None,outputfile=gof,remap=False)
+    logging.debug("Done.")
 
-    with open(fof,'w') as ff:
-        for node in G.nodes():
-            name=">"+str(node)+"\n"
-            seq=G.node[node]['seq']
-            ff.write(name)
-            for i in range( (len(seq)/args.lw)+(len(seq) % args.lw > 0)):
-                ff.write(seq[i*args.lw:(i+1)*args.lw]+"\n")
+    if args.fasta:
+        logging.debug("Write corresponding fasta file...")
+        with open(fof,'w') as ff:
+            for node in G.nodes():
+                name=">"+str(node)+"\n"
+                seq=G.node[node]['seq']
+                ff.write(name)
+                for i in range( (len(seq)/args.lw)+(len(seq) % args.lw > 0)):
+                    ff.write(seq[i*args.lw:(i+1)*args.lw]+"\n")
+        logging.debug("Done.")
     
     if args.check:
+        logging.debug("Validate if all k-mers from the original graph are contained in overlap graph...")
         import extract
         r="$".join([G.node[node]['seq'] for node in G])
         for path in Gorg.graph['paths']:
@@ -47,9 +55,9 @@ def chop_cmd(args):
             s=extract.extract(Gorg,path)
             for i in xrange(len(s)-args.k):
                 if r.find(s[i:i+args.k])==-1:
-                    print i,s[i:i+args.k]
-                    logging.error("Flat representation does not cover all k-length substrings for %s!"%path)
+                    logging.error("Flat representation does not cover all k-length substrings for %s, could not find: %s!"%(path,s[i:i+args.k]))
                     sys.exit(1)
+        logging.debug("Done.")
 
 def contract(G,topsort):
     newtopsort=[]
@@ -183,13 +191,22 @@ def chop(G,k=100):
                 dups.append(n)
         
         for n in dups:
-            duplicate_node(G,n)
+            logging.debug("Duplicating node %d..."%n)
+            for dup in duplicate_node(G,n):
+                logging.info("Generated node %d"%dup)
+        logging.debug("Duplicating done.")
 
+        logging.debug("Contracting nodes...")
         contract(G,list(nx.topological_sort(G)))
+        logging.debug("Contracting done.")
+
+        logging.debug("Checking edges...")
         es=checkedges(G,k=k)
+        logging.debug("Done. %d unextendable edges remain."%len(es))
 
         iteration+=1
 
+    logging.debug("Adding prefix/suffix to nodes...")
     #all edges can now be extended
     for u,v,d in G.edges(data=True):
         assert(d['overlap']!=None)
@@ -199,5 +216,6 @@ def chop(G,k=100):
             assert(d['overlap']==v)
             G.node[u]['suffix']=G.node[v]['seq'][:k-1]
         d['cigar']=str(k)+"M"
+    logging.debug("Done.")
 
     return G
