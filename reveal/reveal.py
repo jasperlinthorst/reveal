@@ -198,7 +198,7 @@ def main():
     parser_finish.add_argument('reference', help='(Multi-)fasta reference sequence.')
     parser_finish.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
     parser_finish.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
-    parser_finish.add_argument("-m", dest="minlength", type=int, default=None, help="Min length of maximal exact matches for considering (if not set, use the set of largest MUMs for which the genome wide coverage is below 1).")
+    parser_finish.add_argument("-m", dest="minlength", type=int, default=15, help="Min length of maximal exact matches for considering (if not set, use the set of largest MUMs for which the genome wide coverage is below 1).")
     parser_finish.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
     parser_finish.add_argument("--noextend", dest="extend", default=True, action="store_false", help="Don't extend chains to contig ends.")
     parser_finish.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to do MUM extraction (max: 2 proc) and mapping (max: number of contigs) in parallel (increases mem usage!).")
