@@ -640,7 +640,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     f.write("L\t"+str(mapping[node])+"\t"+G[node][to]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to]['oto']+"\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
                 else: #if not there, assume same orientation
                     f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
-    
+
     #write paths
     for sample in G.graph['paths']:
         sid=G.graph['path2id'][sample]
@@ -654,6 +654,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
 
         path=[]
         cigarpath=[]
+
         if len(subgraph)>0:
 
             sg=nx.DiGraph(subgraph)
@@ -688,15 +689,15 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
                     cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
                 pn=n
-        elif len(subgraph)==1: #Maybe just a single node, strictly not a path..
+        else: #Maybe just a single node, strictly not a path..
             for node,data in G.nodes(data=True):
                 if sid in data['offsets'] and type(node)!=str:
                     path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
-        else:
-            #if len(path)==0: #not just a single node, sample not part of the graph, dont write path
-            logging.debug("Sample %s not part of the graph."%sid)
-            continue
 
+            if len(path)==0:
+                logging.debug("Sample %s not part of the graph."%sid)
+                continue
+        
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(cigarpath)+"\n")
     
     f.close()
