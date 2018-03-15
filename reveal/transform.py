@@ -194,9 +194,8 @@ def transform(args):
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
     G.graph['startnodes']=[]
+    G.graph['endnodes']=[]
     
-    
-
     gapi=0
     pathi=0
     
@@ -334,7 +333,10 @@ def transform(args):
         startnode=uuid.uuid4().hex
         G.add_node(startnode,offsets={refid:0},endpoint=True)
         G.graph['startnodes'].append(startnode)
-        pn=startnode
+
+        endnode=uuid.uuid4().hex
+        G.add_node(endnode,offsets={refid:0},endpoint=True)
+        G.graph['endnodes'].append(endnode)
 
         for ctg in ctgs:
             p="*"+base+"_"+ctg[0] #prefix with asterisk so they're recognisable
@@ -458,6 +460,9 @@ def transform(args):
                         
                         if pn!=None:
                             G.add_edge(pn,n,ofrom="+",oto="+",paths={refid})
+                        else: #has to be first node for reference chrom
+                            G.add_edge(startnode,n,ofrom="+",oto="+",paths={refid})
+
                         pn=n
 
                 if args.plot:
@@ -561,6 +566,7 @@ def transform(args):
                     else:
                         ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'bx')
                         ax.plot([refbegin,refend],[o+gapsize+ctgbegin,o+ctgend+gapsize],'r-')
+            
             i+=1
             o=o+l
             yticks.append(o)
@@ -591,18 +597,42 @@ def transform(args):
                 plt.show()
             else:
                 plt.savefig(args.output+"_"+ref.split()[0]+".png")
-    
+
+        G.add_edge(pn,endnode,ofrom="+",oto="+",paths={refid})
+
     if args.outputtype=='graph':
         ctgswithevents=set()
+
         if args.order=="chains":#reconnect the chains based on their layout in the draft assembly
-            if G.number_of_nodes()>1:
-                sortednodes=sorted(G.nodes()) #sort by contigname, then start position within the contig
-                pnode=sortednodes[0]
-                for node in sortednodes[1:]:
-                    if pnode[0]==node[0]:
-                        G.add_edge(pnode,node,ofrom="+" if pnode[3]==0 else '-',oto="+" if node[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pnode[0]]})
-                        ctgswithevents.add("*"+base+"_"+pnode[0])
-                    pnode=node
+            sortednodes=sorted([n for n in G.nodes() if type(n)!=str])
+            pn=sortednodes[0]
+
+            startnode=uuid.uuid4().hex
+            G.graph['startnodes'].append(startnode)
+            G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True)
+            G.add_edge(startnode,pn,ofrom="+",oto="+" if pn[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+
+            if len(sortednodes)>1:
+                for n in sortednodes[1:]:
+                    if n[0]!=pn[0]:
+                        startnode=uuid.uuid4().hex
+                        G.graph['startnodes'].append(startnode)
+                        G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+n[0]]:0},endpoint=True)
+                        G.add_edge(startnode,n,ofrom="+",oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+n[0]]})
+
+                        endnode=uuid.uuid4().hex
+                        G.graph['endnodes'].append(endnode)
+                        G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
+                        G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+                    else:
+                        ctgswithevents.add("*"+base+"_"+pn[0])
+                        G.add_edge(pn,n,ofrom="+" if pn[3]==0 else '-',oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+                    pn=n
+
+            endnode=uuid.uuid4().hex
+            G.graph['endnodes'].append(endnode)
+            G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
+            G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
 
         if not args.allcontigs:
             G.graph['paths']=[sample for sample in G.graph['paths'] if sample in ctgswithevents or not sample.startswith("*")]
