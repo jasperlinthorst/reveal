@@ -45,5 +45,8 @@ def split(gfafile):
             for p in d['offsets']:
                 no[mapping[p]]=d['offsets'][p]
             sg.node[n]['offsets']=no
-        name="_".join(sg.graph['paths'])
+
+        # name="_".join(sg.graph['paths']).replace("|","").replace(" ","")[:200]
+        name=str(i)
+        
         write_gfa(sg,None,outputfile="%s.gfa"%name)
