@@ -118,12 +118,12 @@ class TestReveal(TestCase):
     def test12_split_cmd(self):
         sys.argv=['reveal','split','123a_123b.gfa']
         reveal.main()
-        self.assertTrue(os.path.exists('ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa'))
-        self.assertTrue(os.path.exists('ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa'))
-        self.assertTrue(os.path.exists('ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa'))
-        os.remove("ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa")
-        os.remove("ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa")
-        os.remove("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa")
+        self.assertTrue(os.path.exists('0.gfa'))
+        self.assertTrue(os.path.exists('1.gfa'))
+        self.assertTrue(os.path.exists('2.gfa'))
+        os.remove("0.gfa")
+        os.remove("1.gfa")
+        os.remove("2.gfa")
 
     @with_setup(setup, teardown)
     def test13_refine_cmd(self):
