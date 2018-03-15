@@ -236,9 +236,6 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
         ng.node[node]['offsets']=corrected
     
-    for node in ng:
-        logging.debug("%s: %s"%(node,ng.node[node]['seq']))
-
     return bubble,ng,path2start,path2end
 
 
@@ -250,7 +247,8 @@ def align_worker(inputq,outputq):
             break
         else:
             sg,bubble,offsets,paths,kwargs=data
-            outputq.put(refine_bubble(sg,bubble,offsets,paths,**kwargs))
+            b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+            outputq.put(b)
 
 def graph_worker(G,nn,outputq,nworkers):
     deadworkers=0
@@ -262,7 +260,7 @@ def graph_worker(G,nn,outputq,nworkers):
                 break
         else:
             bubble,ng,path2start,path2end=data
-            logging.info("Replacing bubble: %s"%bubble.nodes)
+            logging.debug("Replacing bubble: %s"%bubble.nodes)
             G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
 
 def refine_all(G,  **kwargs):
@@ -309,8 +307,6 @@ def refine_all(G,  **kwargs):
             logging.info("Skipping bubble %s, indel, no point in realigning."%(str(b.nodes)))
             continue
 
-        # sourcesamples=set(G.node[b.source]['offsets'].keys())
-        # sinksamples=set(G.node[b.sink]['offsets'].keys())
         realignbubbles.append(b)
 
     distinctbubbles=[]
@@ -330,19 +326,18 @@ def refine_all(G,  **kwargs):
         inputq = Queue()
         outputq = Queue()
 
-        # original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        
-        # pool = Pool(processes=kwargs['nproc'])
+        nworkers=kwargs['nproc']
+        aworkers=[]
 
-        # signal.signal(signal.SIGINT, original_sigint_handler)
-        results=[]
-        # try:
+        for i in range(nworkers):
+            aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
+
 
         for bubble in distinctbubbles:
             G.node[bubble.source]['aligned']=1
             G.node[bubble.sink]['aligned']=1
-            
-            logging.debug("Adding bubble between <%s> and <%s> to alignment queue, max allele size in bubble %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+
+            logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
             bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
             sg=G.subgraph(bnodes).copy()
             
@@ -356,23 +351,14 @@ def refine_all(G,  **kwargs):
 
             inputq.put((sg,bubble,offsets,paths,kwargs))
 
-        aworkers=[]
-        nworkers=kwargs['nproc']-1
-
-        for i in range(nworkers):
-            aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
-        
-        gw = Process(target=graph_worker, args=(G,nn,outputq,nworkers))
-        
-        for p in aworkers:
-            p.start()
-
-        gw.start()
-
-
         for i in range(nworkers):
             inputq.put(-1)
 
+        for p in aworkers:
+            p.start()
+
+        graph_worker(G,nn,outputq,nworkers)
+        
         inputq.close()
         inputq.join_thread()
 
@@ -380,23 +366,6 @@ def refine_all(G,  **kwargs):
 
         for p in aworkers:
             p.join()
-
-        gw.join()
-
-            # results.append((bubble,pool.apply_async(refine_bubble,(sg,bubble,offsets,paths),kwargs)))
-
-        # except KeyboardInterrupt:
-        #     pool.terminate()
-        # else:
-        #     pool.close()
-        # pool.join()
-
-
-        # for bubble,r in results:
-        #     logging.debug("Retrieving bubble realign results for bubble: %s - %s."%(bubble.source,bubble.sink))
-        #     ng,path2start,path2end=r.get()
-        #     G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
-
 
     else:
         for bubble in distinctbubbles:
@@ -656,10 +625,6 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
     ng.remove_nodes_from(remove)
 
     # write_gml(ng,"",outputfile="after.gml")
-
-    for node in ng:
-        logging.debug("%s: %s"%(node,ng.node[node]['seq']))
-
 
     for tmpfile in tempfiles:
         try:
