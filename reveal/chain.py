@@ -29,6 +29,8 @@ def chain_cmd(args):
     G.graph['paths']=idx.samples
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
+    G.graph['startnodes']=[]
+    G.graph['endnodes']=[]
 
     for sid,sample in enumerate(G.graph['paths']):
         G.graph['path2id'][sample]=sid
@@ -44,6 +46,10 @@ def chain_cmd(args):
     G.add_node(istart,l=0)
     G.add_node(iend,l=0)
     G.add_edge(istart,iend)
+    
+    G.graph['startnodes'].append(istart)
+    G.graph['endnodes'].append(iend)
+    
     idc=range(idx.nsamples)
 
     stack=[(idx,idc,istart,iend,startcoords,0,False)]
