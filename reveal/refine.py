@@ -1,9 +1,10 @@
 from utils import *
-from extract import extract
+from extract import extract,extract_path
 from rem import align,prune_nodes
 import bubbles
 import schemes
 from multiprocessing.pool import Pool
+from multiprocessing import Process,Queue
 import signal
 
 def refine_bubble_cmd(args):
@@ -22,6 +23,7 @@ def refine_bubble_cmd(args):
                             wscore=args.wscore,
                             wpen=args.wpen,
                             maxsize=args.maxsize,
+                            minmaxsize=args.minmaxsize,
                             minsize=args.minsize,
                             maxcumsize=args.maxcumsize,
                             mincumsize=args.mincumsize,
@@ -65,6 +67,7 @@ def refine_bubble_cmd(args):
                                 wscore=args.wscore,
                                 wpen=args.wpen,
                                 maxsize=args.maxsize,
+                                minmaxsize=args.minmaxsize,
                                 seedsize=args.seedsize,
                                 maxmums=args.maxmums,
                                 gcmodel=args.gcmodel,
@@ -81,16 +84,6 @@ def refine_bubble_cmd(args):
         fn=args.graph[0].replace(".gfa",".realigned.gfa")
     else:
         fn=args.outfile
-    
-    # write_gml(G,"")
-    # for node in G:
-    #     if len(G.node[node]['offsets'])>1:
-    #         if 'aligned' not in G.node[node]:
-    #             print node,"No attribute!"
-    #             G.node[node]['aligned']=1
-    #         elif G.node[node]['aligned']==0:
-    #             print node,"Attribute not set!"
-    #             G.node[node]['aligned']=1
 
     prune_nodes(G)
 
@@ -161,10 +154,6 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     logging.info("Realigning bubble between <%s> and <%s>, with %s (cum. size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,kwargs['method'],bubble.cumsize,len(bubble.nodes)-2))
 
-    # if bubble.maxsize>kwargs['maxsize']:
-    #     logging.fatal("Bubble (%s,%s) size=%d is too big. Increase --maxsize (if possible), now %d."%(source,sink,bubble.maxsize,kwargs['maxsize']))
-    #     return
-
     if len(bubble.nodes)==3:
         logging.fatal("Indel bubble, no point realigning.")
         return
@@ -178,7 +167,12 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     for sid in paths:
         seq=extract(sg,sg.graph['id2path'][sid])
         if len(seq)>0:
-            aobjs.append((sg.graph['id2path'][sid],seq))
+            if seq in d:
+                d[seq].append(str(sid))
+            else:
+                d[seq]=[str(sid)]
+
+    aobjs=[(",".join(d[seq]),seq) for seq in d]
 
     for name,seq in aobjs:
         logging.debug("IN %s: %s%s"%(name.rjust(4,' '),seq[:200],'...'if len(seq)>200 else ''))
@@ -203,19 +197,19 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     #map edge atts back to original graph
     for n1,n2,data in ng.edges(data=True):
-        old=data['paths']
-        new=set()
-        for sid in old:
-            new.add( sg.graph['path2id'][ng.graph['id2path'][sid]] )
-        data['paths']=new
+        newpaths=set()
+        for p in data['paths']:
+            for x in ng.graph['id2path'][p].split(','):
+                newpaths.add(int(x))
+        data['paths']=newpaths
 
     #map node atts back to original graph
     for node,data in ng.nodes(data=True):
-        old=data['offsets']
-        new=dict()
-        for sid in old:
-            new[sg.graph['path2id'][ng.graph['id2path'][sid]]]=old[sid]
-        data['offsets']=new
+        newoffsets={}
+        for sid in data['offsets']:
+            for x in ng.graph['id2path'][sid].split(','):
+                newoffsets[int(x)]=data['offsets'][sid]
+        data['offsets']=newoffsets
 
     ng.graph['paths']=sg.graph['paths']
     ng.graph['path2id']=sg.graph['path2id']
@@ -245,7 +239,31 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     for node in ng:
         logging.debug("%s: %s"%(node,ng.node[node]['seq']))
 
-    return ng,path2start,path2end
+    return bubble,ng,path2start,path2end
+
+
+def align_worker(inputq,outputq):
+    while True:
+        data = inputq.get()
+        if data==-1:
+            outputq.put(-1)
+            break
+        else:
+            sg,bubble,offsets,paths,kwargs=data
+            outputq.put(refine_bubble(sg,bubble,offsets,paths,**kwargs))
+
+def graph_worker(G,nn,outputq,nworkers):
+    deadworkers=0
+    while True:
+        data = outputq.get()
+        if data==-1:
+            deadworkers+=1
+            if deadworkers==nworkers:
+                break
+        else:
+            bubble,ng,path2start,path2end=data
+            logging.info("Replacing bubble: %s"%bubble.nodes)
+            G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
 
 def refine_all(G,  **kwargs):
     realignbubbles=[]
@@ -268,6 +286,10 @@ def refine_all(G,  **kwargs):
 
         if b.minsize<kwargs['minsize']:
             logging.info("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
+            continue
+
+        if b.maxsize<kwargs['minmaxsize']:
+            logging.warn("Skipping bubble %s, largest allele (%dbp) is smaller than maxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
             continue
 
         if b.maxsize>kwargs['maxsize']:
@@ -304,38 +326,78 @@ def refine_all(G,  **kwargs):
     nn=max([node for node in G.nodes() if type(node)==int])+1
 
     if kwargs['nproc']>1:
-        original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        pool = Pool(processes=kwargs['nproc'])
-        signal.signal(signal.SIGINT, original_sigint_handler)
+
+        inputq = Queue()
+        outputq = Queue()
+
+        # original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        
+        # pool = Pool(processes=kwargs['nproc'])
+
+        # signal.signal(signal.SIGINT, original_sigint_handler)
         results=[]
-        try:
-            for bubble in distinctbubbles:
-                G.node[bubble.source]['aligned']=1
-                G.node[bubble.sink]['aligned']=1
+        # try:
 
-                logging.debug("Submitting realign bubble between <%s> and <%s>, cumulative size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.cumsize,len(bubble.nodes)-2))
-                bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-                sg=G.subgraph(bnodes).copy()
-                
-                offsets=dict()
-                for sid in G.node[bubble.source]['offsets']:
-                    offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+        for bubble in distinctbubbles:
+            G.node[bubble.source]['aligned']=1
+            G.node[bubble.sink]['aligned']=1
+            
+            logging.debug("Adding bubble between <%s> and <%s> to alignment queue, max allele size in bubble %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+            sg=G.subgraph(bnodes).copy()
+            
+            offsets=dict()
+            for sid in G.node[bubble.source]['offsets']:
+                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
 
-                sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-                sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-                paths=sourcesamples.intersection(sinksamples)
+            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+            paths=sourcesamples.intersection(sinksamples)
 
-                results.append((bubble,pool.apply_async(refine_bubble,(sg,bubble,offsets,paths),kwargs)))
+            inputq.put((sg,bubble,offsets,paths,kwargs))
 
-        except KeyboardInterrupt:
-            pool.terminate()
-        else:
-            pool.close()
-        pool.join()
-        for bubble,r in results:
-            logging.debug("Retrieving bubble realign results for bubble: %s - %s."%(bubble.source,bubble.sink))
-            ng,path2start,path2end=r.get()
-            G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+        aworkers=[]
+        nworkers=kwargs['nproc']-1
+
+        for i in range(nworkers):
+            aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
+        
+        gw = Process(target=graph_worker, args=(G,nn,outputq,nworkers))
+        
+        for p in aworkers:
+            p.start()
+
+        gw.start()
+
+
+        for i in range(nworkers):
+            inputq.put(-1)
+
+        inputq.close()
+        inputq.join_thread()
+
+        outputq.close()
+
+        for p in aworkers:
+            p.join()
+
+        gw.join()
+
+            # results.append((bubble,pool.apply_async(refine_bubble,(sg,bubble,offsets,paths),kwargs)))
+
+        # except KeyboardInterrupt:
+        #     pool.terminate()
+        # else:
+        #     pool.close()
+        # pool.join()
+
+
+        # for bubble,r in results:
+        #     logging.debug("Retrieving bubble realign results for bubble: %s - %s."%(bubble.source,bubble.sink))
+        #     ng,path2start,path2end=r.get()
+        #     G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+
+
     else:
         for bubble in distinctbubbles:
             
@@ -357,7 +419,7 @@ def refine_all(G,  **kwargs):
             if res==None:
                 continue
             else:
-                ng,path2start,path2end=res
+                bubble,ng,path2start,path2end=res
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
     return G
 
