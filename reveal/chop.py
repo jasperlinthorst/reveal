@@ -24,7 +24,7 @@ def chop_cmd(args):
     if args.check:
         Gorg=G.copy()
 
-    chop(G,k=args.k)
+    chop(G,k=args.k,extend=args.extend)
     
     logging.debug("Merging node sequence...")
     for node in G.nodes():
@@ -153,7 +153,7 @@ def checkedges(G,k=100):
             es.append((u,v))
     return es
 
-def chop(G,k=100):
+def chop(G,k=100,extend=True):
     remove=[]
     for node in G.nodes():
         if type(node)==str:
@@ -190,15 +190,16 @@ def chop(G,k=100):
             if dup:
                 dups.append(n)
         
+        logging.info("Duplicating nodes...")
         for n in dups:
             logging.debug("Duplicating node %d..."%n)
             for dup in duplicate_node(G,n):
-                logging.info("Generated node %d"%dup)
-        logging.debug("Duplicating done.")
+                logging.debug("Generated node %d"%dup)
+        logging.info("Duplicating done.")
 
-        logging.debug("Contracting nodes...")
+        logging.info("Contracting nodes...")
         contract(G,list(nx.topological_sort(G)))
-        logging.debug("Contracting done.")
+        logging.info("Contracting done.")
 
         logging.debug("Checking edges...")
         es=checkedges(G,k=k)
@@ -206,16 +207,35 @@ def chop(G,k=100):
 
         iteration+=1
 
-    logging.debug("Adding prefix/suffix to nodes...")
-    #all edges can now be extended
-    for u,v,d in G.edges(data=True):
-        assert(d['overlap']!=None)
-        if d['overlap']==u:
-            G.node[v]['prefix']=G.node[u]['seq'][-(k-1):]
-        else:
-            assert(d['overlap']==v)
-            G.node[u]['suffix']=G.node[v]['seq'][:k-1]
-        d['cigar']=str(k)+"M"
-    logging.debug("Done.")
+    if extend:
+        logging.info("Extending nodes with prefix/suffix...")
+        #all edges can now be extended
+        for u,v,d in G.edges(data=True):
+            assert(d['overlap']!=None)
+            if d['overlap']==u:
+                G.node[v]['prefix']=G.node[u]['seq'][-(k-1):]
+            else:
+                assert(d['overlap']==v)
+                G.node[u]['suffix']=G.node[v]['seq'][:k-1]
+            d['cigar']=str(k-1)+"M"
+        logging.info("Done.")
+    
+    # logging.info("Unzipping bubbles...")
+    # #all edges can now be extended
+    # for n in G.nodes():
+    #     extend=False
+    #     for u,v,d in G.out_edges(n,data=True):
+    #         if d['overlap']==v: #overlap comes from v, so use prefix of v as suffix for u
+    #             if extend:
+    #                 logging.error("PROBLEM out!")
+    #                 print n,u,v,d
+    #             extend=True
+    #     prefix=False
+    #     for u,v,d in G.in_edges(n,data=True):
+    #         if d['overlap']==u: #overlap comes from u, so use suffix of u as prefix for v
+    #             if prefix:
+    #                 logging.error("PROBLEM in!")
+    #                 print n,u,v,d
+    #             prefix=True
 
     return G
