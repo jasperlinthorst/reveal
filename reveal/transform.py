@@ -78,7 +78,6 @@ def transform(args):
                 pref.append(bn)
         args.output="_".join(pref)
 
-
     if args.nproc>1:
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         pool = Pool(processes=2 if args.nproc>=2 else 1)
@@ -89,7 +88,7 @@ def transform(args):
         except:
             pool.terminate()
             sys.exit(1)
-        
+
         pool.close()
         pool.join()
 
@@ -194,14 +193,15 @@ def transform(args):
     G.graph['paths']=[]
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
+    G.graph['startnodes']=[]
     
+    
+
     gapi=0
     pathi=0
     
     defref2ctg=dict()
     unused=[]
-
-
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     pool = Pool(processes=args.nproc)
@@ -296,7 +296,9 @@ def transform(args):
 
     #build graph/fasta for the structural layout of the genome
     for ref in sorted(defref2ctg):
+        
         pn=None
+
         if args.split and args.outputtype=='fasta':
             finished=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
             unplaced=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
@@ -328,6 +330,11 @@ def transform(args):
         G.graph['path2id'][ctgchromname]=refid
         G.graph['id2path'][refid]=ctgchromname
         G.graph['paths'].append(ctgchromname)
+
+        startnode=uuid.uuid4().hex
+        G.add_node(startnode,offsets={refid:0},endpoint=True)
+        G.graph['startnodes'].append(startnode)
+        pn=startnode
 
         for ctg in ctgs:
             p="*"+base+"_"+ctg[0] #prefix with asterisk so they're recognisable
@@ -996,7 +1003,11 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     
     mums=[]
     
-    for mum in idx.getmums(minlength if minlength!=0 else 1):
+    minlength=minlength if minlength!=0 else 1
+
+    logging.debug("Extracting all MUMs of size %d or larger."%minlength)
+    
+    for mum in idx.getmums(minlength):
         refstart=mum[2][0][1]
         ctgstart=mum[2][1][1]
         rnode=t[refstart].pop() #start position on match to node in graph
@@ -1008,10 +1019,10 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
             mums.append((rnode[2], refstart-rnode[0], cnode[2], ctgstart-cnode[0], mum[0], mum[1], 0))
     
     if revcomp:
-        logging.debug("Extracted %d, 3'-5' MUMs."%len(mums))
+        logging.debug("Extracted %d, 3'-5' MUMs (size=%d bytes)."%(len(mums),sys.getsizeof(mums)))
     else:
-        logging.debug("Extracted %d, 5'-3' MUMs."%len(mums))
-
+        logging.debug("Extracted %d, 5'-3' MUMs (size=%d bytes)."%(len(mums),sys.getsizeof(mums)))
+    
     return mums
 
 def filtercontainedmumsboth(mums):
