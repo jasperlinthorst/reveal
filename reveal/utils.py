@@ -673,26 +673,27 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
     #write paths
     for sample in G.graph['paths']:
         sid=G.graph['path2id'][sample]
-        logging.debug("Writing path: %s (sid=%d)"%(sample,sid))
-
+        logging.info("Writing path: %s (sid=%d)"%(sample,sid))
         path=[]
         cigarpath=[]
-
         for node in G.graph['startnodes']:
-            if node in G:
+            if node in G: #might be a subgraph of the actual graph
                 if sid in G.node[node]['offsets']: #found the start of this path
                     while True:
-                        if len(G.out_edges(node,data=True))==0:
+                        oute=[(u,v,d) for u,v,d in G.out_edges(node,data=True) if sid in d['paths']]
+                        
+                        if len(oute)==0:
+                            logging.error("Path: %s doesnt reach end node, stops at %s!"%(sample,u))
                             break
-                        for u,v,d in G.out_edges(node,data=True):
-                            if sid in d['paths']:
-                                if type(v)!=str:
-                                    path.append(str(mapping[v])+d['oto'] if 'oto' in d else '+')
-                                    cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
-                                    break
-                        if type(v)==str:
+                        elif len(oute)>1:
+                            logging.error("Ambiguity in path for: %s"%sample)
                             break
                         else:
+                            v=oute[0][1]
+                            if type(v)==str:
+                                break
+                            path.append(str(mapping[v])+d['oto'] if 'oto' in d else '+')
+                            cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
                             node=v
                     break
 
