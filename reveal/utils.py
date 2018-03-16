@@ -670,7 +670,6 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 else: #if not there, assume same orientation
                     f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
 
-    write_gml(G,None)
     #write paths
     for sample in G.graph['paths']:
         sid=G.graph['path2id'][sample]
