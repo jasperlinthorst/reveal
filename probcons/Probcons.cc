@@ -1512,8 +1512,7 @@ static PyObject *align(Probcons *self, PyObject *args, PyObject *keywds)
 
     if (!PyArg_ParseTupleAndKeywords(args, keywds, "O|iii", const_cast<char **>(kwlist), &seqlist, &numConsistencyReps, &numIterativeRefinementReps, &numPreTrainingReps))
         return NULL;
-
-
+    
     // if (!PyArg_ParseTuple(args, "O", &seqlist))
         // return NULL;
 
@@ -1527,7 +1526,7 @@ static PyObject *align(Probcons *self, PyObject *args, PyObject *keywds)
     int length,i,seqlabel=0;
     
     // parametersInputFilename="nw.txt";
-
+    
     ReadParameters(); //Takes default hardcoded parameters
 
     // PrintParameters ("Using parameter set:", initDistrib, gapOpen, gapExtend, emitPairs, emitSingle, NULL);

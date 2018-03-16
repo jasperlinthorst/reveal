@@ -77,7 +77,7 @@ def refine_bubble_cmd(args):
                                 sa64=args.sa64)
 
         if res!=None:
-            ng,path2start,path2end=res
+            bubble,ng,path2start,path2end=res
             G,nn=replace_bubble(G,b,ng,path2start,path2end,nn)
 
     if args.outfile==None:
@@ -175,7 +175,10 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     aobjs=[(",".join(d[seq]),seq) for seq in d]
 
     for name,seq in aobjs:
-        logging.debug("IN %s: %s%s"%(name.rjust(4,' '),seq[:200],'...'if len(seq)>200 else ''))
+        if len(seq)>200:
+            logging.debug("IN %s: %s...%s"%(name.rjust(4,' '),seq[:100],seq[-100:]))
+        else:
+            logging.debug("IN %s: %s"%(name.rjust(4,' '),seq))
 
     if kwargs['method']!="reveal": #use custom multiple sequence aligner to refine bubble structure
         ng=msa2graph(aobjs,msa=kwargs['method'],minconf=kwargs['minconf'],parameters=kwargs['parameters'])
@@ -478,8 +481,12 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
         confidence=aln[1]
 
         for i,seq in enumerate(seqs):
-            logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq[0:400]))
-        logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence[0:400]]))
+            if len(seq)>200:
+                logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
+                logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
+            else:
+                logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
+                logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
     
     offsets={o:-1 for o in range(len(seqs))}
     nid=nn
@@ -632,5 +639,9 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
         except Exception as e:
             logging.fatal("Failed to remove tmp file: \"%s\""%tmpfile)
             return
+
+    logging.debug("%d nodes in refined graph:",ng.number_of_nodes())
+    for node in ng:
+        logging.debug("%s"%ng.node[node]['seq'])
 
     return ng
