@@ -152,7 +152,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     source=bubble.source
     sink=bubble.sink
 
-    logging.info("Realigning bubble between <%s> and <%s>, with %s (cum. size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,kwargs['method'],bubble.cumsize,len(bubble.nodes)-2))
+    logging.info("Realigning bubble between <%s> and <%s>, with %s (max size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
 
     if len(bubble.nodes)==3:
         logging.fatal("Indel bubble, no point realigning.")
