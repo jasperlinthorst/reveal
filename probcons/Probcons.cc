@@ -1499,8 +1499,7 @@ int ComputeScore (const SafeVector<pair<int, int> > &active, const SafeVector<Sa
 
 //PYTHON LIB!
 
-
-static PyObject *align(Probcons *self, PyObject *args, PyObject *keywds)
+static PyObject *bpalign(Probcons *self, PyObject *args, PyObject *keywds)
 {
     PyObject * seqlist;
     
@@ -1608,7 +1607,7 @@ static PyObject *align(Probcons *self, PyObject *args, PyObject *keywds)
 
 
 static PyMethodDef probcons_methods[] = {
-    { "align", (PyCFunction) align, METH_VARARGS|METH_KEYWORDS },
+    { "align", (PyCFunction) bpalign, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
 
