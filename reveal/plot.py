@@ -208,10 +208,11 @@ def plot(args):
     plt.autoscale(enable=False)
     
     if args.region!=None:
-        rstart,rend=args.region.split(":")
-        plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
-        plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
-
+        for region in args.region.split(","):
+            rstart,rend=region.split(":")
+            plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
+            plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+    
     if args.interactive:
         plt.show()
     else:
