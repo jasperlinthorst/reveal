@@ -12,6 +12,10 @@ def gplot(args):
     G=nx.DiGraph()
     read_gfa(args.graph,None,None,G)
     
+    if len(G.graph['paths'])<2:
+        logging.error("Can't make a plot for less than two samples.")
+        sys.exit(1)
+
     if args.x==None and args.y==None:
         args.x=G.graph['paths'][0]
         args.y=G.graph['paths'][1]
@@ -36,7 +40,6 @@ def plot(args):
     ax = plt.axes()
     
     if len(args.fastas)==2:
-        #get mmems for forward orientation
         if args.sa64:
             idx=reveallib64.index()
         else:
@@ -115,7 +118,7 @@ def plot(args):
             
             idx.construct()
             
-            print "Extracting RC mems..."
+            print "Extracting RC mums..."
             tmp=idx.getmums(args.minlength)
             
             vi=iter(qryintvs)
@@ -207,12 +210,18 @@ def plot(args):
         plt.xlabel(args.fastas[0]+"_rc")
     plt.autoscale(enable=False)
     
-    if args.region!=None:
-        for region in args.region.split(","):
-            rstart,rend=region.split(":")
+    if args.xregion!=None:
+        for region in args.xregion.split(","):
+            rstart,rend=region.split(":") #should be rectangle with alfa here
             plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
             plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
-    
+
+    if args.yregion!=None:
+        for region in args.yregion.split(","):
+            rstart,rend=region.split(":") #should be rectangle with alfa here
+            plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
+            plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
+
     if args.interactive:
         plt.show()
     else:
