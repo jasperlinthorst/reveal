@@ -134,23 +134,24 @@ def transform(args):
     logging.debug("Sorting %d MUMs by size..."%len(mums))
     mums=sorted(mums,key=lambda m: m[4],reverse=True)
     logging.debug("Done.")
-    #prevent use of too many mums
-    cov=0
-    for i,mem in enumerate(mums):
-        cov+=mem[4]
-        if cov/float(totl)>1:
-            break
+    
+    if args.minlength==0: #auto determine minlength, prevent use of too many mums
+        cov=0
+        for i,mem in enumerate(mums):
+            cov+=mem[4]
+            if cov/float(totl)>1:
+                break
 
-    if i<len(mums)-1:
-        mums=mums[:i+1]
-        logging.info("Over representation of MUMs, auto determined min-mum-length to %d for cov. of %f"%(mums[-1][4],cov/float(totl)))
+        if i<len(mums)-1:
+            mums=mums[:i+1]
+            logging.info("Over representation of MUMs, auto determined min-mum-length to %d for cov. of %f"%(mums[-1][4],cov/float(totl)))
 
     ld=[mem[4] for mem in mums]
     bpcovered=sum(ld)
 
     bpncovered=totl-bpcovered
     if bpncovered<0:
-        logging.error("Over representation of MUMs, probably better to use larger -m.")
+        logging.info("Over representation of MUMs, probably better to use larger -m.")
         bpncovered=1
     
     avgcov=bpcovered/float(totl)
