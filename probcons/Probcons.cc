@@ -51,6 +51,7 @@ bool enableTrainEmissions = false;
 bool enableAlignOrder = false;
 
 int numConsistencyReps = 2;
+int consgap = 0; //whether the consistency transformation should consider gaps in Z, default off=0 
 
 int numPreTrainingReps = 0;
 int numIterativeRefinementReps = 100;
@@ -92,9 +93,10 @@ MultiSequence *AlignAlignments (MultiSequence *align1, MultiSequence *align2,
                                 const SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices,
                                 const ProbabilisticModel &model);
 SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, 
-						      SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices);
+						      SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices, int consgap);
 void Relax (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior);
 void Relax1 (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior);
+void Relax_gap (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior);
 
 set<int> GetSubtree (const TreeNode *tree);
 void TreeBasedBiPartitioning (const SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices,
@@ -137,7 +139,7 @@ int main (int argc, char **argv){
   if (enableTraining){
 
     // build new model for aligning
-    ProbabilisticModel model (initDistrib, gapOpen, gapExtend, emitPairs, emitSingle);
+    ProbabilisticModel model (initDistrib, gapOpen, gapExtend, emitPairs, emitSingle, gapSwitchDefault);
 
     // prepare to average parameters
     for (int i = 0; i < (int) initDistrib.size(); i++) initDistrib[i] = 0;
@@ -210,7 +212,7 @@ int main (int argc, char **argv){
 
       // build new model for aligning
       ProbabilisticModel model (initDistrib, gapOpen, gapExtend, 
-                                emitPairs, emitSingle);
+                                emitPairs, emitSingle, gapSwitchDefault);
 
       // do initial alignments
       DoAlign (sequences, model, initDistrib, gapOpen, gapExtend, emitPairs, emitSingle);
@@ -223,7 +225,7 @@ int main (int argc, char **argv){
 
     // now, we can perform the alignments and write them out
     MultiSequence *alignment = DoAlign (sequences,
-                                        ProbabilisticModel (initDistrib, gapOpen, gapExtend,  emitPairs, emitSingle),
+                                        ProbabilisticModel (initDistrib, gapOpen, gapExtend,  emitPairs, emitSingle, gapSwitchDefault),
                                         initDistrib, gapOpen, gapExtend, emitPairs, emitSingle);
     
     if (!enableAllPairs){
@@ -314,6 +316,7 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
   const int numSeqs = sequences->GetNumSequences();
   VVF distances (numSeqs, VF (numSeqs, 0));
   SafeVector<SafeVector<SparseMatrix *> > sparseMatrices (numSeqs, SafeVector<SparseMatrix *>(numSeqs, NULL));
+  // SafeVector<SafeVector<SparseMatrix *> > untransformedSparseMatrices (numSeqs, SafeVector<SparseMatrix *>(numSeqs, NULL));
 
   if (enableTraining){
     // prepare to average parameters
@@ -322,7 +325,7 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
     for (int i = 0; i < (int) gapExtend.size(); i++) gapExtend[i] = 0;
     if (enableTrainEmissions){
       for (int i = 0; i < (int) emitPairs.size(); i++)
-	for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] = 0;
+        for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] = 0;
       for (int i = 0; i < (int) emitSingle.size(); i++) emitSingle[i] = 0;
     }
   }
@@ -333,82 +336,85 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
     // do all pairwise alignments for posterior probability matrices
     for (int a = 0; a < numSeqs-1; a++){
       for (int b = a+1; b < numSeqs; b++){
-	Sequence *seq1 = sequences->GetSequence (a);
-	Sequence *seq2 = sequences->GetSequence (b);
-	
-	// verbose output
-	if (enableVerbose)
-	  cerr << "Computing posterior matrix: (" << a+1 << ") " << seq1->GetHeader() << " vs. "
-	       << "(" << b+1 << ") " << seq2->GetHeader() << " -- ";
-	
-	// compute forward and backward probabilities
-	VF *forward = model.ComputeForwardMatrix (seq1, seq2); assert (forward);
-	VF *backward = model.ComputeBackwardMatrix (seq1, seq2); assert (backward);
-	
-	// if we are training, then we'll simply want to compute the
-	// expected counts for each region within the matrix separately;
-	// otherwise, we'll need to put all of the regions together and
-	// assemble a posterior probability match matrix
-	
-	// so, if we're training
-	if (enableTraining){
-	  
-	  // compute new parameters
-	  VF thisInitDistrib (NumMatrixTypes);
-	  VF thisGapOpen (2*NumInsertStates);
-	  VF thisGapExtend (2*NumInsertStates);
-	  VVF thisEmitPairs (256, VF (256, 1e-10));
-	  VF thisEmitSingle (256, 1e-5);
-	  
-	  model.ComputeNewParameters (seq1, seq2, *forward, *backward, thisInitDistrib, thisGapOpen, thisGapExtend, thisEmitPairs, thisEmitSingle, enableTrainEmissions);
+        Sequence *seq1 = sequences->GetSequence (a);
+        Sequence *seq2 = sequences->GetSequence (b);
 
-	  // add in contribution of the derived parameters
-	  for (int i = 0; i < (int) initDistrib.size(); i++) initDistrib[i] += thisInitDistrib[i];
-	  for (int i = 0; i < (int) gapOpen.size(); i++) gapOpen[i] += thisGapOpen[i];
-	  for (int i = 0; i < (int) gapExtend.size(); i++) gapExtend[i] += thisGapExtend[i];
-	  if (enableTrainEmissions){
-	    for (int i = 0; i < (int) emitPairs.size(); i++) 
-	      for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] += thisEmitPairs[i][j];
-	    for (int i = 0; i < (int) emitSingle.size(); i++) emitSingle[i] += thisEmitSingle[i];
-	  }
+        // verbose output
+        if (enableVerbose)
+          cerr << "Computing posterior matrix: (" << a+1 << ") " << seq1->GetHeader() << " vs. "
+               << "(" << b+1 << ") " << seq2->GetHeader() << " -- ";
 
-	  // let us know that we're done.
-	  if (enableVerbose) cerr << "done." << endl;
-	}
-	else {
+        // compute forward and backward probabilities
+        VF *forward = model.ComputeForwardMatrix (seq1, seq2); assert (forward);
+        VF *backward = model.ComputeBackwardMatrix (seq1, seq2); assert (backward);
 
-	  // compute posterior probability matrix
-	  VF *posterior = model.ComputePosteriorMatrix (seq1, seq2, *forward, *backward); assert (posterior);
+        // if we are training, then we'll simply want to compute the
+        // expected counts for each region within the matrix separately;
+        // otherwise, we'll need to put all of the regions together and
+        // assemble a posterior probability match matrix
 
-	  // compute sparse representations
-	  sparseMatrices[a][b] = new SparseMatrix (seq1->GetLength(), seq2->GetLength(), *posterior);
-	  sparseMatrices[b][a] = NULL; 
-	  
-	  if (!enableAllPairs){
-	    // perform the pairwise sequence alignment
-	    pair<SafeVector<char> *, float> alignment = model.ComputeAlignment (seq1->GetLength(),
-										seq2->GetLength(),
-										*posterior);
-	    
-	    // compute "expected accuracy" distance for evolutionary tree computation
-	    float distance = alignment.second / min (seq1->GetLength(), seq2->GetLength());
-	    distances[a][b] = distances[b][a] = distance;
-	    
-	    if (enableVerbose)
-	      cerr << setprecision (10) << distance << endl;
-	    
-	      delete alignment.first;
-	  }
-	  else {
-	    // let us know that we're done.
-	    if (enableVerbose) cerr << "done." << endl;
-	  }
-	  
-	  delete posterior;
-	}
-	
-	delete forward;
-	delete backward;
+        // so, if we're training
+        if (enableTraining){
+          
+          // compute new parameters
+          VF thisInitDistrib (NumMatrixTypes);
+          VF thisGapOpen (2*NumInsertStates);
+          VF thisGapExtend (2*NumInsertStates);
+          VVF thisEmitPairs (256, VF (256, 1e-10));
+          VF thisEmitSingle (256, 1e-5);
+          
+          model.ComputeNewParameters (seq1, seq2, *forward, *backward, thisInitDistrib, thisGapOpen, thisGapExtend, thisEmitPairs, thisEmitSingle, enableTrainEmissions);
+
+          // add in contribution of the derived parameters
+          for (int i = 0; i < (int) initDistrib.size(); i++) initDistrib[i] += thisInitDistrib[i];
+          for (int i = 0; i < (int) gapOpen.size(); i++) gapOpen[i] += thisGapOpen[i];
+          for (int i = 0; i < (int) gapExtend.size(); i++) gapExtend[i] += thisGapExtend[i];
+          if (enableTrainEmissions){
+            for (int i = 0; i < (int) emitPairs.size(); i++) 
+              for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] += thisEmitPairs[i][j];
+            for (int i = 0; i < (int) emitSingle.size(); i++) emitSingle[i] += thisEmitSingle[i];
+          }
+
+          // let us know that we're done.
+          if (enableVerbose) cerr << "done." << endl;
+        }
+        else {
+
+          // compute posterior probability matrix
+          VF *posterior = model.ComputePosteriorMatrix (seq1, seq2, *forward, *backward); assert (posterior);
+
+          // compute sparse representations
+          sparseMatrices[a][b] = new SparseMatrix (seq1->GetLength(), seq2->GetLength(), *posterior);
+          sparseMatrices[b][a] = NULL; 
+
+          // untransformedSparseMatrices[a][b] = new SparseMatrix (seq1->GetLength(), seq2->GetLength(), *posterior);
+          // untransformedSparseMatrices[b][a] = NULL;
+          
+          if (!enableAllPairs){
+            // perform the pairwise sequence alignment
+            pair<SafeVector<char> *, float> alignment = model.ComputeAlignment (seq1->GetLength(),
+        									seq2->GetLength(),
+        									*posterior);
+            
+            // compute "expected accuracy" distance for evolutionary tree computation
+            float distance = alignment.second / min (seq1->GetLength(), seq2->GetLength());
+            distances[a][b] = distances[b][a] = distance;
+            
+            if (enableVerbose)
+              cerr << setprecision (10) << distance << endl;
+            
+              delete alignment.first;
+          }
+          else {
+            // let us know that we're done.
+            if (enableVerbose) cerr << "done." << endl;
+          }
+          
+          delete posterior;
+        }
+
+        delete forward;
+        delete backward;
       }
     }
   }
@@ -423,7 +429,7 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
 
     if (enableTrainEmissions){
       for (int i = 0; i < (int) emitPairs.size(); i++)
-	for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] /= numSeqs * (numSeqs - 1) / 2;
+        for (int j = 0; j < (int) emitPairs[i].size(); j++) emitPairs[i][j] /= numSeqs * (numSeqs - 1) / 2;
       for (int i = 0; i < (int) emitSingle.size(); i++) emitSingle[i] /= numSeqs * (numSeqs - 1) / 2;
     }
   }
@@ -432,65 +438,67 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
   else {
 
     if (!enableViterbi){
-      
-      // perform the consistency transformation the desired number of times
-      for (int r = 0; r < numConsistencyReps; r++){
-	SafeVector<SafeVector<SparseMatrix *> > newSparseMatrices = DoRelaxation (sequences, sparseMatrices);
 
-	// now replace the old posterior matrices
-	for (int i = 0; i < numSeqs; i++){
-	  for (int j = 0; j < numSeqs; j++){
-	    delete sparseMatrices[i][j];
-	    sparseMatrices[i][j] = newSparseMatrices[i][j];
-	  }
-	}
+      // perform the consistency transformation the desired number of times
+      for (int r = 0; r < numConsistencyReps; r++) {
+        SafeVector<SafeVector<SparseMatrix *> > newSparseMatrices = DoRelaxation (sequences, sparseMatrices, consgap);
+
+        // now replace the old posterior matrices
+        for (int i = 0; i < numSeqs; i++) {
+          for (int j = 0; j < numSeqs; j++) {
+            delete sparseMatrices[i][j];
+            sparseMatrices[i][j] = newSparseMatrices[i][j];
+          }
+        }
+
       }
+
     }
 
     MultiSequence *finalAlignment = NULL;
 
     if (enableAllPairs){
       for (int a = 0; a < numSeqs-1; a++){
-	for (int b = a+1; b < numSeqs; b++){
-	  Sequence *seq1 = sequences->GetSequence (a);
-	  Sequence *seq2 = sequences->GetSequence (b);
-	  
-	  if (enableVerbose)
-	    cerr << "Performing pairwise alignment: (" << a+1 << ") " << seq1->GetHeader() << " vs. "
-		 << "(" << b+1 << ") " << seq2->GetHeader() << " -- ";
+        for (int b = a+1; b < numSeqs; b++){
+          Sequence *seq1 = sequences->GetSequence (a);
+          Sequence *seq2 = sequences->GetSequence (b);
+          
+          if (enableVerbose)
+            cerr << "Performing pairwise alignment: (" << a+1 << ") " << seq1->GetHeader() << " vs. "
+        	 << "(" << b+1 << ") " << seq2->GetHeader() << " -- ";
 
-	  
-	  // perform the pairwise sequence alignment
-	  pair<SafeVector<char> *, float> alignment;
-	  if (enableViterbi)
-	    alignment = model.ComputeViterbiAlignment (seq1, seq2);
-	  else {
+          
+          // perform the pairwise sequence alignment
+          pair<SafeVector<char> *, float> alignment;
+          if (enableViterbi)
+            alignment = model.ComputeViterbiAlignment (seq1, seq2);
+          else {
 
-	    // build posterior matrix
-	    VF *posterior = sparseMatrices[a][b]->GetPosterior(); assert (posterior);
-	    int length = (seq1->GetLength() + 1) * (seq2->GetLength() + 1);
-	    for (int i = 0; i < length; i++) (*posterior)[i] -= cutoff;
+            // build posterior matrix
+            VF *posterior = sparseMatrices[a][b]->GetPosterior(); assert (posterior);
+            int length = (seq1->GetLength() + 1) * (seq2->GetLength() + 1);
+            for (int i = 0; i < length; i++) (*posterior)[i] -= cutoff;
 
-	    alignment = model.ComputeAlignment (seq1->GetLength(), seq2->GetLength(), *posterior);
-	    delete posterior;
-	  }
+            alignment = model.ComputeAlignment (seq1->GetLength(), seq2->GetLength(), *posterior);
+            delete posterior;
+          }
 
-	  // write pairwise alignments 
-	  string name = seq1->GetHeader() + "-" + seq2->GetHeader() + (enableClustalWOutput ? ".aln" : ".fasta");
-	  ofstream outfile (name.c_str());
-	  
-	  MultiSequence *result = new MultiSequence();
-	  result->AddSequence (seq1->AddGaps(alignment.first, 'X'));
-	  result->AddSequence (seq2->AddGaps(alignment.first, 'Y'));
-	  if (enableClustalWOutput)
-	    result->WriteALN (outfile);
-	  else
-	    result->WriteMFA (outfile);
-	  
-	  outfile.close();
-	  
-	  delete alignment.first;
-	}
+          // write pairwise alignments 
+          string name = seq1->GetHeader() + "-" + seq2->GetHeader() + (enableClustalWOutput ? ".aln" : ".fasta");
+          ofstream outfile (name.c_str());
+          
+          MultiSequence *result = new MultiSequence();
+          result->AddSequence (seq1->AddGaps(alignment.first, 'X'));
+          result->AddSequence (seq2->AddGaps(alignment.first, 'Y'));
+          if (enableClustalWOutput)
+            result->WriteALN (outfile);
+          else
+            result->WriteMFA (outfile);
+          
+          outfile.close();
+          
+          delete alignment.first;
+        }
       }
     }
     
@@ -513,6 +521,7 @@ MultiSequence *DoAlign (MultiSequence *sequences, const ProbabilisticModel &mode
       if (enableAnnotation){
         // WriteAnnotation (finalAlignment, sparseMatrices);
         ComputeAnnotation (finalAlignment, sparseMatrices);
+        // ComputeAnnotation (finalAlignment, untransformedSparseMatrices);
       }
 
       delete tree;
@@ -1123,7 +1132,7 @@ MultiSequence *AlignAlignments (MultiSequence *align1, MultiSequence *align2,con
 //
 /////////////////////////////////////////////////////////////////
 
-SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices){
+SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, SafeVector<SafeVector<SparseMatrix *> > &sparseMatrices, int consgap){
   const int numSeqs = sequences->GetNumSequences();
 
   SafeVector<SafeVector<SparseMatrix *> > newSparseMatrices (numSeqs, SafeVector<SparseMatrix *>(numSeqs, NULL));
@@ -1131,6 +1140,9 @@ SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, 
   // for every pair of sequences
   for (int i = 0; i < numSeqs; i++){
     for (int j = i+1; j < numSeqs; j++){
+
+      // cerr << "Relaxing all pairs --> i:" << i << " j:" << j << endl;
+
       Sequence *seq1 = sequences->GetSequence (i);
       Sequence *seq2 = sequences->GetSequence (j);
 
@@ -1153,15 +1165,36 @@ SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, 
 
       // contribution from all other sequences
       for (int k = 0; k < numSeqs; k++) if (k != i && k != j){
-	if (k < i)
-	  Relax1 (sparseMatrices[k][i], sparseMatrices[k][j], posterior);
-	else if (k > i && k < j)
-	  Relax (sparseMatrices[i][k], sparseMatrices[k][j], posterior);
-	else {
-	  SparseMatrix *temp = sparseMatrices[j][k]->ComputeTranspose();
-	  Relax (sparseMatrices[i][k], temp, posterior);
-	  delete temp;
-	}
+
+        if (k < i) {
+          // cerr << "Relax1 k:" << k << " i:" << i << " j:" << j << endl;
+          SparseMatrix *temp = sparseMatrices[k][i]->ComputeTranspose();
+          if (consgap) {
+            Relax_gap (temp, sparseMatrices[k][j], posterior);
+          }
+          else {
+            Relax (temp, sparseMatrices[k][j], posterior);
+          }
+          // Relax1 (sparseMatrices[k][i], sparseMatrices[k][j], posterior);
+          delete temp;
+        } else if (k > i && k < j){
+          // cerr << "Relax k:" << k << " i:" << i << " j:" << j << endl;
+          if (consgap) {
+            Relax_gap (sparseMatrices[i][k], sparseMatrices[k][j], posterior);
+          }
+          else {
+            Relax (sparseMatrices[i][k], sparseMatrices[k][j], posterior);
+          }
+        } else {
+          // cerr << "Relax temp k:" << k << " i:" << i << " j:" << j << endl;
+          SparseMatrix *temp = sparseMatrices[j][k]->ComputeTranspose();
+          if (consgap) {
+            Relax_gap (sparseMatrices[i][k], temp, posterior);
+          } else {
+            Relax (sparseMatrices[i][k], temp, posterior);
+          }
+          delete temp;
+        }
       }
 
       // now renormalization
@@ -1169,30 +1202,32 @@ SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, 
 
       // mask out positions not originally in the posterior matrix
       SparseMatrix *matXY = sparseMatrices[i][j];
+      
       for (int y = 0; y <= seq2Length; y++) posterior[y] = 0;
+      
       for (int x = 1; x <= seq1Length; x++){
-	SafeVector<PIF>::iterator XYptr = matXY->GetRowPtr(x);
-	SafeVector<PIF>::iterator XYend = XYptr + matXY->GetRowSize(x);
-	VF::iterator base = posterior.begin() + x * (seq2Length + 1);
-	int curr = 0;
-	while (XYptr != XYend){
+        SafeVector<PIF>::iterator XYptr = matXY->GetRowPtr(x);
+        SafeVector<PIF>::iterator XYend = XYptr + matXY->GetRowSize(x);
+        VF::iterator base = posterior.begin() + x * (seq2Length + 1);
+        int curr = 0;
 
-	  // zero out all cells until the first filled column
-	  while (curr < XYptr->first){
-	    base[curr] = 0;
-	    curr++;
-	  }
+        while (XYptr != XYend){
+          // zero out all cells until the first filled column
+          while (curr < XYptr->first){
+            base[curr] = 0;
+            curr++;
+          }
 
-	  // now, skip over this column
-	  curr++;
-	  ++XYptr;
-	}
-	
-	// zero out cells after last column
-	while (curr <= seq2Length){
-	  base[curr] = 0;
-	  curr++;
-	}
+          // now, skip over this column
+          curr++;
+          ++XYptr;
+        }
+
+        // zero out cells after last column
+        while (curr <= seq2Length){
+          base[curr] = 0;
+          curr++;
+        }
       }
 
       // save the new posterior matrix
@@ -1212,12 +1247,6 @@ SafeVector<SafeVector<SparseMatrix *> > DoRelaxation (MultiSequence *sequences, 
   return newSparseMatrices;
 }
 
-/////////////////////////////////////////////////////////////////
-// Relax()
-//
-// Computes the consistency transformation for a single sequence
-// z, and adds the transformed matrix to "posterior".
-/////////////////////////////////////////////////////////////////
 
 void Relax (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior){
 
@@ -1250,6 +1279,82 @@ void Relax (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior){
     }
   }
 }
+
+
+/////////////////////////////////////////////////////////////////
+// Relax()
+//
+// Computes the consistency transformation for a single sequence
+// z, and adds the transformed matrix to "posterior".
+/////////////////////////////////////////////////////////////////
+
+void Relax_gap (SparseMatrix *matXZ, SparseMatrix *matZY, VF &posterior){
+
+  assert (matXZ);
+  assert (matZY);
+
+  int lengthX = matXZ->GetSeq1Length();
+  int lengthY = matZY->GetSeq2Length();
+  assert (matXZ->GetSeq2Length() == matZY->GetSeq1Length());
+
+  float * p_gapX = new float [lengthX+1];
+  float * p_gapY = new float [lengthY+1];
+
+  // for every x[i]
+  for (int i = 1; i <= lengthX; i++){
+    SafeVector<PIF>::iterator XZptr = matXZ->GetRowPtr(i);
+    SafeVector<PIF>::iterator XZend = XZptr + matXZ->GetRowSize(i);
+
+    VF::iterator base = posterior.begin() + i * (lengthY + 1);
+
+    float totprobXiZ=0; //total probability that X[i] is aligned to any base in Z
+
+    // iterate through all x[i]-z[k]
+    while (XZptr != XZend){
+      SafeVector<PIF>::iterator ZYptr = matZY->GetRowPtr(XZptr->first);
+      SafeVector<PIF>::iterator ZYend = ZYptr + matZY->GetRowSize(XZptr->first);
+      const float XZval = XZptr->second;
+
+      totprobXiZ+=XZval;
+
+      // iterate through all z[k]-y[j]
+      while (ZYptr != ZYend){
+        base[ZYptr->first] += XZval * ZYptr->second;
+        ZYptr++;
+      }
+      XZptr++;
+    }
+    p_gapX[i]=1-totprobXiZ; //probability that Xi is aligned to a gap in Z
+  }
+
+  SparseMatrix *matYZ = matZY->ComputeTranspose();
+  for (int j = 1; j <= lengthY; j++){
+    float totprobYjZ=0;
+    SafeVector<PIF>::iterator YZptr = matYZ->GetRowPtr(j);
+    SafeVector<PIF>::iterator YZend = YZptr + matYZ->GetRowSize(j);
+    while (YZptr != YZend){
+      totprobYjZ+=YZptr->second;
+      YZptr++;
+    }
+    p_gapY[j]=1-totprobYjZ;
+  }
+
+  //correct for the probability that both X[i] and Y[j] are aligned to a gap in Z
+  for (int i = 1; i <= lengthX; i++){
+    VF::iterator base = posterior.begin() + i * (lengthY + 1);
+    for (int j = 1; j <= lengthY; j++){
+      base[j]+= p_gapX[i] * p_gapY[j];
+    }
+  }
+
+  delete p_gapX;
+  delete p_gapY;
+  delete matYZ;
+}
+
+
+//TODO: check this Relax1 function and apply same correction here!
+
 
 /////////////////////////////////////////////////////////////////
 // Relax1()
@@ -1286,6 +1391,7 @@ void Relax1 (SparseMatrix *matZX, SparseMatrix *matZY, VF &posterior){
       ZXptr++;
     }
   }
+  
 }
 
 /////////////////////////////////////////////////////////////////
@@ -1503,13 +1609,14 @@ static PyObject *bpalign(Probcons *self, PyObject *args, PyObject *keywds)
 {
     PyObject * seqlist;
     
-    const char *kwlist[] = {"name_seq_list","consistency","refinement","pretraining",NULL};
+    const char *kwlist[] = {"name_seq_list","consistency","refinement","pretraining","consgap",NULL};
 
     numConsistencyReps = 0;
     numIterativeRefinementReps = 0;
     numPreTrainingReps = 0;
+    consgap = 0;
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "O|iii", const_cast<char **>(kwlist), &seqlist, &numConsistencyReps, &numIterativeRefinementReps, &numPreTrainingReps))
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "O|iiii", const_cast<char **>(kwlist), &seqlist, &numConsistencyReps, &numIterativeRefinementReps, &numPreTrainingReps, &consgap))
         return NULL;
     
     // if (!PyArg_ParseTuple(args, "O", &seqlist))
@@ -1553,7 +1660,7 @@ static PyObject *bpalign(Probcons *self, PyObject *args, PyObject *keywds)
 
     //do the consistency based multiple sequence alignment
     MultiSequence *alignment = DoAlign (sequences,
-                                        ProbabilisticModel (initDistrib, gapOpen, gapExtend,  emitPairs, emitSingle),
+                                        ProbabilisticModel (initDistrib, gapOpen, gapExtend,  emitPairs, emitSingle, gapSwitchDefault),
                                         initDistrib, gapOpen, gapExtend, emitPairs, emitSingle);
     
     // alignment->WriteALN (cout);

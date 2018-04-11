@@ -1,11 +1,10 @@
 /////////////////////////////////////////////////////////////////
 // Defaults.h
 //
-// Default constants for use in PROBCONS.  The emission
-// probabilities were computed using the program used to build
-// the BLOSUM62 matrix from the BLOCKS 5.0 dataset.  Transition
-// parameters were obtained via unsupervised EM training on the
-// BALIBASE 2.0 benchmark alignment database.
+// Default constants for use in REVEAL-PROBCONS.
+// The emission and transition parameters are initialized to be
+// the same as the default values of pecan.
+// 
 /////////////////////////////////////////////////////////////////
 
 #ifndef DEFAULTS_H
@@ -20,10 +19,16 @@ float initDistrib1Default[] = { 0.33333333f, 0.33333333f, 0.33333333f };
 float gapOpen1Default[] = { 0.013652682f, 0.013652682f };
 float gapExtend1Default[] = { 0.9744453f, 0.9744453f };
 
+
+
+
+
 float initDistrib2Default[] = { 0.2f, 0.2f, 0.2f, 0.2f, 0.2f };
 
 float gapOpen2Default[] = { 0.012986835f, 0.012986835f, 0.0018214881f, 0.0018214881f};
 float gapExtend2Default[] = { 0.7126062401851738f, 0.7126062401851738f, 0.99656342579062f, 0.99656342579062f};
+
+float gapSwitchDefault = 0.0073673675173412815f;
 
 string alphabetDefault = "ACGTN";
 

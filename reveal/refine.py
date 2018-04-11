@@ -6,6 +6,7 @@ import schemes
 from multiprocessing.pool import Pool
 from multiprocessing import Process,Queue
 import signal
+import probconslib
 
 def refine_bubble_cmd(args):
     if len(args.graph)<1:
@@ -37,7 +38,11 @@ def refine_bubble_cmd(args):
                             parameters=args.parameters,
                             minconf=args.minconf,
                             nproc=args.nproc,
-                            sa64=args.sa64)
+                            sa64=args.sa64,
+                            constrans=args.constrans,
+                            nrefinements=args.nrefinements,
+                            consgap=args.consgap
+                            )
     else:
         if args.source==None or args.sink==None:
             logging.error("Specify source sink pair")
@@ -74,7 +79,11 @@ def refine_bubble_cmd(args):
                                 method=args.method,
                                 parameters=args.parameters,
                                 minconf=args.minconf,
-                                sa64=args.sa64)
+                                sa64=args.sa64,
+                                constrans=args.constrans,
+                                nrefinements=args.nrefinements,
+                                consgap=args.consgap
+                                )
 
         if res!=None:
             bubble,ng,path2start,path2end=res
@@ -152,8 +161,6 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     source=bubble.source
     sink=bubble.sink
 
-    logging.info("Realigning bubble between <%s> and <%s>, with %s (max size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
-
     if len(bubble.nodes)==3:
         logging.fatal("Indel bubble, no point realigning.")
         return
@@ -174,6 +181,8 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     aobjs=[(",".join(d[seq]),seq) for seq in d]
 
+    logging.info("Realigning bubble between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
+
     for name,seq in aobjs:
         if len(seq)>200:
             logging.debug("IN %s: %s...%s"%(name.rjust(4,' '),seq[:100],seq[-100:]))
@@ -181,7 +190,14 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
             logging.debug("IN %s: %s"%(name.rjust(4,' '),seq))
 
     if kwargs['method']!="reveal": #use custom multiple sequence aligner to refine bubble structure
-        ng=msa2graph(aobjs,msa=kwargs['method'],minconf=kwargs['minconf'],parameters=kwargs['parameters'])
+        ng=msa2graph(aobjs,
+                        msa=kwargs['method'],
+                        minconf=kwargs['minconf'],
+                        parameters=kwargs['parameters'],
+                        constrans=kwargs['constrans'],
+                        nrefinements=kwargs['nrefinements'],
+                        consgap=kwargs['consgap']
+                        )
         if ng==None:
             logging.fatal("MSA using %s for bubble: %s - %s failed."%(kwargs['method'],source,sink))
             return
@@ -290,7 +306,7 @@ def refine_all(G,  **kwargs):
             continue
 
         if b.maxsize<kwargs['minmaxsize']:
-            logging.warn("Skipping bubble %s, largest allele (%dbp) is smaller than maxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
+            logging.warn("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
             continue
 
         if b.maxsize>kwargs['maxsize']:
@@ -321,6 +337,8 @@ def refine_all(G,  **kwargs):
         else:
             distinctbubbles.append(b1)
 
+
+
     logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     nn=max([node for node in G.nodes() if type(node)==int])+1
 
@@ -334,7 +352,6 @@ def refine_all(G,  **kwargs):
 
         for i in range(nworkers):
             aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
-
 
         for bubble in distinctbubbles:
             G.node[bubble.source]['aligned']=1
@@ -372,7 +389,6 @@ def refine_all(G,  **kwargs):
 
     else:
         for bubble in distinctbubbles:
-            
             G.node[bubble.source]['aligned']=1
             G.node[bubble.sink]['aligned']=1
 
@@ -393,9 +409,10 @@ def refine_all(G,  **kwargs):
             else:
                 bubble,ng,path2start,path2end=res
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+
     return G
 
-def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
+def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,consgap=True,nrefinements=100):
 
     nn=idoffset
     ng=nx.DiGraph()
@@ -414,7 +431,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
     #TODO: writing to a temporary file (for now), but this should ideally happen in memory
     uid=uuid.uuid4().hex
     tempfiles=[]
-    logging.debug("Trying to construct MSA with %s."%msa)
+    logging.debug("Trying to construct MSA with %s, minconf=%d."%(msa,minconf))
 
     if msa in {'muscle','pecan','msaprobs','probcons'}:
 
@@ -469,10 +486,9 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
                         confidence[i]=confidence[i]*100
 
     else:
-        import probconslib
         logging.debug("Using probcons (in memory)")
         pl=probconslib.probcons()
-        aln=pl.align(aobjs,consistency=2,refinement=100,pretraining=0)
+        aln=pl.align(aobjs,consistency=constrans,refinement=nrefinements,pretraining=0,consgap=consgap)
         seqs=[""]*len(aobjs)
         names=[""]*len(aobjs)
         for name,seq in aln[0]:
@@ -596,8 +612,6 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
         pcol=col
         pp=p
 
-    # write_gml(ng,"",outputfile="before.gml")
-
     #remove gaps from graph
     remove=[]
     for node,data in ng.nodes(data=True):
@@ -630,8 +644,6 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0):
                         ng.add_edge(in1,out2,paths=overlap,ofrom='+',oto='+')
 
     ng.remove_nodes_from(remove)
-
-    # write_gml(ng,"",outputfile="after.gml")
 
     for tmpfile in tempfiles:
         try:
