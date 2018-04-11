@@ -148,6 +148,9 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     if len(G.in_edges(bubble.sink))==1 and type(bubble.sink)!=str:
         # assert(len(set(path2end.values()))==1)
         endnode=mapping[path2end.values()[0][0]]
+        
+        print endnode
+
         G.node[bubble.sink]['seq']=G.node[endnode]['seq']+G.node[bubble.sink]['seq']
         G.node[bubble.sink]['offsets']=G.node[endnode]['offsets']
         for e0,e1,d in G.in_edges(endnode,data=True):
@@ -178,6 +181,10 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
                 d[seq].append(str(sid))
             else:
                 d[seq]=[str(sid)]
+
+    if len(d)==1:
+        logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
+        return
 
     aobjs=[(",".join(d[seq]),seq) for seq in d]
 
@@ -302,11 +309,11 @@ def refine_all(G,  **kwargs):
                 continue
 
         if b.minsize<kwargs['minsize']:
-            logging.info("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
+            logging.debug("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
             continue
 
         if b.maxsize<kwargs['minmaxsize']:
-            logging.warn("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
+            logging.debug("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
             continue
 
         if b.maxsize>kwargs['maxsize']:
@@ -353,6 +360,9 @@ def refine_all(G,  **kwargs):
         for i in range(nworkers):
             aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
 
+        for p in aworkers:
+            p.start()
+
         for bubble in distinctbubbles:
             G.node[bubble.source]['aligned']=1
             G.node[bubble.sink]['aligned']=1
@@ -373,9 +383,6 @@ def refine_all(G,  **kwargs):
 
         for i in range(nworkers):
             inputq.put(-1)
-
-        for p in aworkers:
-            p.start()
 
         graph_worker(G,nn,outputq,nworkers)
         
