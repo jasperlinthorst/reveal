@@ -50,11 +50,11 @@ class ProbabilisticModel {
   /////////////////////////////////////////////////////////////////
 
   ProbabilisticModel (const VF &initDistribMat, const VF &gapOpen, const VF &gapExtend,
-                      const VVF &emitPairs, const VF &emitSingle, const float gapSwitchDefault){
-
+                      const VVF &emitPairs, const VF &emitSingle, const float *gapSwitch){
     // build transition matrix
     VVF transMat (NumMatrixTypes, VF (NumMatrixTypes, 0.0f));
     transMat[0][0] = 1;
+
     for (int i = 0; i < NumInsertStates; i++){
       transMat[0][2*i+1] = gapOpen[2*i];
       transMat[0][2*i+2] = gapOpen[2*i+1];
@@ -62,10 +62,10 @@ class ProbabilisticModel {
       assert (transMat[0][0] > 0);
       transMat[2*i+1][2*i+1] = gapExtend[2*i];
       transMat[2*i+2][2*i+2] = gapExtend[2*i+1];
-      transMat[2*i+1][2*i+2] = gapSwitchDefault; //0.0073673674;
-      transMat[2*i+2][2*i+1] = 0;//gapSwitchDefault; //0.0073673674;
-      transMat[2*i+1][0] = 1 - gapExtend[2*i] - gapSwitchDefault;
-      transMat[2*i+2][0] = 1 - gapExtend[2*i+1];// - gapSwitchDefault;
+      transMat[2*i+1][2*i+2] = gapSwitch[i];
+      transMat[2*i+2][2*i+1] = gapSwitch[i];
+      transMat[2*i+1][0] = 1 - gapExtend[2*i] - gapSwitch[i];
+      transMat[2*i+2][0] = 1 - gapExtend[2*i+1] - gapSwitch[i];
     }
 
     // create initial and transition probability matrices
