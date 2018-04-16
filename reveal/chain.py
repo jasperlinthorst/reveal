@@ -29,6 +29,8 @@ def chain_cmd(args):
     G.graph['paths']=idx.samples
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
+    G.graph['startnodes']=[]
+    G.graph['endnodes']=[]
 
     for sid,sample in enumerate(G.graph['paths']):
         G.graph['path2id'][sample]=sid
@@ -44,6 +46,10 @@ def chain_cmd(args):
     G.add_node(istart,l=0)
     G.add_node(iend,l=0)
     G.add_edge(istart,iend)
+    
+    G.graph['startnodes'].append(istart)
+    G.graph['endnodes'].append(iend)
+    
     idc=range(idx.nsamples)
 
     stack=[(idx,idc,istart,iend,startcoords,0,False)]
@@ -164,7 +170,7 @@ def chain_cmd(args):
             if sid in data['offsets']:
                 sg.append(node)
         subgraph=G.subgraph(sg)
-        topsort=nx.topological_sort(subgraph)
+        topsort=list(nx.topological_sort(subgraph))
         pnode=topsort[0]
         for node in topsort[1:]:
             if 'paths' in G[pnode][node]:
@@ -242,7 +248,8 @@ def chain(idx,offsets,minlength,depth,maxmums,recurse=True,uniq=True,gcmodel="su
     #add all nodes to the graph
     for mum in mums:
         # point=sorted(mum[2])
-        point=sorted(mum[2].values())
+        # point=sorted(mum[2].values())
+        point=sorted([sp for gid,sp in mum[2]])
         for i,p in enumerate(point):
             point[i]=offsets[i]+(point[i]-localoffsets[i]) #map positions back to toplevel T index
         point=tuple(point)
@@ -288,7 +295,8 @@ def chain(idx,offsets,minlength,depth,maxmums,recurse=True,uniq=True,gcmodel="su
     while v!=p1:
         bestpath.append(v)
         G.node[v]['aligned']=1
-        v=G.predecessors(v)[0]
+        for v in G.predecessors(v):
+            break
 
     bestpath.append(p1)
     

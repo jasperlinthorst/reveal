@@ -8,7 +8,6 @@ def extract_cmd(args):
         logging.fatal("Invalid gfa file.")
         return
     width=args.width
-    #G=nx.DiGraph();
     G=nx.MultiDiGraph()
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
@@ -25,7 +24,7 @@ def extract_cmd(args):
             else:
                 logging.fatal("Unknown input type")
                 sys.exit(1)
-
+            
             sys.stdout.write(">"+ins+"\n")
             f=0
             for i in xrange(width,len(seq),width):
@@ -53,7 +52,7 @@ def extract(G,sample):
     sid=G.graph['path2id'][sample]
     sg=[]
 
-    for n1,n2,d in G.edges_iter(data=True):
+    for n1,n2,d in G.edges(data=True):
         if sid in d['paths']:
             sg.append((n1,n2,d))
 
@@ -61,10 +60,13 @@ def extract(G,sample):
         #G can be a MultiDiGraph, but subgraph should be single edge!
         subgraph=nx.DiGraph(sg)
         seq=""
-        path=nx.topological_sort(subgraph)
-        subgraph.add_edge(0,path[0],ofrom='+',oto='+')
+        path=list(nx.topological_sort(subgraph))
 
+        inito=subgraph[path[0]][subgraph[path[0]].keys()[0]]['ofrom']
+
+        subgraph.add_edge(0,path[0],ofrom='+',oto=inito)
         pnode=0
+
         for node in path:
             o=subgraph[pnode][node]['oto']
             if o=="+":
@@ -75,7 +77,7 @@ def extract(G,sample):
 
     else: #has to be a single node
         seq=""
-        for n,d in G.nodes_iter(data=True):
+        for n,d in G.nodes(data=True):
             if sid in d['offsets']:
                 seq=d['seq']
                 break

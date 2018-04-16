@@ -12,6 +12,10 @@ def gplot(args):
     G=nx.DiGraph()
     read_gfa(args.graph,None,None,G)
     
+    if len(G.graph['paths'])<2:
+        logging.error("Can't make a plot for less than two samples.")
+        sys.exit(1)
+
     if args.x==None and args.y==None:
         args.x=G.graph['paths'][0]
         args.y=G.graph['paths'][1]
@@ -36,7 +40,6 @@ def plot(args):
     ax = plt.axes()
     
     if len(args.fastas)==2:
-        #get mmems for forward orientation
         if args.sa64:
             idx=reveallib64.index()
         else:
@@ -88,7 +91,8 @@ def plot(args):
         idx.construct()
         
         print "Extracting mums..."
-        mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
+        #mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
+        mmems=[(mem[0],mem[1],[sp for gid,sp in mem[2]],0) for mem in idx.getmums(args.minlength)]
         
         sep=idx.nsep[0]
 
@@ -114,13 +118,14 @@ def plot(args):
             
             idx.construct()
             
-            print "Extracting RC mems..."
+            print "Extracting RC mums..."
             tmp=idx.getmums(args.minlength)
             
             vi=iter(qryintvs)
             v=vi.next()
             
-            tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
+            #tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
+            tmp=[(m[0],m[1],sorted([sp for gid,sp in m[2]])) for m in tmp] #make sure start positions are sorted
             tmp.sort(key=lambda l: l[2][1]) #sort by query pos
             
             nmmems=[]
@@ -205,10 +210,17 @@ def plot(args):
         plt.xlabel(args.fastas[0]+"_rc")
     plt.autoscale(enable=False)
     
-    if args.region!=None:
-        rstart,rend=args.region.split(":")
-        plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
-        plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+    if args.xregion!=None:
+        for region in args.xregion.split(","):
+            rstart,rend=region.split(":") #should be rectangle with alfa here
+            plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
+            plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+
+    if args.yregion!=None:
+        for region in args.yregion.split(","):
+            rstart,rend=region.split(":") #should be rectangle with alfa here
+            plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
+            plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
 
     if args.interactive:
         plt.show()

@@ -62,7 +62,7 @@ static PyObject *addsequence(RevealIndex *self, PyObject *args)
     uint64_t t;
     t=self->n;
     if ((t+(l+1)+1) > INT_MAX){
-        PyErr_SetString(RevealError, "Total amount of sequence too large, use \"reveal --64 <subcommand>\" to use 64 bit suffix arrays instead.");
+        PyErr_SetString(RevealError, "Total amount of sequence too large, use \"reveal <subcommand> --64\" to use 64 bit suffix arrays instead.");
         return NULL;
     }
 #endif
@@ -372,7 +372,9 @@ static PyMethodDef reveal_methods[] = {
     { "addsequence", (PyCFunction) addsequence, METH_VARARGS },
     { "construct", (PyCFunction) construct, METH_VARARGS },
     { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
+    { "getmultimems", (PyCFunction) getmultimems, METH_VARARGS|METH_KEYWORDS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
+    { "splitindex", (PyCFunction) splitindex, METH_VARARGS|METH_KEYWORDS },
     { NULL, NULL }
 };
 
@@ -814,7 +816,8 @@ initreveallib(void)
     Py_INCREF(&RevealIndexType);
     PyModule_AddObject(m, "index", (PyObject *)&RevealIndexType);
     
-    RevealError = PyErr_NewException("Reveal.error", NULL, NULL);
+    char errname[]="Reveal.error";
+    RevealError = PyErr_NewException(errname, NULL, NULL);
     Py_INCREF(RevealError);
     PyModule_AddObject(m, "error", RevealError);
 }
