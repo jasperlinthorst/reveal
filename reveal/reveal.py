@@ -130,8 +130,56 @@ def main():
     parser_comp.add_argument('graph', nargs=1, help='The graph to be reverse complemented.')
     parser_comp.set_defaults(func=comp.comp_cmd)
     
+<<<<<<< Updated upstream
     parser_finish.add_argument('reference', help='Multi-fasta reference sequence.')
     parser_finish.add_argument('contigs', help='Multi-fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
+=======
+
+
+
+
+    parser_transform = subparsers.add_parser('transform', prog="reveal transform", description="Transform a draft assembly into a graph that encodes the structural order of assembled segments with respect to a finished reference assembly.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_transform.add_argument('reference', help='(Multi-)fasta reference sequence.')
+    parser_transform.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
+    parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
+    parser_transform.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (if set to 0, try to extract all MUMs).")
+    parser_transform.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
+    
+    parser_transform.add_argument("--noextend", dest="extend", default=True, action="store_false", help="Don't extend chains to contig ends.")
+
+    parser_transform.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to do MUM extraction (max: 2 proc) and mapping (max: number of contigs) in parallel (increases mem usage!).")
+    parser_transform.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
+    parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
+    parser_transform.add_argument("--graph", dest="outputtype", choices=["graph","fasta"], default="graph", help="Output a graph or fasta representation of the transformed genome.")
+    parser_transform.add_argument("--structonly", dest="allcontigs", action="store_false", default=True, help="Only output paths for contigs that contain structural rearrangements.")
+    parser_transform.add_argument("--filter", dest="filtermums", action="store_true", default=False, help="Reduce search space by filtering exact matches.")
+    parser_transform.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
+    parser_transform.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
+    parser_transform.add_argument("--order", dest="order", default="chains", choices=["contigs","chains"], help="Determine the order for either contigs or chains.")
+    parser_transform.add_argument("--mineventsize", dest="mineventsize", type=int, default=1500, help="Minimal size (in basepairs) of a rearrangement event that has to be transformed (set larger than typical transposon event).")
+    parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=None, help="Minimal sum of the length of the MUMs in a chain before its reported (if not set use (.5*genome wide mum coverage)*MINEVENTSIZE).")
+    parser_transform.add_argument("--maxmums", dest="maxmums", type=int, default=0, help="Max number of MUMs to consider for chaining (when 0 use all).")
+    parser_transform.add_argument("--cutn", dest="cutn", type=int, default=1000, help="Cut contigs at N-stretches longer than this value, to force re-estimation of gapsizes (set to 0, to switch off).")
+    parser_transform.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
+    parser_transform.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
+    
+    parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
+    parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
+    parser_transform.add_argument("--extiter", dest="extiter", type=int, default=3, help="Number of extension iterations using locally unique MUMs.")
+    parser_transform.add_argument("--maxextend", dest="maxextend", type=int, default=200, help="Size of the region to try to inspect for locally unique MUMs.")
+    parser_transform.set_defaults(func=transform.transform)
+
+
+
+
+
+
+
+
+    parser_finish = subparsers.add_parser('finish', prog="reveal finish", description="Order and orient the contigs of a draft assembly with respect to a finished reference assembly (essentially the same as transform but with different default parameters).", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_finish.add_argument('reference', help='(Multi-)fasta reference sequence.')
+    parser_finish.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
+>>>>>>> Stashed changes
     parser_finish.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
     parser_finish.add_argument("-m", dest="minlength", type=int, default=None, help="Min length of maximal exact matches for considering (if not set, use the set of largest MUMs for which the genome wide coverage is below 1).")
     parser_finish.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
