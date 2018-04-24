@@ -210,7 +210,7 @@ def transform(args):
         #multi-process contig-path computation
         for ref in ref2ctg:
             if ref=='unchained' or ref=='unplaced':
-                # defref2ctg[ref]=ref2ctg[ref]
+                defref2ctg[ref]=ref2ctg[ref]
                 continue
             defref2ctg[ref]=pool.apply_async(bestctgpath, (ref2ctg[ref],))
     except KeyboardInterrupt:
@@ -236,7 +236,7 @@ def transform(args):
             if args.order=='contigs':
                 for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
                     logging.debug("Unused: %s (length=%d)"%(ctgname,contig2length[ctgname]))
-                    # ref2ctg['unplaced'].append(ctgname)
+                    ref2ctg['unplaced'].append(ctgname)
             else:
                 for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
                     if ctgbegin<ctgend:
@@ -303,7 +303,7 @@ def transform(args):
             finished=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
             unplaced=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
                 
-        if ref=='unchained':
+        if ref=='unchained' or ref=='unplaced':
             continue
         
         logging.debug("Determining %s order for: %s"%(args.order,ref))
@@ -638,6 +638,11 @@ def transform(args):
         if not args.allcontigs:
             G.graph['paths']=[sample for sample in G.graph['paths'] if sample in ctgswithevents or not sample.startswith("*")]
 
+    if 'unplaced' in defref2ctg:
+        for ctgname in defref2ctg['unplaced']:
+            unplaced.write(">%s\n"%(ctgname))
+            unplaced.write("%s\n"%contig2seq[ctgname])
+    
     if 'unchained' in defref2ctg:
         if len(defref2ctg['unchained'])>0:
             logging.info("The following parts of contigs could not be placed anywhere on the reference sequence.")
@@ -924,8 +929,8 @@ def map_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,maxmums=
 
 def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,maxmums=15000,nproc=1):
     
-    # ref2ctg={'unplaced':[]}
-    ref2ctg={}
+    ref2ctg={'unplaced':[]}
+    #ref2ctg={}
     ctg2ref=dict()
     results=dict()
 
@@ -944,10 +949,7 @@ def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,m
     for ctg in ctg2mums:
         paths=results[ctg].get()
         if len(paths)==0:
-            # if 'unplaced' in ref2ctg:
-            #     ref2ctg['unplaced'].append(ctg)
-            # else:
-            #     ref2ctg['unplaced']=[ctg]
+            ref2ctg['unplaced'].append(ctg)
             continue
         
         paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score in descending order, best first
