@@ -14,8 +14,16 @@ def split_cmd(args):
     split(args.gfa[0])
 
 def split(gfafile):
+    # G=nx.MultiDiGraph()
     G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
+
+    # remove=[]
+    # for node in G:
+    #     if type(node)==str:
+    #         remove.append(node)
+    
+    # G.remove_nodes_from(remove)
     
     for i,sub in enumerate(nx.connected_components(G.to_undirected())):
         sg=nx.subgraph(G,sub)
