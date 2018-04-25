@@ -20,7 +20,13 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             plt.title(ctgname)
             plt.ylabel(ctgname)
             plt.xlabel(refname)
-            mums=sorted(ctg2mums[ctgname][refname],key=lambda m: m[2],reverse=True)[:10000]
+
+            mums=sorted(ctg2mums[ctgname][refname],key=lambda m: m[2],reverse=True)
+            
+            if len(mums)>10000:
+                logging.info("Too many mums, plot only the largest 10000")
+                mums=mums[:10000]
+            
             for s1,s2,l,revcomp in mums:
                 if revcomp==1:
                     plt.plot([s1,s1+l],[s2+l,s2],'g-')
@@ -31,12 +37,17 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             last=0
 
             for ref,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in sorted(ctg2ref[ctgname],key=lambda c: c[6] if c[1]==0 else c[5]):
-                logging.info("Plot chain: %s"%str((revcomp,refbegin,refend,ctgbegin,ctgend)))
+                logging.info("Plot chain: %s"%str((ref,refname,revcomp,refbegin,refend,ctgbegin,ctgend,refend-refbegin)))
                 if refname != ref:
                     continue
 
                 if revcomp:
                     ctgbegin,ctgend=ctgend,ctgbegin
+
+                plt.axhline(y=ctgbegin,linewidth=.5,color='black',linestyle='solid')
+                plt.axhline(y=ctgend,linewidth=.5,color='black',linestyle='solid')
+                # plt.axvline(x=refbegin,linewidth=.5,color='black',linestyle='solid')
+                # plt.axvline(x=refend,linewidth=.5,color='black',linestyle='solid')
 
                 if last!=ctgbegin:
                     ax.add_patch(
@@ -50,13 +61,19 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
                     )
 
                 ax.add_patch(
-                        patches.Rectangle(
-                            (refbegin, ctgbegin), #bottom left
-                            refend-refbegin, #width
-                            ctgend-ctgbegin, #height
-                            alpha=.1
-                        )
+                    patches.Rectangle(
+                        (refbegin, ctgbegin), #bottom left
+                        refend-refbegin, #width
+                        ctgend-ctgbegin, #height
+                        alpha=.1,
+                        color="green" if revcomp else "red"
                     )
+                )
+
+                # if revcomp:
+                #     plt.plot([refbegin,refend],[ctgend,ctgbegin],'g--')
+                # else:
+                #     plt.plot([refbegin,refend],[ctgbegin,ctgend],'r--')
 
                 last=ctgend
 
@@ -65,22 +82,22 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             plt.show()
             # plt.close()
 
-
 def plotclusters(ctg2mums,contig2length,ref2length):
     for ctg in ctg2mums:
         for ref in ctg2mums[ctg]:
-            plt.clf()
-            plt.title(ctg)
-            plt.ylabel(ctg)
-            plt.xlabel(ref)
-            for refstart,ctgstart,cl,o in ctg2mums[ctg][ref]:
-                if o==1:
-                    plt.plot([refstart,refstart+cl],[ctgstart+cl,ctgstart],'g-')
-                else:
-                    plt.plot([refstart,refstart+cl],[ctgstart,ctgstart+cl],'r-')
-            plt.xlim(0,ref2length[ref])
-            plt.ylim(0,contig2length[ctg])
-            plt.show()
+            if len(ctg2mums[ctg][ref])>0:
+                plt.clf()
+                plt.title(ctg)
+                plt.ylabel(ctg)
+                plt.xlabel(ref)
+                for refstart,ctgstart,cl,o in ctg2mums[ctg][ref]:
+                    if o==1:
+                        plt.plot([refstart,refstart+cl],[ctgstart+cl,ctgstart],'g-')
+                    else:
+                        plt.plot([refstart,refstart+cl],[ctgstart,ctgstart+cl],'r-')
+                plt.xlim(0,ref2length[ref])
+                plt.ylim(0,contig2length[ctg])
+                plt.show()
 
 def transform(args):
     logging.debug("Extracting mums.")
@@ -179,40 +196,38 @@ def transform(args):
         from matplotlib import pyplot as plt
         from matplotlib import patches
 
-    if args.minchainsum==None: #auto set minchainsum with 0.5x of the genome wide coverage
-        args.minchainsum=int((.5*avgcov)*args.mineventsize)
-        logging.info("Auto determined minchainsum to %d"%args.minchainsum)
+    # if args.minchainsum==None: #auto set minchainsum with 0.5x of the genome wide coverage
+        # args.minchainsum=int((.5*avgcov)*args.mineventsize)
+        # logging.info("Auto determined minchainsum to %d"%args.minchainsum)
 
     logging.info("Assembly consists of %d contigs."%len(contig2seq))
     
     logging.debug("Associating mums to contigs.")
     #relate mums to contigs
-    ctg2mums=mapmumstocontig(mums,filtermums=args.filtermums,mineventsize=args.mineventsize)
+    ctg2mums=mapmumstocontig(mums)
 
     logging.debug("Number of contigs that contain MUMs larger than %d: %d."%(args.minlength,len(ctg2mums)))
     
     logging.info("Cluster mums")
-    ctg2mums=clustermumsbydiagonal(ctg2mums)
+    ctg2mums=clustermumsbydiagonal(ctg2mums,maxdist=args.maxdist,minclustsize=args.mincluster)
     
     for i in range(args.extiter):
         logging.info("Extend cluster with local mums")
-        ctg2mums=extend(ctg2mums,contig2seq,ref2seq,extendlength=args.minlength,maxextend=args.maxextend)
+        ctg2mums=extend(ctg2mums,contig2seq,ref2seq,minlocallength=args.minlocallength,maxextend=args.maxextend)
         logging.info("Cluster again")
         ctg2mums=clustermumsbydiagonal(ctg2mums,maxdist=args.maxdist,minclustsize=args.mincluster)
 
-    if args.plot:
-        logging.info("Plotting clusters")
-        plotclusters(ctg2mums,contig2length,ref2length)
-
     logging.info("Using %s to layout the assembly."%args.order)
     if args.order=='chains':
-        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,ref2length,maxmums=args.maxmums,mineventsize=args.mineventsize,minchainsum=args.minchainsum,nproc=args.nproc,extend=args.extend)
+        ref2ctg,ctg2ref=chainstorefence(ctg2mums,contig2length,ref2length,maxmums=args.maxmums,mineventsize=args.mineventsize,minchainsum=args.minchainsum,nproc=args.nproc)
     else:
         ref2ctg,ctg2ref=contigstorefence(ctg2mums,contig2length,maxmums=args.maxmums,mineventsize=args.mineventsize,minchainsum=args.minchainsum,nproc=args.nproc)
     
     #write finished assembly based on contigs or chains that map on each reference chromosome
     if not args.split and args.outputtype=='fasta':
         finished=open(args.output+".fasta",'w')
+
+    if not args.split and args.outputunmapped:
         unplaced=open(args.output+".unplaced.fasta",'w')
     
     totsequnplaced=0
@@ -239,15 +254,15 @@ def transform(args):
         #multi-process contig-path computation
         for ref in ref2ctg:
             if ref=='unchained' or ref=='unplaced':
-                # defref2ctg[ref]=ref2ctg[ref]
+                defref2ctg[ref]=ref2ctg[ref]
                 continue
+
             defref2ctg[ref]=pool.apply_async(bestctgpath, (ref2ctg[ref],))
     except KeyboardInterrupt:
         pool.terminate()
     else:
         pool.close()
     pool.join()
-
 
     #retrieve multi-process results
     for ref in ref2ctg:
@@ -265,20 +280,16 @@ def transform(args):
             if args.order=='contigs':
                 for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
                     logging.debug("Unused: %s (length=%d)"%(ctgname,contig2length[ctgname]))
-                    # ref2ctg['unplaced'].append(ctgname)
+                    ref2ctg['unplaced'].append(ctgname)
             else:
                 for ctgname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in b - a:
                     if ctgbegin<ctgend:
                         logging.debug("Unused: (%s,%s,%s,%d) (length=%d)"%(ctgname,ctgbegin,ctgend,ci,ctgend-ctgbegin))
-                        # ref2ctg['unchained'][ctgname][ctgbegin:ctgend]=0
+                        ref2ctg['unchained'][ctgname][ctgbegin:ctgend]=0
                     else:
                         logging.debug("Unused: (%s,%s,%s,%d) (length=%d)"%(ctgname,ctgbegin,ctgend,ci,ctgbegin-ctgend))
-                        # ref2ctg['unchained'][ctgname][ctgend:ctgbegin]=0
+                        ref2ctg['unchained'][ctgname][ctgend:ctgbegin]=0
                     unused.append((ctgname,ci))
-
-    # if args.plot:
-        # logging.info("Plot chains before extend.")
-        # plotchains(ctg2mums,ctg2ref,contig2length,ref2length)
 
     #remove unused chains from the ctg2ref mapping
     if args.order=="chains":
@@ -298,7 +309,7 @@ def transform(args):
         keys=sorted(defref2ctg)
         for ref in keys: #update the index of the chains, so that we can detect consecutive chains again
             if ref=='unchained' or ref=='unplaced':
-                assert(False)
+            #     assert(False)
                 continue
             for name,i in unused:
                 ctgs=[]
@@ -310,18 +321,19 @@ def transform(args):
                     ctgs.append(ctg)
                 defref2ctg[ref]=ctgs
 
-        if args.extend:
-            defref2ctg,defctg2ref=extendandjoinchains(defref2ctg,defctg2ref,ref2length,contig2length)
+        logging.debug("Join consecutive chains")
+        defref2ctg,defctg2ref=joinchains(defref2ctg,defctg2ref,ref2length,contig2length)
 
         #add parts of contigs that are not part of a chain
+        logging.debug("Derive unchained sequence")
         addunchained(defref2ctg,defctg2ref,contig2length)
 
     else:
         defctg2ref=ctg2ref
 
-    if args.plot:
-        logging.debug("Plot chains after extend.")
-        plotchains(ctg2mums,defctg2ref,contig2length,ref2length)
+    # if args.plot:
+    #     logging.debug("Plot chains after join.")
+    #     plotchains(ctg2mums,defctg2ref,contig2length,ref2length)
 
     #build graph/fasta for the structural layout of the genome
     for ref in sorted(defref2ctg):
@@ -330,9 +342,11 @@ def transform(args):
 
         if args.split and args.outputtype=='fasta':
             finished=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".fasta",'w')
+        
+        if args.split and args.outputunmapped:
             unplaced=open(args.output+"_"+ref.replace(" ","_").replace("|","").replace("/","").replace(";","").replace(":","")+".unplaced.fasta",'w')
                 
-        if ref=='unchained':
+        if ref=='unchained' or ref=='unplaced':
             continue
         
         logging.debug("Determining %s order for: %s"%(args.order,ref))
@@ -424,7 +438,7 @@ def transform(args):
                     logging.debug("Chains for contigs %s and %s overlap by %d bases."%(pctgname,ctgname,abs(gapsize)))
                 gapsize=args.gapsize
             
-            logging.debug("%d (index on ctg: %d->%d) - Order %s (revcomp=%d,prefstart=%d,prefend=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d,gapsize=%d)"%(i,pci,ci,args.order,revcomp,prefbegin,prefend,refbegin,refend,ctgbegin,ctgend,gapsize))
+            logging.debug("%s %d (index on ctg: %d->%d) - Order %s (revcomp=%d,prefstart=%d,prefend=%d,refstart=%d,refend=%d,ctgstart=%d,ctgend=%d,gapsize=%d)"%(ctgname,i,pci,ci,args.order,revcomp,prefbegin,prefend,refbegin,refend,ctgbegin,ctgend,gapsize))
             
             if args.order=='chains':
                 event=None
@@ -544,6 +558,9 @@ def transform(args):
                     if args.outputtype=='fasta':
                         finished.write("N"*gapsize)
                 
+                assert(contig2length[ctgname]>=0)
+                totseqplaced+=contig2length[ctgname]
+
                 if revcomp:
                     seq=rc(contig2seq[ctgname])
                     if args.outputtype=='fasta':
@@ -574,9 +591,6 @@ def transform(args):
                 assert(gapsize>0)
 
                 l=gapsize+contig2length[ctgname]
-
-                assert(contig2length[ctgname]>=0)
-                totseqplaced+=contig2length[ctgname]
             
                 if args.plot:
                     
@@ -615,6 +629,8 @@ def transform(args):
         
         if args.split and args.outputtype=='fasta':
             finished.close()
+
+        if args.outputunmapped:
             unplaced.close()
         
         logging.debug("Done.")
@@ -623,6 +639,7 @@ def transform(args):
             ax.set_yticks(yticks)
             ax.set_yticklabels(yticklabels)
             plt.xlim(0,ref2length[ref])
+            plt.xlabel(ref)
             if args.interactive:
                 plt.show()
             else:
@@ -635,37 +652,50 @@ def transform(args):
 
         if args.order=="chains":#reconnect the chains based on their layout in the draft assembly
             sortednodes=sorted([n for n in G.nodes() if type(n)!=str])
-            pn=sortednodes[0]
 
-            startnode=uuid.uuid4().hex
-            G.graph['startnodes'].append(startnode)
-            G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True)
-            G.add_edge(startnode,pn,ofrom="+",oto="+" if pn[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+            if len(sortednodes)!=0:
+                pn=sortednodes[0]
 
-            if len(sortednodes)>1:
-                for n in sortednodes[1:]:
-                    if n[0]!=pn[0]:
-                        startnode=uuid.uuid4().hex
-                        G.graph['startnodes'].append(startnode)
-                        G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+n[0]]:0},endpoint=True)
-                        G.add_edge(startnode,n,ofrom="+",oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+n[0]]})
+                startnode=uuid.uuid4().hex
+                G.graph['startnodes'].append(startnode)
+                G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True)
+                G.add_edge(startnode,pn,ofrom="+",oto="+" if pn[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
 
-                        endnode=uuid.uuid4().hex
-                        G.graph['endnodes'].append(endnode)
-                        G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
-                        G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
-                    else:
-                        ctgswithevents.add("*"+base+"_"+pn[0])
-                        G.add_edge(pn,n,ofrom="+" if pn[3]==0 else '-',oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
-                    pn=n
+                if len(sortednodes)>1:
+                    for n in sortednodes[1:]:
+                        if n[0]!=pn[0]:
+                            startnode=uuid.uuid4().hex
+                            G.graph['startnodes'].append(startnode)
+                            G.add_node(startnode,offsets={G.graph['path2id']["*"+base+"_"+n[0]]:0},endpoint=True)
+                            G.add_edge(startnode,n,ofrom="+",oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+n[0]]})
 
-            endnode=uuid.uuid4().hex
-            G.graph['endnodes'].append(endnode)
-            G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
-            G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+                            endnode=uuid.uuid4().hex
+                            G.graph['endnodes'].append(endnode)
+                            G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
+                            G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+                        else:
+                            ctgswithevents.add("*"+base+"_"+pn[0])
+                            G.add_edge(pn,n,ofrom="+" if pn[3]==0 else '-',oto="+" if n[3]==0 else '-',paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
+                        pn=n
+
+                endnode=uuid.uuid4().hex
+                G.graph['endnodes'].append(endnode)
+                G.add_node(endnode,offsets={G.graph['path2id']["*"+base+"_"+pn[0]]:0},endpoint=True) #TODO: correct offset?
+                G.add_edge(pn,endnode,ofrom="+" if pn[3]==0 else '-',oto="+",paths={G.graph['path2id']["*"+base+"_"+pn[0]]})
 
         if not args.allcontigs:
             G.graph['paths']=[sample for sample in G.graph['paths'] if sample in ctgswithevents or not sample.startswith("*")]
+
+    if 'unplaced' in defref2ctg:
+        if len(defref2ctg['unplaced'])>0:
+            logging.info("The contigs could not be placed anywhere on the reference sequence.")
+            for ctgname in defref2ctg['unplaced']:
+                logging.info("%s length=%d"%(ctgname,contig2length[ctgname]))
+                seq=contig2seq[ctgname]
+                if args.outputunmapped:
+                    unplaced.write(">%s\n"%(ctgname))
+                    unplaced.write("%s\n"%seq)
+                totsequnplaced+=len(seq)
 
     if 'unchained' in defref2ctg:
         if len(defref2ctg['unchained'])>0:
@@ -674,15 +704,17 @@ def transform(args):
                 # for start,end,i in defref2ctg['unchained'][name]:
                 for start,end in defref2ctg['unchained'][name]:
                     logging.info("%s%s (start=%d,end=%d,length=%d,total-contig-length=%d)"%('*' if end-start!=contig2length[name] else '', name,start,end,end-start,contig2length[name]))
-                    if args.outputtype=='fasta':
+                    if args.outputunmapped:
                         unplaced.write(">%s[%d:%d]\n"%(name,start,end))
                         unplaced.write("%s\n"%contig2seq[name][start:end])
                     totsequnplaced+=end-start
     
     if not args.split and args.outputtype=='fasta':
         finished.close()
-        unplaced.close()
     
+    if args.outputunmapped:
+        unplaced.close()
+
     if args.outputtype=='graph':
         # write_gfa(G,None,outputfile=os.path.splitext(os.path.basename(args.contigs))[0],paths=True)
         write_gfa(G,None,outputfile=args.output,paths=True)
@@ -702,7 +734,7 @@ def addunchained(defref2ctg,defctg2ref,contig2length):
         if ctg in defctg2ref:
             defctg2ref[ctg].sort(key=lambda c: c[8])
             for ref,revcomp,score,refstart,refend,ctgstart,ctgend,l,ci in defctg2ref[ctg]:
-                logging.debug("Checking %s:%d:%d %d."%(ctg,ctgstart,ctgend,ci))
+                logging.debug("Checking domain %s:%d:%d %d."%(ctg,ctgstart,ctgend,ci))
                 if revcomp:
                     ctgstart,ctgend=ctgend,ctgstart
                 if ctgstart>offset:
@@ -712,17 +744,16 @@ def addunchained(defref2ctg,defctg2ref,contig2length):
                 offset=ctgend
         assert(offset<=contig2length[ctg])
         if offset<contig2length[ctg]:
-            # defref2ctg['unchained'][ctg][offset:contig2length[ctg]]=0
+            logging.debug("Marking %s:%d:%d as unchained."%(ctg,offset,contig2length[ctg]))
             defref2ctg['unchained'][ctg].append((offset,contig2length[ctg]))
 
-def extendandjoinchains(ref2ctg,ctg2ref,ref2length,contig2length):
+def joinchains(ref2ctg,ctg2ref,ref2length,contig2length):
     # extref2ctg={'unchained':dict()}
     extref2ctg={}
     extctg2ref=dict()
 
     for ref in ref2ctg:
         if ref=="unchained":
-            assert(False)
             continue
 
         ref2ctg[ref]=sorted(ref2ctg[ref],key=lambda c: c[4])
@@ -734,40 +765,6 @@ def extendandjoinchains(ref2ctg,ctg2ref,ref2length,contig2length):
             # update=False
             ctgname,revcomp,score,refstart,refend,ctgstart,ctgend,l,ci=chain
             logging.debug("Evaluate chain: %s:%d:%d - %s:%d:%d %d %d"%(ctgname[:10],ctgstart,ctgend,ref[:10],refstart,refend,revcomp,ci))
-
-            #extend first and last chains
-            if (ci==0 or ci==len(ctg2ref[ctgname])-1) and (ri==0 or ri==len(ref2ctg[ref])-1):
-                logging.debug("Trying to extend: %s"%(ctgname))
-
-                if ci==0 and ri==0 and not revcomp:
-                    if ctgstart<refstart:
-                        refstart-=ctgstart
-                    else:
-                        refstart=0
-                    ctgstart=0
-
-                if ci==len(ctg2ref[ctgname])-1 and ri==0 and revcomp:
-                    if refstart>(contig2length[ctgname]-ctgstart):
-                        refstart-=contig2length[ctgname]-ctgstart
-                    else:
-                        refstart=0
-                    ctgstart=contig2length[ctgname]
-
-                if ci==len(ctg2ref[ctgname])-1 and ri==len(ref2ctg[ref])-1 and not revcomp:
-                    if ref2length[ref]>refend+(contig2length[ctgname]-ctgend):
-                        refend+=contig2length[ctgname]-ctgend
-                    else:
-                        refend=ref2length[ref]
-                    ctgend=contig2length[ctgname]
-
-                if ci==0 and ri==len(ref2ctg[ref])-1 and revcomp:
-                    if ref2length[ref]>(refend+ctgstart):
-                        refend+=ctgstart
-                    else:
-                        refend=ref2length[ref]
-                    ctgend=0
-
-                chain=ctgname,revcomp,score,refstart,refend,ctgstart,ctgend,l,ci
 
             if len(extref2ctg[ref])>0:
                 pctgname,prevcomp,pscore,prefstart,prefend,pctgstart,pctgend,pl,pci=extref2ctg[ref][-1]
@@ -810,8 +807,8 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
     for r in results:
         candidatepaths=r.get()
         for path,score,rc,ctgstart,ctgend,refstart,refend in candidatepaths:
-           if len(path)>0:
-               paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
+            if len(path)>0:
+                paths.append((score,ctgstart,ctgend,refstart,refend,ref,rc,path))
     
     if len(paths)==0:
         return paths
@@ -823,62 +820,136 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
     paths=sorted(paths,key=lambda c: c[0],reverse=True) #sort chains by alignment score
     
     selectedpaths=[]
-    #take n-best paths that dont overlap
-    it=IntervalTree()
+    
+    #take n-best paths that dont overlap on the query
+    cit=IntervalTree()
+    rit=IntervalTree()
     for path in paths:
         score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
         
-        logging.debug("Path: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
-        
+        logging.info("Path before update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
+
         if revcomp:
             ctgend,ctgstart=ctgstart,ctgend
+
+        np=[]
+        for mum in p:
+            for start,end,v in rit[mum[0]:mum[0]+mum[2]]:
+                if start<=mum[0] and end>=mum[0]+mum[2]: #contained on ref domain
+                    break
+            else:
+                for start,end,v in cit[mum[1]:mum[1]+mum[2]]:
+                    if start<=mum[1] and end>=mum[1]+mum[2]: #contained on contig domain
+                        break
+                else:
+                    np.append(mum)
+
+        if len(np)==0:
+            logging.info("All mums are contained, skip")
+            continue
+
+        refstart=min([mum[0] for mum in np])
+        refend=max([mum[0]+mum[2] for mum in np])
+        ctgstart=min([mum[1] for mum in np])
+        ctgend=max([mum[1]+mum[2] for mum in np])
+
+        if revcomp:
+            path=score,ctgend,ctgstart,refstart,refend,ref,revcomp,p
+        else:
+            path=score,ctgstart,ctgend,refstart,refend,ref,revcomp,p
+
+        logging.info("Path after update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
         
-        s=it[ctgstart:ctgend]
-        
-        if s==set():
-            it[ctgstart:ctgend]=path
+        s=cit[ctgstart:ctgend]
+        sr=rit[refstart:refend]
+
+        if s==set() and sr==set():
+            cit[ctgstart:ctgend]=path
+            rit[refstart:refend]=path
             selectedpaths.append(path)
         else:
             for start,end,v in s:
-                if start<=ctgstart and end>=ctgend: #allow overlap, not containment
+                if start<=ctgstart and end>=ctgend: #contained on contig domain
+                    logging.info("Chain: %s is contained on contig, skip it."%str(path))
                     break
             else:
-                #update boundaries such that path does not overlap other paths
-                bctgstart=ctgstart
-                bctgend=ctgend
-                assert(ctgstart<ctgend)
-                
-                for start,end,v in s:
-                    assert(start<end)
-                    if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
-                        ctgend=ctgstart
+                for start,end,v in sr:
+                    if start<=refstart and end>=refend: #contained on reference domain
+                        logging.info("Chain: %s is contained on reference, skip it."%str(path))
                         break
-                    if ctgstart<=start: #left overlap, update ctgend
-                        ctgend=start
-                    if ctgend>=end:
-                        ctgstart=end
-                
-                assert(bctgstart!=ctgstart or bctgend!=ctgend) #one of the two has to have been updated
-                
-                assert(ctgend>=ctgstart)
-                if ctgend!=ctgstart:
-                    #update path
-                    if revcomp:
-                        path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p) #note that the reference domain is not updated
-                    else:
-                        path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
+                else:
+                    assert(ctgstart<ctgend)
+                    
+                    for start,end,v in s:
+                        assert(start<end)
+                        if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
+                            ctgend=ctgstart
+                            logging.info("Path %d-%d contains smaller, but better scoring chain %d-%d"%(ctgstart,ctgend,start,end))
+                            break
+                        if ctgstart<=start: #left overlap, update ctgend
+                            logging.info("Update left overlap ctgend was %d, is %d"%(ctgend,start))
+                            if revcomp:
+                                refstart+=ctgend-start
+                            else:
+                                refend-=ctgend-start
+                            ctgend=start
+                        if ctgend>=end:
+                            logging.info("Update right overlap ctgstart was %d, is %d"%(ctgstart,end))
+                            if revcomp:
+                                refend-=end-ctgstart
+                            else:
+                                refstart+=end-ctgstart
+                            ctgstart=end
+                    
+                    assert(refstart<=refend)
+                    sr=rit[refstart:refend]
 
-                    if abs(ctgend-ctgstart)>=mineventsize:
-                        it[ctgstart:ctgend]=path
-                        selectedpaths.append(path)
+                    for start,end,v in sr:
+                        assert(start<end)
+                        if refstart<=start and refend>=end: #chain contains a smaller chain with better score, reduce to a point
+                            refend=refstart
+                            logging.info("Path %d-%d contains smaller, but better scoring chain %d-%d"%(refstart,refend,start,end))
+                            break
+                        if refstart<=start: #left overlap, update ctgend
+                            logging.info("Update left overlap refend was %d, is %d"%(refend,start))
+                            assert(refend-start>0)
+                            if revcomp:
+                                ctgstart+=refend-start
+                            else:
+                                ctgend-=refend-start
+                            refend=start
+                        if refend>=end:
+                            logging.info("Update right overlap refstart was %d, is %d"%(refstart,end))
+                            if revcomp:
+                                ctgend-=end-refstart
+                            else:
+                                ctgstart+=end-refstart
+                            assert(end-refstart>0)
+                            refstart=end
+                    
+                    assert(ctgend>=ctgstart)
+                    assert(refend>=refstart)
+
+                    if ctgend>ctgstart and refend>refstart:
+                        if refend-refstart>mineventsize and ctgend-ctgstart>mineventsize:
+                            if revcomp:
+                                path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p)
+                            else:
+                                path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
+                            cit[ctgstart:ctgend]=path
+                            rit[refstart:refend]=path
+                            selectedpaths.append(path)
     
+    for score,ctgstart,ctgend,refstart,refend,ref,revcomp,p in selectedpaths:
+        logging.info("Path after update: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
+
     paths=sorted(selectedpaths,key=lambda c: c[1] if c[6] else c[2]) #sort by endposition on contig
 
     return paths
 
-def chainstorefence(ctg2mums,contig2length,ref2length,mineventsize=1500,minchainsum=1000,maxmums=15000,nproc=1,extend=True):    
-    # ref2ctg={'unchained':dict()}
-    ref2ctg={}
+def chainstorefence(ctg2mums,contig2length,ref2length,mineventsize=1500,minchainsum=1000,maxmums=15000,nproc=1):    
+    ref2ctg={'unchained':dict()}
+    # ref2ctg={}
     ctg2ref=dict()
     results=dict()
 
@@ -894,19 +965,21 @@ def chainstorefence(ctg2mums,contig2length,ref2length,mineventsize=1500,minchain
         pool.close()
 
     for ctg in ctg2mums:
-        # ref2ctg['unchained'][ctg]=IntervalTree()
+        ref2ctg['unchained'][ctg]=IntervalTree()
         logging.debug("Determining best chains for: %s"%ctg)
         paths=results[ctg].get()
         
         if len(paths)==0:
             logging.info("No valid chains found for contig: %s"%ctg)
-            # ref2ctg['unchained'][ctg][0:contig2length[ctg]]=0
+            ref2ctg['unchained'][ctg][0:contig2length[ctg]]=0
             continue
         
         logging.info("Found %d chains for contig: %s"%(len(paths),ctg))
         offset=0
         for i,path in enumerate(paths):
+            logging.debug("Path %d: %s"%(i,str(path)))
             score,ctgstart,ctgend,refstart,refend,ref,revcomp,chain=path
+
             if revcomp:
                 assert(ctgend<ctgstart)
             else:
@@ -929,14 +1002,16 @@ def chainstorefence(ctg2mums,contig2length,ref2length,mineventsize=1500,minchain
             
             if offset!=ctgstart:
                 logging.debug("%d:%d:%d --> unchained"%(offset,ctgstart,revcomp))
-                # ref2ctg['unchained'][ctg][offset:ctgstart]=i
+                ref2ctg['unchained'][ctg][offset:ctgstart]=i
             logging.debug("%d:%d:%d --> %s:%d:%d"%(ctgstart,ctgend,revcomp,ref,refstart,refend))
+
+            logging.debug("OFFSET:%d"%ctgend)
 
             offset=ctgend
 
         if offset!=contig2length[ctg]:
             assert(offset<contig2length[ctg])
-            # ref2ctg['unchained'][ctg][offset:contig2length[ctg]]=i
+            ref2ctg['unchained'][ctg][offset:contig2length[ctg]]=i
 
     return ref2ctg,ctg2ref
 
@@ -953,8 +1028,7 @@ def map_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,maxmums=
 
 def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,maxmums=15000,nproc=1):
     
-    # ref2ctg={'unplaced':[]}
-    ref2ctg={}
+    ref2ctg={'unplaced':[]}
     ctg2ref=dict()
     results=dict()
 
@@ -973,10 +1047,7 @@ def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,m
     for ctg in ctg2mums:
         paths=results[ctg].get()
         if len(paths)==0:
-            # if 'unplaced' in ref2ctg:
-            #     ref2ctg['unplaced'].append(ctg)
-            # else:
-            #     ref2ctg['unplaced']=[ctg]
+            ref2ctg['unplaced'].append(ctg)
             continue
         
         paths.sort(key=lambda p:p[0],reverse=True) #sort chains by score in descending order, best first
@@ -995,7 +1066,7 @@ def contigstorefence(ctg2mums,contig2length,mineventsize=1500,minchainsum=1000,m
     
     return ref2ctg,ctg2ref
 
-def mapmumstocontig(mums,filtermums=False,mineventsize=1500,minchainsum=1000):
+def mapmumstocontig(mums):#,filtermums=False,mineventsize=1500,minchainsum=1000):
     ctg2mums=dict()
     logging.debug("Mapping %d mums to contigs."%len(mums))
     for mum in mums:
@@ -1013,12 +1084,6 @@ def mapmumstocontig(mums,filtermums=False,mineventsize=1500,minchainsum=1000):
 
         else:
             ctg2mums[ctg]=dict({refchrom : [[refstart,ctgstart,l,o]]})
-    
-    if filtermums:
-        for ctg in ctg2mums:
-            for ref in ctg2mums[ctg]:
-                logging.info("Filtering mums between %s and %s"%(ref,ctg))
-                ctg2mums[ctg][ref]=filtermumsrange(ctg2mums[ctg][ref],mineventsize=mineventsize,minchainsum=minchainsum)#,minchainlength=minchainlength)
     
     return ctg2mums
 
@@ -1078,17 +1143,12 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
     
     return mums
 
-def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,extendlength=20):
+def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,minlocallength=20):
     ctg2extmums=dict()
     for ctg in ctg2mums:
         ctg2extmums[ctg]=dict()
         for ref in ctg2mums[ctg]:
-            ctg2extmums[ctg][ref]=list(ctg2mums[ctg][ref])
-
-            # pstart=0
-            # for refstart,ctgstart,cl,o in sorted(ctg2mums[ctg][ref],key=lambda c: c[1]):
-            #     print ctgstart,cl,ctgstart-pstart
-            #     pstart=ctgstart+cl
+            ctg2extmums[ctg][ref]=list(ctg2mums[ctg][ref]) #copy
 
             for refstart,ctgstart,cl,o in ctg2mums[ctg][ref]:
                 if o==0:
@@ -1101,7 +1161,7 @@ def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,extendlength=20):
                         idx.addsample('ctg')
                         idx.addsequence(subctg)
                         idx.construct()
-                        for l,n,sps in idx.getmums(extendlength):
+                        for l,n,sps in idx.getmums(minlocallength):
                             relrefstart=sps[0][1]+refstart-len(subref)
                             relctgstart=sps[1][1]-(len(subref)+1)+ctgstart-len(subctg)
                             mum=(relrefstart, relctgstart, l, o)
@@ -1116,7 +1176,7 @@ def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,extendlength=20):
                         idx.addsample('ctg')
                         idx.addsequence(subctg)
                         idx.construct()
-                        for l,n,sps in idx.getmums(extendlength):
+                        for l,n,sps in idx.getmums(minlocallength):
                             relrefstart=sps[0][1]+refstart+cl
                             relctgstart=sps[1][1]+ctgstart+cl-(len(subref)+1)
                             mum=(relrefstart, relctgstart, l, o)
@@ -1132,7 +1192,7 @@ def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,extendlength=20):
                         idx.addsample('ctg')
                         idx.addsequence(subctg)
                         idx.construct()
-                        for l,n,sps in idx.getmums(extendlength):
+                        for l,n,sps in idx.getmums(minlocallength):
                             relrefstart=sps[0][1]+refstart-len(subref)
                             relctgstart=ctgstart+cl + (len(subctg)-(sps[1][1]-(len(subref)+1))-l)
                             mum=(relrefstart, relctgstart, l, o)
@@ -1147,12 +1207,11 @@ def extend(ctg2mums,ctg2seq,ref2seq,maxextend=200,extendlength=20):
                         idx.addsample('ctg')
                         idx.addsequence(subctg)
                         idx.construct()
-                        for l,n,sps in idx.getmums(extendlength):
+                        for l,n,sps in idx.getmums(minlocallength):
                             relrefstart=sps[0][1]+refstart+cl
                             relctgstart=(ctgstart-len(subctg)) + (len(subctg)-(sps[1][1]-(len(subref)+1))-l)
                             mum=(relrefstart, relctgstart, l, o)
                             ctg2extmums[ctg][ref].append(mum)
-
 
     return ctg2extmums
 
@@ -1227,199 +1286,6 @@ def clustermumsbydiagonal(ctg2mums,maxdist=90,minclustsize=65):
     logging.info("Clustered %d mums into %d clusters."%(before,after))
     
     return ctg2clusters
-
-def filtercontainedmumsboth(mums):
-    #filter mums before trying to form chains
-    before=len(mums)
-    mums.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmums=[]
-    prefstart=0
-    prefend=0
-    for mem in mums:
-        refstart=mem[0]
-        refend=mem[0]+mem[2]
-        if refend<prefend and prefstart<refstart: #ref contained
-            filteredmums.append(mem+[1])
-            continue
-        else:
-            filteredmums.append(mem+[0])
-            prefend=refend
-            prefstart=prefstart
-    
-    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
-    mums=[]
-    pqrystart=0
-    pqryend=0
-    for mem in filteredmums:
-        qrystart=mem[1]
-        qryend=mem[1]+mem[2]
-        if qryend<pqryend and pqrystart<qrystart and mem[5]==1: #qry and ref contained
-            continue
-        else:
-            mums.append(mem[:5])
-            pqryend=qryend
-            pqrystart=pqrystart
-    
-    after=len(mums)
-    
-    logging.info("Filtered mums from %d to %d."%(before,after))
-    
-    return mums
-
-def filtercontainedmumsratio(mums,ratio=.1):
-    #filter mums before trying to form chains
-
-    mums.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmums=[]
-    prefstart=0
-    prefend=0
-    for mem in mums:
-        refstart=mem[0]
-        refend=mem[0]+mem[2]
-        if refend<prefend and prefstart<refstart: #ref contained
-            if float(refend-refstart)/float(prefend-prefstart)<ratio:
-                continue
-
-        filteredmums.append(mem)
-        prefend=refend
-        prefstart=refstart
-        pmem=mem
-    
-    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
-    mums=[]
-    pqrystart=0
-    pqryend=0
-    for mem in filteredmums:
-        qrystart=mem[1]
-        qryend=mem[1]+mem[2]
-        if qryend<pqryend and pqrystart<qrystart: #qry contained
-            if float(qryend-qrystart)/float(pqryend-pqrystart)<ratio:
-                continue
-        mums.append(mem)
-        pqryend=qryend
-        pqrystart=qrystart
-        pmem=mem
-    
-    return mums
-
-def filtermumsrange(mums,mineventsize=1500,minchainsum=1000):#minchainlength=1500):
-    #filter mums before trying to form chains
-    
-    logging.debug("Number of mums before filtering: %d"%len(mums))
-
-    mums.sort(key=lambda m: m[0]) #sort by reference position
-
-    filteredmums=[]
-
-    for i in xrange(len(mums)):
-        if mums[i][2]>=minchainsum:#minchainlength:
-            filteredmums.append(mums[i])
-            continue
-        
-        if len(mums)<=1:
-            continue
-        
-        refstart=mums[i][0]
-        refend=mums[i][0]+mums[i][2]
-        
-        if i==0: #first
-            nrefstart=mums[i+1][0]
-            nrefend=mums[i+1][0]+mums[i+1][2]
-            if abs(refend-nrefstart)>mineventsize:
-                continue
-            else:
-                filteredmums.append(mums[i])
-        elif i==len(mums)-1: #last
-            prefstart=mums[i-1][0]
-            prefend=mums[i-1][0]+mums[i-1][2]
-            if abs(refstart-prefend)>mineventsize:
-                continue
-            else:
-                filteredmums.append(mums[i])
-        else:
-            prefstart=mums[i-1][0]
-            prefend=mums[i-1][0]+mums[i-1][2]
-            nrefstart=mums[i+1][0]
-            nrefend=mums[i+1][0]+mums[i+1][2]
-            if abs(refstart-prefend)>mineventsize and abs(refend-nrefstart)>mineventsize:
-                continue
-            else:
-                filteredmums.append(mums[i])
-    
-    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
-    mums=[]
-
-    for i in xrange(len(filteredmums)):
-        if filteredmums[i][2]>=minchainsum:#minchainlength:
-            mums.append(filteredmums[i])
-            continue
-        
-        if len(filteredmums)<=1:
-            continue
-        
-        qrystart=filteredmums[i][1]
-        qryend=filteredmums[i][1]+filteredmums[i][2]
-        
-        if i==0: #first
-            nqrystart=filteredmums[i+1][1]
-            nqryend=filteredmums[i+1][1]+filteredmums[i+1][2]
-            if abs(qryend-nqrystart)>mineventsize:
-                continue
-            else:
-                mums.append(filteredmums[i])
-        elif i==len(filteredmums)-1: #last
-            pqrystart=filteredmums[i-1][1]
-            pqryend=filteredmums[i-1][1]+filteredmums[i-1][2]
-            if abs(qrystart-pqryend)>mineventsize:
-                continue
-            else:
-                mums.append(filteredmums[i])
-        else:
-            pqrystart=filteredmums[i-1][1]
-            pqryend=filteredmums[i-1][1]+filteredmums[i-1][2]
-            nqrystart=filteredmums[i+1][1]
-            nqryend=filteredmums[i+1][1]+filteredmums[i+1][2]
-            if abs(qrystart-pqryend)>mineventsize and abs(qryend-nqrystart)>mineventsize:
-                continue
-            else:
-                mums.append(filteredmums[i])
-    
-    logging.debug("Number of mums after filtering: %d"%len(mums))
-    
-    return mums
-
-def filtercontainedmums(mums):
-    #filter mums before trying to form chains
-
-    mums.sort(key=lambda m: m[0]) #sort by reference position
-    filteredmums=[]
-    prefstart=0
-    prefend=0
-    for mem in mums:
-        refstart=mem[0]
-        refend=mem[0]+mem[2]
-        if refend<prefend and prefstart<refstart: #ref contained
-            continue
-        else:
-            filteredmums.append(mem)
-            prefend=refend
-            prefstart=prefstart
-    
-    filteredmums.sort(key=lambda m: m[1]) #sort by qry position
-    mums=[]
-    pqrystart=0
-    pqryend=0
-    for mem in filteredmums:
-        qrystart=mem[1]
-        qryend=mem[1]+mem[2]
-        if qryend<pqryend and pqrystart<qrystart: #qry contained
-            continue
-        else:
-            mums.append(mem)
-            pqryend=qryend
-            pqrystart=pqrystart
-
-    return mums
 
 def bestctgpath(ctgs):
     ctgs.sort(key=lambda c: c[3])
@@ -1508,188 +1374,140 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
     paths=[]
     
     #extract the best path, remove mums that are part of or start/end within the range of the best path, until no more mums remain
-    while len(mums)>0:
+    # while len(mums)>0:
         
-        mums.sort(key=lambda mem: mem[0]+mem[2]) #sort by reference position
+    mums.sort(key=lambda mem: mem[0]+mem[2]) #sort by reference position
+    
+    init=(None, None, 0, 0, 0, 0)
+    link=dict()
+    score=dict({init:0})
+    active=[]
+    processed=[]
+    start=init
+    end=None
+    
+    endpoints=[]
+    rcendpoints=[]
+    pointtomem=dict()
+    for mem in mums:
+        # if mem[4]==0:
+        if mem[3]==0:
+            p=(mem[0]+mem[2],mem[1]+mem[2])
+            endpoints.append(p)
+            pointtomem[p]=mem
+        else:
+            p=(mem[0]+mem[2],mem[1])
+            rcendpoints.append(p)
+            pointtomem[p]=mem
+    
+    #build kdtrees
+    memtree=kdtree(endpoints,2)
+    rcmemtree=kdtree(rcendpoints,2)
+    maxscore=0
+    
+    for mem in mums:
+        best=init
+        w=wscore*mem[2]
         
-        init=(None, None, 0, 0, 0, 0)
-        link=dict()
-        score=dict({init:0})
-        active=[]
-        processed=[]
-        start=init
-        end=None
+        # if mem[4]==1:
+        if mem[3]==1:
+            frompoint=(mem[0]-mineventsize, mem[1])
+            topoint=(mem[0]+mem[2]-1, mem[1]+(mem[2]-1)+mineventsize)
+            assert(frompoint[0]<topoint[0])
+            assert(frompoint[1]<topoint[1])
+            assert((topoint[1]-frompoint[1])==(topoint[0]-frompoint[0]))
+            subactive=[pointtomem[p] for p in range_search(rcmemtree,frompoint,topoint)]
+        else:
+            frompoint=(mem[0]-mineventsize, mem[1]-mineventsize)
+            topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]-1)
+            assert(frompoint[0]<topoint[0])
+            assert(frompoint[1]<topoint[1])
+            assert((topoint[1]-frompoint[1])==(topoint[0]-frompoint[0]))
+            subactive=[pointtomem[p] for p in range_search(memtree,frompoint,topoint)]
         
-        endpoints=[]
-        rcendpoints=[]
-        pointtomem=dict()
-        for mem in mums:
-            # if mem[4]==0:
-            if mem[3]==0:
-                p=(mem[0]+mem[2],mem[1]+mem[2])
-                endpoints.append(p)
-                pointtomem[p]=mem
-            else:
-                p=(mem[0]+mem[2],mem[1])
-                rcendpoints.append(p)
-                pointtomem[p]=mem
-        
-        #build kdtrees
-        memtree=kdtree(endpoints,2)
-        rcmemtree=kdtree(rcendpoints,2)
-        maxscore=0
-        
-        for mem in mums:
-            best=init
-            w=wscore*mem[2]
-            
-            # if mem[4]==1:
+        subactive.sort(key=lambda s: score[tuple(s)], reverse=True)
+
+        for amem in subactive:
+            if score[tuple(amem)]+(wscore*mem[2])<w:
+                break
+
+            #calculate score of connecting to active point
             if mem[3]==1:
-                frompoint=(mem[0]-mineventsize, mem[1])
-                topoint=(mem[0]+mem[2]-1, mem[1]+(mem[2]-1)+mineventsize)
-                assert(frompoint[0]<topoint[0])
-                assert(frompoint[1]<topoint[1])
-                assert((topoint[1]-frompoint[1])==(topoint[0]-frompoint[0]))
-                subactive=[pointtomem[p] for p in range_search(rcmemtree,frompoint,topoint)]
+                p1=(mem[0], mem[1]+mem[2])
+                p2=(amem[0]+amem[2], amem[1])
+                penalty=gapcost(p1,p2)
+                tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
+                if tmpw>w:
+                    w=tmpw
+                    best=amem
             else:
-                frompoint=(mem[0]-mineventsize, mem[1]-mineventsize)
-                topoint=(mem[0]+mem[2]-1, mem[1]+mem[2]-1)
-                assert(frompoint[0]<topoint[0])
-                assert(frompoint[1]<topoint[1])
-                assert((topoint[1]-frompoint[1])==(topoint[0]-frompoint[0]))
-                subactive=[pointtomem[p] for p in range_search(memtree,frompoint,topoint)]
-            
-            subactive.sort(key=lambda s: score[tuple(s)], reverse=True)
-
-            for amem in subactive:
-                if score[tuple(amem)]+(wscore*mem[2])<w:
-                    break
-
-                #calculate score of connecting to active point
-                if mem[3]==1:
-                    p1=(mem[0], mem[1]+mem[2])
-                    p2=(amem[0]+amem[2], amem[1])
-                    penalty=gapcost(p1,p2)
-                    tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
-                    if tmpw>w:
-                        w=tmpw
-                        best=amem
-                else:
-                    p1=(amem[0]+amem[2], amem[1]+amem[2])
-                    p2=(mem[0], mem[1])
-                    penalty=gapcost(p1,p2)
-                    tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
-                    if tmpw>w:
-                        w=tmpw
-                        best=amem
-            
-            link[tuple(mem)]=tuple(best)
-            score[tuple(mem)]=w
-            
-            if w>maxscore:
-                maxscore=w
-                end=mem
+                p1=(amem[0]+amem[2], amem[1]+amem[2])
+                p2=(mem[0], mem[1])
+                penalty=gapcost(p1,p2)
+                tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
+                if tmpw>w:
+                    w=tmpw
+                    best=amem
         
+        link[tuple(mem)]=tuple(best)
+        score[tuple(mem)]=w
+        
+        if w>maxscore:
+            maxscore=w
+            end=tuple(mem)
+    
+    while len(link)!=0:
         path=[]
         o=end[3]
 
         while end!=start:
-            # assert(o==end[4])
+            tmp=tuple(end)
             assert(o==end[3])
-            path.append(tuple(end))
-            end=link[tuple(end)]
+            path.append(tmp)
+            end=link[tmp]
+            del link[tmp] #remove edge
+            del score[tmp] #remove node
+
+            if end not in link:
+                break
         
-        if len(path)!=0:
-            refstart=path[-1][0]
-            refend=path[0][0]+path[0][2]
-            
-            if o==1:
-                ctgstart=path[-1][1]+path[-1][2]
-                ctgend=path[0][1]
-            else:
-                ctgstart=path[-1][1]
-                ctgend=path[0][1]+path[0][2]
-            
-            assert(refend>refstart)
-            
-            if not all: #just return first best path
-                logging.debug("Best path contains %d anchors (refstart=%d, refend=%d)."%(len(path),refstart,refend))
-                return [(path,maxscore,o,ctgstart,ctgend,refstart,refend)]
-
-            chainsum=sum([m[2] for m in path])
-            if chainsum>=minchainsum:
-                paths.append((path,maxscore,o,ctgstart,ctgend,refstart,refend))
-                logging.debug("Added path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart))
-            else:
-                logging.debug("Skipping path consisting of %d mums, from ref:%d:%d to ctg:%d:%d with orientation %d with score %d and length %d and sum %d (minchainsum=%d)."%(len(path),refstart,refend,ctgstart,ctgend,o,maxscore,refend-refstart,chainsum,minchainsum))
-                return paths
-            
-            if o==1:
-                assert(ctgstart>ctgend)
-                ctgstart,ctgend=ctgend,ctgstart #flip
-            
-            #TODO: can be sped up by looking up mums from kdtree!
-            umums=[]
-            for mem in mums:
-                
-                #filter mums that were contained in the extracted chain
-                if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
-                    continue
-
-                if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
-                    continue
-                
-                #update mums that were overlapping the ends of the chain, such that we obtain a non-overlapping segmentation of the query sequence
-                
-                #update left overlapping reference
-                #on reference
-                if mem[0]<refstart and mem[0]+mem[2]>refstart:
-                    # mem=(mem[0],mem[1],refstart-mem[0],mem[3],mem[4])
-                    # print "update left overlapping reference",mem,(mem[0],mem[1],refstart-mem[0],mem[3])
-                    mem=(mem[0],mem[1],refstart-mem[0],mem[3])
-                    #check if now it is contained on ctg domain of the chain
-                    if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
-                        continue
-                    
-                #on contig
-                if mem[1]<ctgstart and mem[1]+mem[2]>ctgstart:
-                    # mem=(mem[0],mem[1],ctgstart-mem[1],mem[3],mem[4])
-                    # print "update left overlapping ctg",mem,(mem[0],mem[1],ctgstart-mem[1],mem[3])
-                    mem=(mem[0],mem[1],ctgstart-mem[1],mem[3])
-                    #check if now it is contained on reference domain of the chain
-                    if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
-                        continue
-                    
-                #update right overlapping
-                #on reference
-                if mem[0]<refend and mem[0]+mem[2]>refend:
-                    t=refend-mem[0]
-                    # mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3],mem[4])
-                    # print "update right overlapping ref",mem,(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
-                    mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
-                    #check if now it is contained on ctg domain of the chain
-                    if (mem[1]>=ctgstart and mem[1]+mem[2]<=ctgend):
-                        continue
-
-                #on contig
-                if mem[1]<ctgend and mem[1]+mem[2]>ctgend:
-                    t=ctgend-mem[1]
-                    # mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3],mem[4])
-                    # print "update right overlapping ctg",mem,(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
-                    mem=(mem[0]+t,mem[1]+t,mem[2]-t,mem[3])
-                    #check if now it is contained on reference domain of the chain
-                    if (mem[0]>=refstart and mem[0]+mem[2]<=refend):
-                        continue
-                
-                assert(mem[2]>0)
-                
-                umums.append(mem)
-
-            mums=umums
+        logging.info("Extracted path of length: %d (in mums) %d (sum of mums) %d (on ref in bp)"%(len(path),sum([m[2] for m in path]),(path[0][0]+path[0][2])-path[-1][0]))
+        
+        # paths.append(path)
+        refstart=path[-1][0]
+        refend=path[0][0]+path[0][2]
+        
+        if o==1:
+            ctgstart=path[-1][1]+path[-1][2]
+            ctgend=path[0][1]
         else:
+            ctgstart=path[-1][1]
+            ctgend=path[0][1]+path[0][2]
+
+        if sum([m[2] for m in path]) < minchainsum:
             break
+        
+        paths.append((path,maxscore,o,ctgstart,ctgend,refstart,refend))
+
+        if not all: #just return first best path
+            return paths
+
+        mems=sorted([mem for mem in link],key=lambda m: m[0])
+        
+        maxscore=None
+        score=dict()
+        for mem in mems:
+            if link[mem] not in score:
+                score[mem]=mem[2]
+                link[mem]=start
+            else:
+                score[mem]=mem[2]+score[link[mem]]
+
+            if maxscore==None or score[mem]>maxscore:
+                maxscore=score[mem]
+                end=mem
     
-    logging.debug("Detected number of chains: %d."%len(paths))
+    logging.info("Detected number of chains: %d."%len(paths))
     
     return paths
 
