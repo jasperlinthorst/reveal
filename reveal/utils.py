@@ -23,13 +23,15 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
     gapseq=""
     sub=0
-    ntract=0
     with open(fn,'r') as ff:
         for line in ff:
             if line.startswith(">"):
                 if seq!="":
-                    yield name,seq
-                    sub=0
+                    if cutN>0:
+                        yield name+"_"+str(sub),seq
+                        sub=0
+                    else:
+                        yield name,seq
                 name=line.rstrip().replace(">","").replace("\t","")
                 seq=""
             else:
