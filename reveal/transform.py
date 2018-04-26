@@ -827,7 +827,7 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
     for path in paths:
         score,ctgstart,ctgend,refstart,refend,ref,revcomp,p=path
         
-        logging.info("Path before update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
+        logging.debug("Path before update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
 
         if revcomp:
             ctgend,ctgstart=ctgstart,ctgend
@@ -845,7 +845,7 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                     np.append(mum)
 
         if len(np)==0:
-            logging.info("All mums are contained, skip")
+            logging.debug("All mums are contained, skip")
             continue
 
         refstart=min([mum[0] for mum in np])
@@ -858,8 +858,9 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
         else:
             path=score,ctgstart,ctgend,refstart,refend,ref,revcomp,p
 
-        logging.info("Path after update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
-        
+        logging.debug("Path after update mums: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
+        assert(ctgstart<ctgend)
+
         s=cit[ctgstart:ctgend]
         sr=rit[refstart:refend]
 
@@ -870,48 +871,46 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
         else:
             for start,end,v in s:
                 if start<=ctgstart and end>=ctgend: #contained on contig domain
-                    logging.info("Chain: %s is contained on contig, skip it."%str(path))
+                    logging.debug("Chain: %s is contained on contig, skip it."%str(path))
                     break
             else:
                 for start,end,v in sr:
                     if start<=refstart and end>=refend: #contained on reference domain
-                        logging.info("Chain: %s is contained on reference, skip it."%str(path))
+                        logging.debug("Chain: %s is contained on reference, skip it."%str(path))
                         break
                 else:
-                    assert(ctgstart<ctgend)
-                    
                     for start,end,v in s:
-                        assert(start<end)
                         if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
+                            logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(ctgstart,ctgend,start,end))
                             ctgend=ctgstart
-                            logging.info("Path %d-%d contains smaller, but better scoring chain %d-%d"%(ctgstart,ctgend,start,end))
                             break
                         if ctgstart<=start: #left overlap, update ctgend
-                            logging.info("Update left overlap ctgend was %d, is %d"%(ctgend,start))
+                            logging.debug("Update left overlap ctgend was %d, is %d"%(ctgend,start))
                             if revcomp:
                                 refstart+=ctgend-start
                             else:
                                 refend-=ctgend-start
                             ctgend=start
                         if ctgend>=end:
-                            logging.info("Update right overlap ctgstart was %d, is %d"%(ctgstart,end))
+                            logging.debug("Update right overlap ctgstart was %d, is %d"%(ctgstart,end))
                             if revcomp:
                                 refend-=end-ctgstart
                             else:
                                 refstart+=end-ctgstart
                             ctgstart=end
                     
-                    assert(refstart<=refend)
+                    logging.debug("Updated refstart=%d, refend=%d"%(refstart,refend))
+                    assert(refend>=refstart)
+
                     sr=rit[refstart:refend]
 
                     for start,end,v in sr:
-                        assert(start<end)
                         if refstart<=start and refend>=end: #chain contains a smaller chain with better score, reduce to a point
+                            logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(refstart,refend,start,end))
                             refend=refstart
-                            logging.info("Path %d-%d contains smaller, but better scoring chain %d-%d"%(refstart,refend,start,end))
                             break
                         if refstart<=start: #left overlap, update ctgend
-                            logging.info("Update left overlap refend was %d, is %d"%(refend,start))
+                            logging.debug("Update left overlap refend was %d, is %d"%(refend,start))
                             assert(refend-start>0)
                             if revcomp:
                                 ctgstart+=refend-start
@@ -919,16 +918,16 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                                 ctgend-=refend-start
                             refend=start
                         if refend>=end:
-                            logging.info("Update right overlap refstart was %d, is %d"%(refstart,end))
+                            logging.debug("Update right overlap refstart was %d, is %d"%(refstart,end))
+                            assert(end-refstart>0)
                             if revcomp:
                                 ctgend-=end-refstart
                             else:
                                 ctgstart+=end-refstart
-                            assert(end-refstart>0)
                             refstart=end
                     
+                    logging.debug("Updated ctgstart=%d, ctgend=%d."%(ctgstart,ctgend))
                     assert(ctgend>=ctgstart)
-                    assert(refend>=refstart)
 
                     if ctgend>ctgstart and refend>refstart:
                         if refend-refstart>mineventsize and ctgend-ctgstart>mineventsize:
@@ -941,7 +940,7 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                             selectedpaths.append(path)
     
     for score,ctgstart,ctgend,refstart,refend,ref,revcomp,p in selectedpaths:
-        logging.info("Path after update: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
+        logging.debug("Path after update: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
 
     paths=sorted(selectedpaths,key=lambda c: c[1] if c[6] else c[2]) #sort by endposition on contig
 
