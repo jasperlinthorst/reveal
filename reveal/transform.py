@@ -879,65 +879,69 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                         logging.debug("Chain: %s is contained on reference, skip it."%str(path))
                         break
                 else:
-                    for start,end,v in s:
-                        if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
-                            logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(ctgstart,ctgend,start,end))
-                            ctgend=ctgstart
-                            break
-                        if ctgstart<=start: #left overlap, update ctgend
-                            logging.debug("Update left overlap ctgend was %d, is %d"%(ctgend,start))
-                            if revcomp:
-                                refstart+=ctgend-start
-                            else:
-                                refend-=ctgend-start
-                            ctgend=start
-                        if ctgend>=end:
-                            logging.debug("Update right overlap ctgstart was %d, is %d"%(ctgstart,end))
-                            if revcomp:
-                                refend-=end-ctgstart
-                            else:
-                                refstart+=end-ctgstart
-                            ctgstart=end
-                    
-                    logging.debug("Updated refstart=%d, refend=%d"%(refstart,refend))
-                    assert(refend>=refstart)
+                    if len(s)<=2 and len(sr)<=2:
 
-                    sr=rit[refstart:refend]
+                        for start,end,v in s:
+                            if ctgstart<=start and ctgend>=end: #chain contains a smaller chain with better score, reduce to a point
+                                logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(ctgstart,ctgend,start,end))
+                                ctgend=ctgstart
+                                break
+                            if ctgstart<=start: #left overlap, update ctgend
+                                logging.debug("Update left overlap ctgend was %d, is %d"%(ctgend,start))
+                                if revcomp:
+                                    refstart+=ctgend-start
+                                else:
+                                    refend-=ctgend-start
+                                ctgend=start
+                            if ctgend>=end:
+                                logging.debug("Update right overlap ctgstart was %d, is %d"%(ctgstart,end))
+                                if revcomp:
+                                    refend-=end-ctgstart
+                                else:
+                                    refstart+=end-ctgstart
+                                ctgstart=end
+                        else:
 
-                    for start,end,v in sr:
-                        if refstart<=start and refend>=end: #chain contains a smaller chain with better score, reduce to a point
-                            logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(refstart,refend,start,end))
-                            refend=refstart
-                            break
-                        if refstart<=start: #left overlap, update ctgend
-                            logging.debug("Update left overlap refend was %d, is %d"%(refend,start))
-                            assert(refend-start>0)
-                            if revcomp:
-                                ctgstart+=refend-start
-                            else:
-                                ctgend-=refend-start
-                            refend=start
-                        if refend>=end:
-                            logging.debug("Update right overlap refstart was %d, is %d"%(refstart,end))
-                            assert(end-refstart>0)
-                            if revcomp:
-                                ctgend-=end-refstart
-                            else:
-                                ctgstart+=end-refstart
-                            refstart=end
-                    
-                    logging.debug("Updated ctgstart=%d, ctgend=%d."%(ctgstart,ctgend))
-                    assert(ctgend>=ctgstart)
+                            logging.debug("Updated refstart=%d, refend=%d"%(refstart,refend))
+                            assert(refend>=refstart)
 
-                    if ctgend>ctgstart and refend>refstart:
-                        if refend-refstart>mineventsize and ctgend-ctgstart>mineventsize:
-                            if revcomp:
-                                path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p)
+                            sr=rit[refstart:refend]
+
+                            for start,end,v in sr:
+                                if refstart<=start and refend>=end: #chain contains a smaller chain with better score, reduce to a point
+                                    logging.debug("Path %d-%d contains smaller, but better scoring chain %d-%d"%(refstart,refend,start,end))
+                                    refend=refstart
+                                    break
+                                if refstart<=start: #left overlap, update ctgend
+                                    logging.debug("Update left overlap refend was %d, is %d"%(refend,start))
+                                    assert(refend-start>0)
+                                    if revcomp:
+                                        ctgstart+=refend-start
+                                    else:
+                                        ctgend-=refend-start
+                                    refend=start
+                                if refend>=end:
+                                    logging.debug("Update right overlap refstart was %d, is %d"%(refstart,end))
+                                    assert(end-refstart>0)
+                                    if revcomp:
+                                        ctgend-=end-refstart
+                                    else:
+                                        ctgstart+=end-refstart
+                                    refstart=end
+                                logging.debug("Updated ctgstart=%d, ctgend=%d."%(ctgstart,ctgend))
                             else:
-                                path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
-                            cit[ctgstart:ctgend]=path
-                            rit[refstart:refend]=path
-                            selectedpaths.append(path)
+                                
+                                assert(ctgend>=ctgstart)
+
+                                if ctgend>ctgstart and refend>refstart:
+                                    if refend-refstart>mineventsize and ctgend-ctgstart>mineventsize:
+                                        if revcomp:
+                                            path=(score,ctgend,ctgstart,refstart,refend,ref,revcomp,p)
+                                        else:
+                                            path=(score,ctgstart,ctgend,refstart,refend,ref,revcomp,p)
+                                        cit[ctgstart:ctgend]=path
+                                        rit[refstart:refend]=path
+                                        selectedpaths.append(path)
     
     for score,ctgstart,ctgend,refstart,refend,ref,revcomp,p in selectedpaths:
         logging.debug("Path after update: ctg:%d:%d - ref:%s:%d:%d (%d) with score %d"%(ctgstart,ctgend,ref,refstart,refend,revcomp,score))
