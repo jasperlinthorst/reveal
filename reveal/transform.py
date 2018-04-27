@@ -900,6 +900,11 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                                 else:
                                     refstart+=end-ctgstart
                                 ctgstart=end
+                            
+                            if ctgend-ctgstart<mineventsize:
+                                break
+                            if refend-refstart<mineventsize:
+                                break
                         else:
 
                             logging.debug("Updated refstart=%d, refend=%d"%(refstart,refend))
@@ -929,6 +934,11 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
                                         ctgstart+=end-refstart
                                     refstart=end
                                 logging.debug("Updated ctgstart=%d, ctgend=%d."%(ctgstart,ctgend))
+
+                                if ctgend-ctgstart<mineventsize:
+                                    break
+                                if refend-refstart<mineventsize:
+                                    break
                             else:
                                 
                                 assert(ctgend>=ctgstart)
