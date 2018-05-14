@@ -311,22 +311,27 @@ def variants_cmd(args):
             else:
                 if args.reference in G.node[v]['offsets']:
                     cds=args.reference
-                else:
-                    for p in G.node[v]['offsets']:
-                        if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
-                            cds=p
-                            break
-                    for p in G.node[u]['offsets']:
-                        if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
-                            cdsu=p
-                            break
+                
+                vcontigid=None
+                for p in G.node[v]['offsets']:
+                    if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
+                        cds=p
+                    else:
+                        vcontigid=p
+
+                ucontigid=None
+                for p in G.node[u]['offsets']:
+                    if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
+                        cdsu=p
+                    else:
+                        ucontigid=p
 
                 minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
                 sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),minflank,
                                                                     v,
                                                                     u,
-                                                                    G.node[v]['seq'][-20:] if v in G else '-',
-                                                                    G.node[u]['seq'][:20] if u in G else '-',
+                                                                    G.graph['id2path'][ucontigid] if ucontigid!=None else "N/A",
+                                                                    G.graph['id2path'][vcontigid] if vcontigid!=None else "N/A",
                                                                     'struct_inv' if d['ofrom']!=d['oto'] else 'struct',
                                                                     G.graph['id2path'][cds]+" <--> "+G.graph['id2path'][cdsu]))
                 for sample in gori:
