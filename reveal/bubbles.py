@@ -243,7 +243,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tminflanksize\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos\tsource_size\tsink_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -283,13 +283,16 @@ def variants_cmd(args):
             if minflank<args.minflank:
                 continue
 
+            sourcelen=len(G.node[v.source]['seq'])
+            sinklen=len(G.node[v.sink]['seq'])
+
             genotypestr=",".join(v.genotypes)
 
             if args.nogaps:
                 if 'N' in genotypestr:
                     continue
 
-            sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],minflank,
+            sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],sourcelen,sinklen,
                                                                     v.source if type(v.source)!=str else '<start>',
                                                                     v.sink if type(v.sink)!=str else '<end>',
                                                                     G.node[v.source]['seq'][-20:] if v.source in G else '-',
@@ -327,7 +330,13 @@ def variants_cmd(args):
                         ucontigid=p
 
                 minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
-                sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),minflank,
+                sourcelen=len(G.node[v]['seq'])
+                sinklen=len(G.node[u]['seq'])
+                
+                if minflank<args.minflank:
+                    continue
+
+                sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),sourcelen,sinklen,
                                                                     v,
                                                                     u,
                                                                     G.graph['id2path'][ucontigid] if ucontigid!=None else "N/A",
