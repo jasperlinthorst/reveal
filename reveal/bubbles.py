@@ -288,7 +288,7 @@ def variants_cmd(args):
             if args.nogaps:
                 if 'N' in genotypestr:
                     continue
-            
+
             sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],minflank,
                                                                     v.source if type(v.source)!=str else '<start>',
                                                                     v.sink if type(v.sink)!=str else '<end>',
@@ -307,14 +307,19 @@ def variants_cmd(args):
         else: #structural variant, handle output differently
             v,u,d=b
             if type(v)==str or type(u)==str:
-                continue #just start
+                continue #just start/end
             else:
                 if args.reference in G.node[v]['offsets']:
                     cds=args.reference
                 else:
-                    for p in d['paths']:
-                        cds=p
-                        break
+                    for p in G.node[v]['offsets']:
+                        if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
+                            cds=p
+                            break
+                    for p in G.node[u]['offsets']:
+                        if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
+                            cdsu=p
+                            break
 
                 minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
                 sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),minflank,
@@ -323,7 +328,7 @@ def variants_cmd(args):
                                                                     G.node[v]['seq'][-20:] if v in G else '-',
                                                                     G.node[u]['seq'][:20] if u in G else '-',
                                                                     'struct_inv' if d['ofrom']!=d['oto'] else 'struct',
-                                                                    "N/A"))
+                                                                    G.graph['id2path'][cds]+" <--> "+G.graph['id2path'][cdsu]))
                 for sample in gori:
                     if G.graph['path2id'][sample] in d['paths']:
                         sys.stdout.write("\t1")
