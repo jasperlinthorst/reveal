@@ -258,6 +258,15 @@ def variants_cmd(args):
             if v.vtype!=args.type and args.type!='all':
                 continue
             
+            genotypestr=",".join(v.genotypes)
+            if args.nogaps:
+                if 'N' in genotypestr:
+                    continue
+
+            minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
+            if minflank<args.minflank:
+                continue
+            
             if args.fastaout:
                 if args.split:
                     with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
@@ -278,19 +287,9 @@ def variants_cmd(args):
                 for cds in v.vpos.keys():
                     if not G.graph['id2path'][cds].startswith('*'): #use ref layout if its there
                         break
-            
-            minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
-            if minflank<args.minflank:
-                continue
 
             sourcelen=len(G.node[v.source]['seq'])
             sinklen=len(G.node[v.sink]['seq'])
-
-            genotypestr=",".join(v.genotypes)
-
-            if args.nogaps:
-                if 'N' in genotypestr:
-                    continue
 
             sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],sourcelen,sinklen,
                                                                     v.source if type(v.source)!=str else '<start>',
@@ -332,7 +331,7 @@ def variants_cmd(args):
                 minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
                 sourcelen=len(G.node[v]['seq'])
                 sinklen=len(G.node[u]['seq'])
-                
+
                 if minflank<args.minflank:
                     continue
 
