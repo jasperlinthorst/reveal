@@ -35,13 +35,14 @@ def bubbles(G):
             logging.debug("Converting MultiDigraph to DiGraph, before bubble extraction.")
             orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
             refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
+            refpathnames=[p for p in G.graph['paths'] if not p.startswith('*')]
             for e0,e1,k,d in G.edges(keys=True,data=True):
                 if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
                     # logging.debug("STRUCTURAL VARIANT: %s %s %s"%(e0,e1,d))
                     structural_variants.append((e0,e1,k,d))
 
             G.remove_edges_from(structural_variants)
-            G.graph['paths']=refpaths
+            G.graph['paths']=refpathnames
 
         logging.debug("Topologically sort the graph.")
         ordD_=list(nx.topological_sort(G))
