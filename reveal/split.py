@@ -14,8 +14,8 @@ def split_cmd(args):
     split(args.gfa[0])
 
 def split(gfafile):
-    # G=nx.MultiDiGraph()
-    G=nx.DiGraph()
+    G=nx.MultiDiGraph()
+    # G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
 
     # remove=[]
@@ -54,7 +54,7 @@ def split(gfafile):
                 no[mapping[p]]=d['offsets'][p]
             sg.node[n]['offsets']=no
 
-        # name="_".join(sg.graph['paths']).replace("|","").replace(" ","")[:200]
-        name=str(i)
+        name="_".join([p for p in sg.graph['paths'] if not p.startswith("*")]).replace("|","").replace(" ","")[:200]
+        #name=str(i)
         
         write_gfa(sg,None,outputfile="%s.gfa"%name)

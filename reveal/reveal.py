@@ -212,9 +212,7 @@ def main():
     parser_transform.add_argument("--ml", dest="minlocallength", type=int, default=20, help="Min size of locally unique mums.")
     
     parser_transform.add_argument("--unmapped", dest="outputunmapped", action="store_true", default=False, help="Output a unmappable sequence to a separate fasta file.")
-
     parser_transform.set_defaults(func=transform.transform)
-
 
 
 
@@ -288,6 +286,7 @@ def main():
     parser_variants.add_argument("--minsize", dest="minsize", default=0, type=int, help="Only output variants larger than this.")
     parser_variants.add_argument("--minflank", dest="minflank", default=0, type=int, help="Only output variants with an exact matching flanking sequence of at least this length.")
     parser_variants.add_argument("--type", dest="type", default="all", choices=["all","snp","indel","multi-allelic","region","undefined"], help="Only output variants of this type.")
+    parser_variants.add_argument("--nogaps", dest="nogaps", default=False, action="store_true", help="Don't output variants that are caused by gaps (contain the N character).")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
     
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])

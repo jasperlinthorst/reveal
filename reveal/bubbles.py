@@ -283,13 +283,19 @@ def variants_cmd(args):
             if minflank<args.minflank:
                 continue
 
+            genotypestr=",".join(v.genotypes)
+
+            if args.nogaps:
+                if 'N' in genotypestr:
+                    continue
+            
             sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],minflank,
                                                                     v.source if type(v.source)!=str else '<start>',
                                                                     v.sink if type(v.sink)!=str else '<end>',
                                                                     G.node[v.source]['seq'][-20:] if v.source in G else '-',
                                                                     G.node[v.sink]['seq'][:20] if v.sink in G else '-',
                                                                     v.vtype,
-                                                                    ",".join(v.genotypes)))
+                                                                    genotypestr))
             for sample in gori:
                 if sample in v.calls:
                     sys.stdout.write("\t%s"%v.calls[sample])
