@@ -15,7 +15,7 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
         refs=set([refname for refname,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in ctg2ref[ctgname]])
 
         for refname in refs:
-            plt.ioff()
+            # plt.ioff()
             plt.clf()
             plt.title(ctgname)
             plt.ylabel(ctgname)
@@ -27,13 +27,15 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
                 logging.info("Too many mums, plot only the largest 10000")
                 mums=mums[:10000]
             
-            for s1,s2,l,revcomp in mums:
-                if revcomp==1:
-                    plt.plot([s1,s1+l],[s2+l,s2],'g-')
-                else:
-                    plt.plot([s1,s1+l],[s2,s2+l],'r-')
+            # for s1,s2,l,revcomp in mums:
+            #     if revcomp==1:
+            #         plt.plot([s1,s1+l],[s2+l,s2],'g-')
+            #     else:
+            #         plt.plot([s1,s1+l],[s2,s2+l],'r-')
 
             ax = plt.axes()
+            # plt.xticks([], [])
+            # plt.yticks([], [])
             last=0
 
             for ref,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in sorted(ctg2ref[ctgname],key=lambda c: c[6] if c[1]==0 else c[5]):
@@ -44,41 +46,42 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
                 if revcomp:
                     ctgbegin,ctgend=ctgend,ctgbegin
 
-                plt.axhline(y=ctgbegin,linewidth=.5,color='black',linestyle='solid')
-                plt.axhline(y=ctgend,linewidth=.5,color='black',linestyle='solid')
+                # plt.axhline(y=ctgbegin,linewidth=.5,color='black',linestyle='solid')
+                # plt.axhline(y=ctgend,linewidth=.5,color='black',linestyle='solid')
                 # plt.axvline(x=refbegin,linewidth=.5,color='black',linestyle='solid')
                 # plt.axvline(x=refend,linewidth=.5,color='black',linestyle='solid')
 
-                if last!=ctgbegin:
-                    ax.add_patch(
-                        patches.Rectangle(
-                            (0, last), #bottom left
-                            ref2length[refname], #width
-                            ctgbegin-last, #height
-                            alpha=.1,
-                            color="grey"
-                        )
-                    )
+                # if last!=ctgbegin:
+                #     ax.add_patch(
+                #         patches.Rectangle(
+                #             (0, last), #bottom left
+                #             ref2length[refname], #width
+                #             ctgbegin-last, #height
+                #             alpha=.25,
+                #             color="grey"
+                #         )
+                #     )
 
                 ax.add_patch(
                     patches.Rectangle(
                         (refbegin, ctgbegin), #bottom left
                         refend-refbegin, #width
                         ctgend-ctgbegin, #height
-                        alpha=.1,
+                        alpha=.25,
                         color="green" if revcomp else "red"
                     )
                 )
 
-                # if revcomp:
-                #     plt.plot([refbegin,refend],[ctgend,ctgbegin],'g--')
-                # else:
-                #     plt.plot([refbegin,refend],[ctgbegin,ctgend],'r--')
+                if revcomp:
+                    plt.plot([refbegin,refend],[ctgend,ctgbegin],'g--')
+                else:
+                    plt.plot([refbegin,refend],[ctgbegin,ctgend],'r--')
 
                 last=ctgend
 
             plt.xlim(0,ref2length[refname])
             plt.ylim(0,contig2length[ctgname])
+            plt.savefig("chainlayout.svg")
             plt.show()
             # plt.close()
 
@@ -165,13 +168,13 @@ def transform(args):
 
     #if args.minlength==None:
     #    args.minlength=1
-
-    #sort by length
-    logging.debug("Sorting %d MUMs by size..."%len(mums))
-    mums=sorted(mums,key=lambda m: m[4],reverse=True)
-    logging.debug("Done.")
     
     if args.minlength==0: #auto determine minlength, prevent use of too many mums
+        #sort by length
+        logging.debug("Sorting %d MUMs by size..."%len(mums))
+        mums=sorted(mums,key=lambda m: m[4],reverse=True)
+        logging.debug("Done.")
+
         cov=0
         for i,mem in enumerate(mums):
             cov+=mem[4]
@@ -291,6 +294,10 @@ def transform(args):
                         ref2ctg['unchained'][ctgname][ctgend:ctgbegin]=0
                     unused.append((ctgname,ci))
 
+    # if args.plot:
+    #     logging.debug("Plot chains before join.")
+    #     plotchains(ctg2mums,ctg2ref,contig2length,ref2length)
+
     #remove unused chains from the ctg2ref mapping
     if args.order=="chains":
         defctg2ref=ctg2ref.copy()
@@ -331,9 +338,9 @@ def transform(args):
     else:
         defctg2ref=ctg2ref
 
-    # if args.plot:
-    #     logging.debug("Plot chains after join.")
-    #     plotchains(ctg2mums,defctg2ref,contig2length,ref2length)
+    if args.plot:
+        logging.debug("Plot chains after join.")
+        plotchains(ctg2mums,defctg2ref,contig2length,ref2length)
 
     #build graph/fasta for the structural layout of the genome
     for ref in sorted(defref2ctg):
@@ -349,7 +356,7 @@ def transform(args):
         if ref=='unchained' or ref=='unplaced':
             continue
         
-        logging.debug("Determining %s order for: %s"%(args.order,ref))
+        logging.info("Determining %s order for: %s"%(args.order,ref))
         
         ctgs=defref2ctg[ref]
         ctgs.sort(key=lambda c: c[3]) #sort by ref start position
@@ -429,6 +436,8 @@ def transform(args):
             
             if refend<=prefend:
                 logging.error("Contained contig should not be in best contig path! %s with alignment length %d"%(ctgname,ctgend-ctgbegin))
+                logging.error("pctg: %s"%str(pctg))
+                logging.error("ctg: %s"%str(ctg))
                 sys.exit(1)
 
             gapsize=refbegin-prefend
@@ -629,9 +638,6 @@ def transform(args):
         
         if args.split and args.outputtype=='fasta':
             finished.close()
-
-        if args.outputunmapped:
-            unplaced.close()
         
         logging.debug("Done.")
         
@@ -816,7 +822,9 @@ def decompose_contig(ctg,mums,contiglength,mineventsize=1500,minchainsum=1000,ma
     nrefchroms=len(set([p[5] for p in paths]))
     
     logging.debug("Found a total of %d chains for %s that map to %d different reference chromosomes."%(len(paths),ctg,nrefchroms))
-     
+    
+    # return sorted(paths,key=lambda c: c[1] if c[6] else c[2])
+
     paths=sorted(paths,key=lambda c: c[0],reverse=True) #sort chains by alignment score
     
     selectedpaths=[]
@@ -1013,6 +1021,7 @@ def chainstorefence(ctg2mums,contig2length,ref2length,mineventsize=1500,minchain
             if revcomp==1:
                 ctgstart,ctgend=ctgend,ctgstart
             
+            # if offset<ctgstart:
             if offset!=ctgstart:
                 logging.debug("%d:%d:%d --> unchained"%(offset,ctgstart,revcomp))
                 ref2ctg['unchained'][ctg][offset:ctgstart]=i
@@ -1300,19 +1309,19 @@ def clustermumsbydiagonal(ctg2mums,maxdist=90,minclustsize=65):
     
     return ctg2clusters
 
-def bestctgpath(ctgs):
-    ctgs.sort(key=lambda c: c[3])
+def bestctgpath(chains):
+    chains.sort(key=lambda c: c[3]) #sort by reference 
     start=(0,0,0,0,0,0,0,0,0)
     
-    link=dict() 
+    link=dict()
     score=dict({start:0})
     
     processed=[]
     active=[start]
     maxscore=0
      
-    for ctg in ctgs:
-        ctgname,revcomp,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=ctg
+    for chain in chains:
+        ctgname,revcomp,cscore,refbegin,refend,ctgbegin,ctgend,ctglength,ci=chain
         
         remove=[]
         for pctg in processed:
@@ -1337,7 +1346,6 @@ def bestctgpath(ctgs):
 
             if arefend>refbegin:
                 penalty=arefend-refbegin #penalize by the amount of overlap
-                assert(penalty>0)
             else:
                 penalty=0
             
@@ -1348,14 +1356,14 @@ def bestctgpath(ctgs):
         
         assert(best!=None)
         
-        link[ctg]=best
-        score[ctg]=w
+        link[chain]=best
+        score[chain]=w
         
         if w>maxscore:
             maxscore=w
-            end=ctg
+            end=chain
         
-        processed.append(ctg)
+        processed.append(chain)
     
     #backtrack
     minscore=0
@@ -1363,7 +1371,7 @@ def bestctgpath(ctgs):
     while end[0]!=start[0]:
         path.append(end)
         end=link[end]
-    
+
     return path[::-1]
 
 def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=1000,wscore=1,wpen=1,all=True):
@@ -1448,7 +1456,7 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
             if mem[3]==1:
                 p1=(mem[0], mem[1]+mem[2])
                 p2=(amem[0]+amem[2], amem[1])
-                penalty=gapcost(p1,p2)
+                penalty=gapcost(p1,p2,lambda_=1,epsilon_=0,convex=True)
                 tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
                 if tmpw>w:
                     w=tmpw
@@ -1456,7 +1464,7 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
             else:
                 p1=(amem[0]+amem[2], amem[1]+amem[2])
                 p2=(mem[0], mem[1])
-                penalty=gapcost(p1,p2)
+                penalty=gapcost(p1,p2,lambda_=1,epsilon_=0,convex=True)
                 tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
                 if tmpw>w:
                     w=tmpw

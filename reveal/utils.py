@@ -88,7 +88,7 @@ def fasta_writer(fn,name_seq,lw=100):
             for i in range( (len(seq)/lw)+(len(seq) % lw > 0)):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
-def gapcost(pointa,pointb,model="sumofpairs",convex=True): #model is either sumofpairs or star
+def gapcost(pointa,pointb,model="sumofpairs",convex=True,lambda_=1,epsilon_=0): #epsilon is mismatch penalty weight, lambda is indel penalty weight
     assert(len(pointa)==len(pointb))
     
     if model=="star-avg":
@@ -98,12 +98,14 @@ def gapcost(pointa,pointb,model="sumofpairs",convex=True): #model is either sumo
     elif model=="sumofpairs":
         p=0
         D=[abs(pointa[i]-pointb[i]) for i in range(len(pointa))]
+        if epsilon_>0:
+            p+=min(D)*epsilon_
         for i in range(len(D)): #all pairwise distances
             for j in range(i+1,len(D)):
                 if convex:
-                    p+=log(abs(D[i]-D[j])+1)
+                    p+=log(abs(D[i]-D[j])+1)*lambda_
                 else:
-                    p+=abs(D[i]-D[j])
+                    p+=abs(D[i]-D[j])*lambda_
         return p
     else:
         logging.warn("Unknown penalty model: %s."%model)
@@ -156,6 +158,8 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     logging.debug("Samples in graph: %s"%G.graph['path2id'])
     logging.debug("Generating plot for %s and %s, with minlength=%d."%(s1,s2,minlength))
 
+    anchors=[]
+
     for node,data in G.nodes(data=True):
         if type(node)==str:
             continue
@@ -193,8 +197,17 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
             continue
 
         if s1t and s2t:
-            plt.plot([data['offsets'][s1], data['offsets'][s1]+l], [data['offsets'][s2], data['offsets'][s2]+l], 'r-')
+            anchors.append((data['offsets'][s1],data['offsets'][s2],l))
     
+    anchors.sort(key=lambda a: a[2],reverse=True)
+
+    if len(anchors)>10000:
+        logging.info("More than 10000 anchors, showing only the largest 10000.")
+        anchors=anchors[:10000]
+
+    for s1,s2,l in anchors:
+        plt.plot([s1, s1+l], [s2, s2+l], 'r-')
+
     if minx==None:
         minx=0
     if miny==None:
@@ -369,7 +382,10 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         tags=dict()
         tags['ofrom']=e[2]
         tags['oto']=e[4]
-        tags['cigar']=e[5]
+
+        if len(e)>5:
+            tags['cigar']=e[5]
+        
         if '*' in e: #there are additional tags parse them
             for tag in e[7:]:
                 key,ttype,value=tag.split(':')
