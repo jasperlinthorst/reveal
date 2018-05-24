@@ -1310,7 +1310,7 @@ def clustermumsbydiagonal(ctg2mums,maxdist=90,minclustsize=65):
     return ctg2clusters
 
 def bestctgpath(chains):
-    chains.sort(key=lambda c: c[3]) #sort by reference 
+    chains.sort(key=lambda c: (c[3],c[4])) #sort by reference 
     start=(0,0,0,0,0,0,0,0,0)
     
     link=dict()
@@ -1327,7 +1327,7 @@ def bestctgpath(chains):
         for pctg in processed:
             pctgname,prevcomp,pscore,prefbegin,prefend,pctgbegin,pctgend,pctglength,pci=pctg
 
-            if prefend<refend: #may overlap, may not be contained
+            if prefend<=refend: #may overlap, may not be contained
                 active.append(pctg)
                 remove.append(pctg)
         
@@ -1457,6 +1457,7 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
                 p1=(mem[0], mem[1]+mem[2])
                 p2=(amem[0]+amem[2], amem[1])
                 penalty=gapcost(p1,p2,lambda_=1,epsilon_=0,convex=True)
+                assert(penalty>=0)
                 tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
                 if tmpw>w:
                     w=tmpw
@@ -1465,6 +1466,7 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
                 p1=(amem[0]+amem[2], amem[1]+amem[2])
                 p2=(mem[0], mem[1])
                 penalty=gapcost(p1,p2,lambda_=1,epsilon_=0,convex=True)
+                assert(penalty>=0)
                 tmpw=score[tuple(amem)]+(wscore*mem[2])-(wpen*penalty)
                 if tmpw>w:
                     w=tmpw
@@ -1492,7 +1494,12 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
             if end not in link:
                 break
         
-        logging.info("Extracted path of length: %d (in mums) %d (sum of mums) %d (on ref in bp)"%(len(path),sum([m[2] for m in path]),(path[0][0]+path[0][2])-path[-1][0]))
+        chainsum=sum([m[2] for m in path])
+        
+        if chainsum<minchainsum:
+            break
+
+        logging.info("Extracted path of length: %d (in mums) %d (sum of mums) %d (on ref in bp) with score: %s."%(len(path),chainsum,(path[0][0]+path[0][2])-path[-1][0], str(maxscore)) )
         
         # paths.append(path)
         refstart=path[-1][0]
@@ -1504,10 +1511,9 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
         else:
             ctgstart=path[-1][1]
             ctgend=path[0][1]+path[0][2]
-
-        if sum([m[2] for m in path]) < minchainsum:
-            break
         
+        assert(maxscore<=chainsum)
+
         paths.append((path,maxscore,o,ctgstart,ctgend,refstart,refend))
 
         if not all: #just return first best path
@@ -1531,5 +1537,3 @@ def mempathsbothdirections(mums,ctglength,n=15000,mineventsize=1500,minchainsum=
     logging.info("Detected number of chains: %d."%len(paths))
     
     return paths
-
-
