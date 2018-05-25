@@ -21,12 +21,11 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             plt.ylabel(ctgname)
             plt.xlabel(refname)
 
-            mums=sorted(ctg2mums[ctgname][refname],key=lambda m: m[2],reverse=True)
-            
-            if len(mums)>10000:
-                logging.info("Too many mums, plot only the largest 10000")
-                mums=mums[:10000]
-            
+            #draw mums
+            # mums=sorted(ctg2mums[ctgname][refname],key=lambda m: m[2],reverse=True)
+            # if len(mums)>10000:
+            #     logging.info("Too many mums, plot only the largest 10000")
+            #     mums=mums[:10000]
             # for s1,s2,l,revcomp in mums:
             #     if revcomp==1:
             #         plt.plot([s1,s1+l],[s2+l,s2],'g-')
@@ -39,9 +38,10 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
             last=0
 
             for ref,revcomp,score,refbegin,refend,ctgbegin,ctgend,ctglength,ci in sorted(ctg2ref[ctgname],key=lambda c: c[6] if c[1]==0 else c[5]):
-                logging.info("Plot chain: %s"%str((ref,refname,revcomp,refbegin,refend,ctgbegin,ctgend,refend-refbegin)))
                 if refname != ref:
                     continue
+
+                logging.info("Plot chain: %s"%str((ref,refname,revcomp,refbegin,refend,ctgbegin,ctgend,refend-refbegin)))
 
                 if revcomp:
                     ctgbegin,ctgend=ctgend,ctgbegin
@@ -81,7 +81,7 @@ def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
 
             plt.xlim(0,ref2length[refname])
             plt.ylim(0,contig2length[ctgname])
-            plt.savefig("chainlayout.svg")
+            # plt.savefig("chainlayout.svg")
             plt.show()
             # plt.close()
 
@@ -1341,7 +1341,7 @@ def bestctgpath(chains):
             #calculate score of connecting to active point
             actgname,arevcomp,ascore,arefbegin,arefend,actgbegin,actgend,actglength,aci=actg
             
-            if arefend>refend:
+            if arefend>=refend:
                 continue
 
             if arefend>refbegin:
