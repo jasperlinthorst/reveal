@@ -337,7 +337,7 @@ def variants_cmd(args):
                 if minflank<args.minflank:
                     continue
 
-                sys.stdout.write("%s\t%s\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),sourcelen,sinklen,'N/A',
+                sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),sourcelen,sinklen,'N/A',
                                                                     v,
                                                                     u,
                                                                     G.graph['id2path'][ucontigid] if ucontigid!=None else "N/A",
