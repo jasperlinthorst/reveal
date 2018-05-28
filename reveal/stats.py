@@ -25,9 +25,7 @@ def stats(gfafile):
     stats["Number of samples"]=nsamples
     for i,sample in enumerate(samples):
         stats["Sample %d"%i]=sample
-    stats["Number of nodes"]=G.number_of_nodes()
-    stats["Number of edges"]=G.number_of_edges()    
-    
+
     stats["Number of connected components"]=0
     stats["A count"]=0
     stats["C count"]=0
@@ -141,6 +139,16 @@ def stats(gfafile):
         stats["Chain weight (sum-of-pairs) in component %d"%sgi]=chainweight
         stats["Chain penalty (sum-of-pairs) in component %d"%sgi]=chainpenalty
         stats["Chain score in component %d"%sgi]=chainweight-chainpenalty
+
+    remove=[]
+    for node in G.nodes():
+        if type(node)==str:
+            remove.append(node)
+    G.remove_nodes_from(remove)
     
+    stats["Number of nodes"]=G.number_of_nodes()
+    stats["Number of edges"]=G.number_of_edges()
+
     for label in sorted(stats.keys()):
         sys.stdout.write("%s:\t%s\n"%(label.ljust(50),str(stats[label]).rjust(50)))
+
