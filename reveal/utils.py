@@ -19,6 +19,22 @@ from math import log
 import uuid
 import subprocess
 
+def MultiGraphToDiGraph(G):
+    structural_variants=[]
+    logging.debug("Converting MultiDigraph to DiGraph, by removing structural variant edges.")
+    orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
+    refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
+    refpathnames=[p for p in G.graph['paths'] if not p.startswith('*')]
+    for e0,e1,k,d in G.edges(keys=True,data=True):
+        if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
+            if type(e0)!=str and type(e1)!=str:
+                structural_variants.append((e0,e1,k,d))
+    
+    G.remove_edges_from(structural_variants)
+    G.graph['paths']=refpathnames
+
+    return structural_variants
+
 def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
     gapseq=""
@@ -225,7 +241,6 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         plt.show()
     else:
         plt.savefig("%s_%s.png"%(s1,s2))
-
 
 def read_fasta(fasta, index, tree, graph, contigs=True):
     logging.info("Reading fasta: %s ..." % fasta)
@@ -778,7 +793,6 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(cigarpath)+"\n")
     
     f.close()
-
 
 def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
     G=G.copy()

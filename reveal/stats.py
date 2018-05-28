@@ -16,8 +16,12 @@ def stats_cmd(args):
 
 def stats(gfafile):
     stats=dict()
-    G=nx.DiGraph()
+    
+    G=nx.MultiDiGraph()
     read_gfa(gfafile,None,"",G)
+
+    struct=MultiGraphToDiGraph(G)
+
     samples=G.graph['paths']
     nsamples=len(samples)
     
@@ -25,7 +29,9 @@ def stats(gfafile):
     stats["Number of samples"]=nsamples
     for i,sample in enumerate(samples):
         stats["Sample %d"%i]=sample
-
+    
+    stats["Number of rearrangement edges"]=len(struct)
+    
     stats["Number of connected components"]=0
     stats["A count"]=0
     stats["C count"]=0
@@ -63,7 +69,7 @@ def stats(gfafile):
             i+=1
         
         for node,data in sg.nodes(data=True):
-            seqperngenomes[len(data['offsets'])]+=len(data['seq'])
+            seqperngenomes[len([o for o in data['offsets'] if not sg.graph['id2path'][o].startswith("*")])]+=len(data['seq'])
 
         for n in seqperngenomes:
             stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
@@ -145,7 +151,7 @@ def stats(gfafile):
         if type(node)==str:
             remove.append(node)
     G.remove_nodes_from(remove)
-    
+
     stats["Number of nodes"]=G.number_of_nodes()
     stats["Number of edges"]=G.number_of_edges()
 
