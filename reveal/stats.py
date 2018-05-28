@@ -29,9 +29,9 @@ def stats(gfafile):
     stats["Number of samples"]=nsamples
     for i,sample in enumerate(samples):
         stats["Sample %d"%i]=sample
-    
+
     stats["Number of rearrangement edges"]=len(struct)
-    
+
     stats["Number of connected components"]=0
     stats["A count"]=0
     stats["C count"]=0
@@ -55,9 +55,11 @@ def stats(gfafile):
         sgsamples=set()
         for node,data in sg.nodes(data=True):
             if len(data['offsets'])>nsgsamples:
-                nsgsamples=len(data['offsets'])
+                nsgsamples=len([o for o in data['offsets'] if not sg.graph['id2path'][o].startswith("*")])
+
             for sid in data['offsets']:
-                sgsamples.add(G.graph['id2path'][sid])
+                if not sg.graph['id2path'][sid].startswith("*"):
+                    sgsamples.add(G.graph['id2path'][sid])
         
         stats["Composition of component %d"%sgi]=",".join(sgsamples)
 
@@ -130,15 +132,16 @@ def stats(gfafile):
                 chainlengthbp+=l
                 chainlength+=1
         
-        chain.sort(key=lambda l: l[0])
-        
-        ppoint=tuple([c+chain[0][1] for c in chain[0][0]])
-        for point,length in chain[1:]:
-            for i in range(len(point)):
-                assert(point[i]>=ppoint[i])
-            p=gapcost(ppoint,point) #sumofpairs penalty!
-            ppoint=tuple([c+length for c in point])
-            chainpenalty+=p
+        if len(chain)>0:
+            chain.sort(key=lambda l: l[0])
+            
+            ppoint=tuple([c+chain[0][1] for c in chain[0][0]])
+            for point,length in chain[1:]:
+                for i in range(len(point)):
+                    assert(point[i]>=ppoint[i])
+                p=gapcost(ppoint,point) #sumofpairs penalty!
+                ppoint=tuple([c+length for c in point])
+                chainpenalty+=p
         
         stats["Chain length in component %d"%sgi]=chainlength
         stats["Chain length basepairs in component %d"%sgi]=chainlengthbp
