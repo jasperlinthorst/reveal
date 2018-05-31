@@ -278,7 +278,7 @@ def align_worker(inputq,outputq):
             else:
                 outputq.put(b)
 
-def align_worker2(G,chunk,outputq,kwargs,chunksize=50):
+def align_worker2(G,chunk,outputq,kwargs,chunksize=500):
     
     rchunk=[]
     for bubble in chunk:
@@ -306,7 +306,7 @@ def align_worker2(G,chunk,outputq,kwargs,chunksize=50):
             if len(rchunk)==chunksize:
                 outputq.put(rchunk)
                 rchunk=[]
-    
+
     if len(rchunk)>0:
         outputq.put(rchunk)
 
@@ -390,7 +390,7 @@ def refine_all(G, **kwargs):
     if kwargs['nproc']>1:
 
         outputq = Queue()
-        nworkers=kwargs['nproc']-1
+        nworkers=kwargs['nproc']
         aworkers=[]
 
         chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
