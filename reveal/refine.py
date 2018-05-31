@@ -273,7 +273,10 @@ def align_worker(inputq,outputq):
         else:
             sg,bubble,offsets,paths,kwargs=data
             b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-            outputq.put(b)
+            if b==None:
+                continue
+            else:
+                outputq.put(b)
 
 def align_worker2(G,chunk,outputq,kwargs,chunksize=50):
     
@@ -295,12 +298,15 @@ def align_worker2(G,chunk,outputq,kwargs,chunksize=50):
         paths=sourcesamples.intersection(sinksamples)
 
         b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-
-        rchunk.append(b)
-        if len(rchunk)==chunksize:
-            outputq.put(rchunk)
-            rchunk=[]
-
+        
+        if b==None:
+            continue
+        else:
+            rchunk.append(b)
+            if len(rchunk)==chunksize:
+                outputq.put(rchunk)
+                rchunk=[]
+    
     if len(rchunk)>0:
         outputq.put(rchunk)
 
