@@ -30,7 +30,7 @@ def bubbles(G):
         previousEntrance={}
         ordD={}
         structural_variants=[]
-        
+
         if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
             structural_variants=MultiGraphToDiGraph(G)
             # logging.debug("Converting MultiDigraph to DiGraph, before bubble extraction.")
@@ -244,7 +244,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tsource_size\tsink_size\tmax_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -253,7 +253,10 @@ def variants_cmd(args):
         if type(b)!=tuple:
             v=Variant(b)
             
-            if v.size<args.minsize:
+            if v.maxsize<args.minsize:
+                continue
+
+            if v.maxsize-v.minsize<args.diffsize:
                 continue
 
             if v.vtype!=args.type and args.type!='all':
@@ -265,6 +268,7 @@ def variants_cmd(args):
                     continue
 
             minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
+            
             if minflank<args.minflank:
                 continue
 
@@ -289,12 +293,27 @@ def variants_cmd(args):
                             sys.stdout.write("%s\n"%seq)
                 continue
             
-            
-
             sourcelen=len(G.node[v.source]['seq'])
             sinklen=len(G.node[v.sink]['seq'])
+            
+            allelesizes=[]
 
-            sys.stdout.write("%s\t%s\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],sourcelen,sinklen,max([len(gt) for gt in v.genotypes]),
+            for gt in v.genotypes:
+                if gt=='-':
+                    allelesizes.append(0)
+                else:
+                    allelesizes.append(len(gt))
+
+            maxa=max(allelesizes)
+            mina=min(allelesizes)
+
+            sys.stdout.write("%s\t%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
+                                                                    v.vpos[cds],
+                                                                    sourcelen,
+                                                                    sinklen,
+                                                                    maxa,
+                                                                    mina,
+                                                                    maxa-mina,
                                                                     v.source if type(v.source)!=str else '<start>',
                                                                     v.sink if type(v.sink)!=str else '<end>',
                                                                     G.node[v.source]['seq'][-20:] if v.source in G else '-',
@@ -338,7 +357,13 @@ def variants_cmd(args):
                 if minflank<args.minflank:
                     continue
 
-                sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),sourcelen,sinklen,'N/A',
+                sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
+                                                                    G.node[v]['offsets'][cds]+len(G.node[v]['seq']),
+                                                                    sourcelen,
+                                                                    sinklen,
+                                                                    'N/A',
+                                                                    'N/A',
+                                                                    'N/A',
                                                                     v,
                                                                     u,
                                                                     G.graph['id2path'][ucontigid] if ucontigid!=None else "N/A",
@@ -384,9 +409,7 @@ class Bubble:
 
         self.simple=None
         
-        #TODO: use source/sink offsets to calculate this!!
-
-        self.paths=set(G.node[self.source]['offsets'].keys()) & set(G.node[self.sink]['offsets'].keys())
+        self.paths=set([k for k in G.node[self.source]['offsets'].keys() if not G.graph['id2path'][k].startswith("*")]) & set([k for k in G.node[self.sink]['offsets'].keys() if not G.graph['id2path'][k].startswith("*")])
 
         if 'seq' in G.node[self.source]:
             l=len(G.node[self.source]['seq'])
@@ -397,6 +420,8 @@ class Bubble:
 
         self.minsize=min(self.allelesizes)
         # self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
+
+        assert(self.minsize>=0)
 
         # self.maxsize=max([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
         self.maxsize=max(self.allelesizes)
@@ -479,8 +504,7 @@ class Variant(Bubble):
         self.vtype='undefined' #type definition of the variant
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
-        self.size=1 #length of the largest allele
-        
+
         gt=list(self.G.successors(self.source))
         gt.sort(key=lambda l: self.ordD[l])
 
@@ -491,8 +515,6 @@ class Variant(Bubble):
                 else:
                     s=self.G.node[v]['seq']
                     self.genotypes.append(s)
-                    if len(s)>self.size:
-                        self.size=len(s)
             #self.genotypes.sort()
         else:
             for v in gt:
