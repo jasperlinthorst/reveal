@@ -7,6 +7,8 @@ from multiprocessing.pool import Pool
 from multiprocessing import Process,Queue
 import signal
 import probconslib
+import math
+
 
 def refine_bubble_cmd(args):
     if len(args.graph)<1:
@@ -148,9 +150,6 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     if len(G.in_edges(bubble.sink))==1 and type(bubble.sink)!=str:
         # assert(len(set(path2end.values()))==1)
         endnode=mapping[path2end.values()[0][0]]
-        
-        print endnode
-
         G.node[bubble.sink]['seq']=G.node[endnode]['seq']+G.node[bubble.sink]['seq']
         G.node[bubble.sink]['offsets']=G.node[endnode]['offsets']
         for e0,e1,d in G.in_edges(endnode,data=True):
@@ -276,20 +275,53 @@ def align_worker(inputq,outputq):
             b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
             outputq.put(b)
 
+def align_worker2(G,chunk,outputq,kwargs,chunksize=50):
+    
+    rchunk=[]
+    for bubble in chunk:
+        G.node[bubble.source]['aligned']=1
+        G.node[bubble.sink]['aligned']=1
+
+        logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+        bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+        sg=G.subgraph(bnodes).copy()
+        
+        offsets=dict()
+        for sid in G.node[bubble.source]['offsets']:
+            offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+
+        sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+        sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+        paths=sourcesamples.intersection(sinksamples)
+
+        b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+
+        rchunk.append(b)
+        if len(rchunk)==chunksize:
+            outputq.put(rchunk)
+            rchunk=[]
+
+    if len(rchunk)>0:
+        outputq.put(rchunk)
+
+    outputq.put(-1)
+    
 def graph_worker(G,nn,outputq,nworkers):
     deadworkers=0
     while True:
         data = outputq.get()
+
         if data==-1:
             deadworkers+=1
             if deadworkers==nworkers:
                 break
         else:
-            bubble,ng,path2start,path2end=data
-            logging.debug("Replacing bubble: %s"%bubble.nodes)
-            G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+            for d in data:
+                bubble,ng,path2start,path2end=d
+                logging.info("Replacing bubble: %s"%bubble.nodes)
+                G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
 
-def refine_all(G,  **kwargs):
+def refine_all(G, **kwargs):
     realignbubbles=[]
     
     if kwargs['minsize']==None:
@@ -326,15 +358,16 @@ def refine_all(G,  **kwargs):
                 continue
 
         if b.cumsize<kwargs['mincumsize']:
-            logging.info("Skipping bubble %s, cumulative size %d is smaller than mincumsize=%d."%(str(b.nodes),b.cumsize,kwargs['mincumsize']))
+            logging.debug("Skipping bubble %s, cumulative size %d is smaller than mincumsize=%d."%(str(b.nodes),b.cumsize,kwargs['mincumsize']))
             continue
 
         if len(b.nodes)==3:
-            logging.info("Skipping bubble %s, indel, no point in realigning."%(str(b.nodes)))
+            logging.debug("Skipping bubble %s, indel, no point in realigning."%(str(b.nodes)))
             continue
 
         realignbubbles.append(b)
 
+    logging.info("Checking for nested bubbles...")
     distinctbubbles=[]
     for b1 in realignbubbles:
         for b2 in realignbubbles:
@@ -343,52 +376,25 @@ def refine_all(G,  **kwargs):
                 break
         else:
             distinctbubbles.append(b1)
-
-
+    logging.info("Done.")
 
     logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     nn=max([node for node in G.nodes() if type(node)==int])+1
 
     if kwargs['nproc']>1:
 
-        inputq = Queue()
         outputq = Queue()
-
-        nworkers=kwargs['nproc']
+        nworkers=kwargs['nproc']-1
         aworkers=[]
 
-        for i in range(nworkers):
-            aworkers.append(Process(target=align_worker, args=(inputq,outputq)))
-
-        for p in aworkers:
+        chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
+        for i in range(0, len(distinctbubbles), chunksize):
+            p=Process(target=align_worker2, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
             p.start()
-
-        for bubble in distinctbubbles:
-            G.node[bubble.source]['aligned']=1
-            G.node[bubble.sink]['aligned']=1
-
-            logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
-            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-            sg=G.subgraph(bnodes).copy()
-            
-            offsets=dict()
-            for sid in G.node[bubble.source]['offsets']:
-                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
-
-            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-            paths=sourcesamples.intersection(sinksamples)
-
-            inputq.put((sg,bubble,offsets,paths,kwargs))
-
-        for i in range(nworkers):
-            inputq.put(-1)
+            aworkers.append(p)
 
         graph_worker(G,nn,outputq,nworkers)
         
-        inputq.close()
-        inputq.join_thread()
-
         outputq.close()
 
         for p in aworkers:
