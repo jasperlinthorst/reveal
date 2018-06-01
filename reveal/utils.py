@@ -29,7 +29,7 @@ def MultiGraphToDiGraph(G):
         if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
             if type(e0)!=str and type(e1)!=str:
                 structural_variants.append((e0,e1,k,d))
-    
+
     G.remove_edges_from(structural_variants)
     G.graph['paths']=refpathnames
 
@@ -454,44 +454,45 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         o=0
         
         # logging.debug("Split into tuple.")
-        path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
-        # logging.debug("Done.")
+        if len(cols)>=3:
+            path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
+            # logging.debug("Done.")
 
-        for pi,gfn in enumerate(path):
-            nid,orientation=gfn
-            node=nmapping[int(nid)]
-            graph.node[node]['offsets'][sid]=o
+            for pi,gfn in enumerate(path):
+                nid,orientation=gfn
+                node=nmapping[int(nid)]
+                graph.node[node]['offsets'][sid]=o
 
-            if 'seq' in graph.node[node]:
-                o+=len(graph.node[node]['seq'])
-            elif isinstance(node,Interval):
-                o+=node[1]-node[0]
-            else:
-                logging.warn("Node %s has unknown sequence content."%node)
-            
-            if pi==0:
+                if 'seq' in graph.node[node]:
+                    o+=len(graph.node[node]['seq'])
+                elif isinstance(node,Interval):
+                    o+=node[1]-node[0]
+                else:
+                    logging.warn("Node %s has unknown sequence content."%node)
+                
+                if pi==0:
+                    pnode=node
+                    pnid=nid
+                    porientation=orientation
+                    continue
+                else:
+                    if node not in graph[pnode]:
+                        logging.fatal("Path %s has %s -> %s, but no edge between these nodes exists in the graph definition!"%(sample,pnid,nid))
+                    assert(node in graph[pnode])
+                    if type(graph)==nx.MultiDiGraph:
+                        for i in graph[pnode][node]:
+                            if graph[pnode][node][i]['oto']==orientation and graph[pnode][node][i]['ofrom']==porientation:
+                                graph[pnode][node][i]['paths'].add(sid)
+                                break
+                        else:
+                            logging.fatal("Edge missing for path %s between %s (%s) and %s (%s)"%(sample,pnode,porientation,node,orientation))
+                            sys.exit(1)
+                    else:
+                        graph[pnode][node]['paths'].add(sid)
+
                 pnode=node
                 pnid=nid
                 porientation=orientation
-                continue
-            else:
-                if node not in graph[pnode]:
-                    logging.fatal("Path %s has %s -> %s, but no edge between these nodes exists in the graph definition!"%(sample,pnid,nid))
-                assert(node in graph[pnode])
-                if type(graph)==nx.MultiDiGraph:
-                    for i in graph[pnode][node]:
-                        if graph[pnode][node][i]['oto']==orientation and graph[pnode][node][i]['ofrom']==porientation:
-                            graph[pnode][node][i]['paths'].add(sid)
-                            break
-                    else:
-                        logging.fatal("Edge missing for path %s between %s (%s) and %s (%s)"%(sample,pnode,porientation,node,orientation))
-                        sys.exit(1)
-                else:
-                    graph[pnode][node]['paths'].add(sid)
-
-            pnode=node
-            pnid=nid
-            porientation=orientation
         
         # logging.debug("Loop over path done.")
 

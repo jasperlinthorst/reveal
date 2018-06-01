@@ -51,6 +51,9 @@ def refine_bubble_cmd(args):
             logging.error("Specify source sink pair")
             sys.exit(1)
 
+        args.source,args.sink=int(args.source),int(args.sink)
+        source_idx,sink_idx=None,None
+
         topiter=nx.topological_sort(G)
         for i,v in enumerate(topiter):
             if v==args.source:
@@ -63,6 +66,9 @@ def refine_bubble_cmd(args):
                 sink_idx=i+j+1
                 break
         
+        if source_idx==None or sink_idx==None:
+            logging.fatal("Unkown source/sink pair: %d,%d"%(args.source,args.sink))
+
         b=bubbles.Bubble(G,args.source,args.sink,source_idx,sink_idx,nodes)
 
         nn=max([node for node in G.nodes() if type(node)==int])+1
@@ -208,7 +214,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
         else:
             logging.debug("IN %s: %s"%(name.rjust(4,' '),seq))
 
-    if kwargs['method']!="reveal": #use custom multiple sequence aligner to refine bubble structure
+    if kwargs['method']!="reveal_rem": #use custom multiple sequence aligner to refine bubble structure
         ng=msa2graph(aobjs,
                         msa=kwargs['method'],
                         minconf=kwargs['minconf'],
@@ -273,7 +279,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
             corrected[sid]=data['offsets'][sid]+offsets[sid]
 
         ng.node[node]['offsets']=corrected
-    
+
     return bubble,ng,path2start,path2end
 
 def align_worker(G,chunk,outputq,kwargs,chunksize=500):
@@ -616,12 +622,11 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
                             ng.add_edge(pbase2node[pbase],base2node[base],paths=overlap,oto='+',ofrom='+')
 
                 elif p<minconf and pp>=minconf:
-                    
+
                     for sid in col[base]:
                         ng.add_node(nid,seq=base,offsets={sid:offsets[sid]},p=[p])
                         ng.add_edge(sid2pnode[sid],nid,paths={sid},oto='+',ofrom='+')
                         sid2node[sid]=nid
-
                         if base in base2node:
                             base2node[base].append(nid)
                         else:
@@ -629,6 +634,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
                         nid+=1
 
                 elif p>=minconf and pp<minconf:
+                    
                     ng.add_node(nid,seq=base,offsets=dict(),p=[p])
                     for sid in col[base]:
                         ng.node[nid]['offsets'][sid]=offsets[sid]
@@ -689,6 +695,19 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
 
     ng.remove_nodes_from(remove)
 
+    #contract edges
+    updated=True
+    while updated:
+        updated=False
+        for v,t in ng.edges():
+            if ng.out_degree(v)==ng.in_degree(t)==1:
+                ng.node[v]['seq']+=ng.node[t]['seq']
+                for suc in ng.successors(t):
+                    ng.add_edge(v,suc,**ng[v][t])
+                ng.remove_node(t)
+                updated=True
+                break
+
     for tmpfile in tempfiles:
         try:
             os.remove(tmpfile)
@@ -698,6 +717,6 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
 
     logging.debug("%d nodes in refined graph:",ng.number_of_nodes())
     for node in ng:
-        logging.debug("%s"%ng.node[node]['seq'])
+        logging.debug("%s: %s"%(node,ng.node[node]['seq']))
 
     return ng
