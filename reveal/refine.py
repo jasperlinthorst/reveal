@@ -120,7 +120,6 @@ def refine_bubble_cmd(args):
     write_gfa(G,"",outputfile=fn)
 
 def replace_bubble(G,bubble,ng,path2start,path2end,nn):
-    
     assert(nn not in G)
 
     bubblenodes=bubble.nodes[1:-1]
@@ -178,7 +177,6 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     return G,nn
 
 def refine_bubble(sg,bubble,offsets,paths,**kwargs):
-
     source=bubble.source
     sink=bubble.sink
 
@@ -284,43 +282,46 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
 def align_worker(G,chunk,outputq,kwargs,chunksize=500):
     
-    rchunk=[]
-    for bubble in chunk:
-        G.node[bubble.source]['aligned']=1
-        G.node[bubble.sink]['aligned']=1
+    try:
+        rchunk=[]
+        for bubble in chunk:
+            G.node[bubble.source]['aligned']=1
+            G.node[bubble.sink]['aligned']=1
 
-        logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
-        bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-        sg=G.subgraph(bnodes).copy()
-        
-        offsets=dict()
-        for sid in G.node[bubble.source]['offsets']:
-            offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+            logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+            sg=G.subgraph(bnodes).copy()
+            
+            offsets=dict()
+            for sid in G.node[bubble.source]['offsets']:
+                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
 
-        sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-        sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-        paths=sourcesamples.intersection(sinksamples)
+            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+            paths=sourcesamples.intersection(sinksamples)
 
-        b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-        
-        if b==None:
-            continue
-        else:
-            rchunk.append(b)
-            if len(rchunk)==chunksize:
-                outputq.put(rchunk)
-                rchunk=[]
+            b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+            
+            if b==None:
+                continue
+            else:
+                rchunk.append(b)
+                if len(rchunk)==chunksize:
+                    outputq.put(rchunk)
+                    rchunk=[]
 
-    if len(rchunk)>0:
-        outputq.put(rchunk)
+        if len(rchunk)>0:
+            outputq.put(rchunk)
 
-    outputq.put(-1)
+        outputq.put(-1)
+    except:
+        logging.fatal("Worker failed!")
+        outputq.put(-1)
     
 def graph_worker(G,nn,outputq,nworkers):
     deadworkers=0
     while True:
         data = outputq.get()
-
         if data==-1:
             deadworkers+=1
             if deadworkers==nworkers:
@@ -393,36 +394,19 @@ def refine_all(G, **kwargs):
             p=i
         else:
             logging.debug("Skipping realignment for: <%d,%d> - is contained in <%d,%d>"%(realignbubbles[i].source,realignbubbles[i].sink,realignbubbles[p].source,realignbubbles[p].sink))
-    # for b1 in realignbubbles:
-    #     for b2 in realignbubbles:
-    #         if set(b2.nodes).issuperset(set(b1.nodes)) and not set(b1.nodes)==set(b2.nodes):
-    #             logging.debug("Skipping bubble %s, because its nested in %s."%(str(b1.nodes),str(b2.nodes)))
-    #             break
-    #     else:
-    #         distinctbubbles.append(b1)
+    
     logging.info("Done.")
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     nn=max([node for node in G.nodes() if type(node)==int])+1
 
     if kwargs['nproc']>1:
-
         outputq = Queue()
         nworkers=kwargs['nproc']
         aworkers=[]
+
+        if nworkers>len(distinctbubbles):
+            nworkers=len(distinctbubbles)
 
         chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
         for i in range(0, len(distinctbubbles), chunksize):
@@ -430,12 +414,20 @@ def refine_all(G, **kwargs):
             p.start()
             aworkers.append(p)
 
-        graph_worker(G,nn,outputq,nworkers)
+        try:
+            graph_worker(G,nn,outputq,nworkers)
+        except:
+            logging.fatal("Failed to update graph with refined bubble! Signal workers to stop.")
+            for p in aworkers:
+                p.terminate()
+            outputq.close()
+            exit(1)
         
         outputq.close()
-
+        logging.info("Waiting for workers to finish...")
         for p in aworkers:
             p.join()
+        logging.info("Done.")
 
     else:
         for bubble in distinctbubbles:
@@ -701,12 +693,13 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
         updated=False
         for v,t in ng.edges():
             if ng.out_degree(v)==ng.in_degree(t)==1:
-                ng.node[v]['seq']+=ng.node[t]['seq']
-                for suc in ng.successors(t):
-                    ng.add_edge(v,suc,**ng[v][t])
-                ng.remove_node(t)
-                updated=True
-                break
+                if ng.node[v]['offsets'].keys()==ng.node[t]['offsets'].keys():
+                    ng.node[v]['seq']+=ng.node[t]['seq']
+                    for suc in ng.successors(t):
+                        ng.add_edge(v,suc,**ng[t][suc])
+                    ng.remove_node(t)
+                    updated=True
+                    break
 
     for tmpfile in tempfiles:
         try:
