@@ -35,6 +35,7 @@ def refine_bubble_cmd(args):
                             gcmodel=args.gcmodel,
                             complex=args.complex,
                             simple=args.simple,
+                            nogaps=args.nogaps,
                             all=args.all,
                             method=args.method,
                             parameters=args.parameters,
@@ -50,7 +51,19 @@ def refine_bubble_cmd(args):
             logging.error("Specify source sink pair")
             sys.exit(1)
 
-        b=bubbles.Bubble(G,args.source,args.sink)
+        topiter=nx.topological_sort(G)
+        for i,v in enumerate(topiter):
+            if v==args.source:
+                source_idx=i
+                break
+        nodes=[args.source]
+        for j,v in enumerate(topiter):
+            nodes.append(v)
+            if v==args.sink:
+                sink_idx=i+j+1
+                break
+        
+        b=bubbles.Bubble(G,args.source,args.sink,source_idx,sink_idx,nodes)
 
         nn=max([node for node in G.nodes() if type(node)==int])+1
 
@@ -263,22 +276,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     
     return bubble,ng,path2start,path2end
 
-
-def align_worker(inputq,outputq):
-    while True:
-        data = inputq.get()
-        if data==-1:
-            outputq.put(-1)
-            break
-        else:
-            sg,bubble,offsets,paths,kwargs=data
-            b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-            if b==None:
-                continue
-            else:
-                outputq.put(b)
-
-def align_worker2(G,chunk,outputq,kwargs,chunksize=500):
+def align_worker(G,chunk,outputq,kwargs,chunksize=500):
     
     rchunk=[]
     for bubble in chunk:
@@ -341,6 +339,12 @@ def refine_all(G, **kwargs):
                 logging.debug("Skipping bubble %s, not complex."%str(b.nodes))
                 continue
 
+        if kwargs['nogaps']:
+            for n in b.nodes:
+                if 'N' in G.nodes[n]['seq']:
+                    logging.info("Skipping bubble %s, bubble spans a gap."%str(b.nodes))
+                    continue
+
         if kwargs['simple']:
             if not b.issimple():
                 logging.debug("Skipping bubble %s, not simple."%str(b.nodes))
@@ -373,16 +377,37 @@ def refine_all(G, **kwargs):
 
         realignbubbles.append(b)
 
-    logging.info("Checking for nested bubbles...")
-    distinctbubbles=[]
-    for b1 in realignbubbles:
-        for b2 in realignbubbles:
-            if set(b2.nodes).issuperset(set(b1.nodes)) and not set(b1.nodes)==set(b2.nodes):
-                logging.debug("Skipping bubble %s, because its nested in %s."%(str(b1.nodes),str(b2.nodes)))
-                break
+    realignbubbles.sort(key=lambda b: b.source_idx)
+    distinctbubbles=[realignbubbles[0]]
+    p=0
+    i=1
+    for i in xrange(i,len(realignbubbles)):
+        if realignbubbles[i].source_idx >= realignbubbles[p].sink_idx:
+            distinctbubbles.append(realignbubbles[i])
+            p=i
         else:
-            distinctbubbles.append(b1)
+            logging.debug("Skipping realignment for: <%d,%d> - is contained in <%d,%d>"%(realignbubbles[i].source,realignbubbles[i].sink,realignbubbles[p].source,realignbubbles[p].sink))
+    # for b1 in realignbubbles:
+    #     for b2 in realignbubbles:
+    #         if set(b2.nodes).issuperset(set(b1.nodes)) and not set(b1.nodes)==set(b2.nodes):
+    #             logging.debug("Skipping bubble %s, because its nested in %s."%(str(b1.nodes),str(b2.nodes)))
+    #             break
+    #     else:
+    #         distinctbubbles.append(b1)
     logging.info("Done.")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
     nn=max([node for node in G.nodes() if type(node)==int])+1
@@ -395,7 +420,7 @@ def refine_all(G, **kwargs):
 
         chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
         for i in range(0, len(distinctbubbles), chunksize):
-            p=Process(target=align_worker2, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
+            p=Process(target=align_worker, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
             p.start()
             aworkers.append(p)
 

@@ -28,22 +28,12 @@ def bubbles(G):
         prevEnti=None
         alternativeEntrance={}
         previousEntrance={}
+        
         ordD={}
         structural_variants=[]
 
         if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
             structural_variants=MultiGraphToDiGraph(G)
-            # logging.debug("Converting MultiDigraph to DiGraph, before bubble extraction.")
-            # orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
-            # refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
-            # refpathnames=[p for p in G.graph['paths'] if not p.startswith('*')]
-            # for e0,e1,k,d in G.edges(keys=True,data=True):
-            #     if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
-            #         # logging.debug("STRUCTURAL VARIANT: %s %s %s"%(e0,e1,d))
-            #         structural_variants.append((e0,e1,k,d))
-
-            # G.remove_edges_from(structural_variants)
-            # G.graph['paths']=refpathnames
 
         logging.debug("Topologically sort the graph.")
         ordD_=list(nx.topological_sort(G))
@@ -120,6 +110,7 @@ def bubbles(G):
 
         if (valid == s):
             sspairs.append((s, vexit[0]))
+
             while (candidates[-1][0] is not s):
                 if candidates[-1][1]==1:
                     ne=nextentrance(candidates,s)
@@ -164,7 +155,7 @@ def bubbles(G):
     for pair in sspairs:
         allpairs.append((pair[0],pair[1],None))
 
-    allpairs.sort(key=lambda a: ordD[a[0]],reverse=True) #sort by topological order of the source
+    allpairs.sort(key=lambda a: ordD[a[0]])#,reverse=True) #sort by topological order of the source
 
     for v,u,d in allpairs:
         if d==None:
@@ -175,7 +166,7 @@ def bubbles(G):
             sinksamples=set(sinknode['offsets'].keys())
             if len(bubblenodes)==2: #only source sink, no variation
                 continue
-            yield Bubble(G,v,u,nodes=bubblenodes,ordD=ordD)
+            yield Bubble(G,v,u,ordD[v],ordD[u],bubblenodes)
         else:
             yield v,u,d
 
@@ -382,27 +373,14 @@ class InvalidBubble(Exception):
     pass
 
 class Bubble:
-    def __init__(self,G,source,sink,nodes=None,ordD=None):
+    def __init__(self,G,source,sink,source_idx,sink_idx,nodes):
         self.source=source
         self.sink=sink
+        self.source_idx=source_idx
+        self.sink_idx=sink_idx
         self.G=G
-
-        if ordD==None or nodes==None:
-            ordD_=list(nx.topological_sort(G))
-
-        if ordD!=None:
-            self.ordD=ordD
-        else:
-            self.ordD={}
-            for i,v in enumerate(ordD_):
-                self.ordD[v]=i
-        
-        if nodes!=None:
-            self.nodes=nodes
-        else:
-            if self.ordD[source]>=self.ordD[sink]:
-                raise InvalidBubble("Sink comes before Source, flip source and sink to form valid bubble.")
-            self.nodes=ordD_[self.ordD[source]:self.ordD[sink]+1]
+        self.nodes=nodes
+        self.ordD={node:i for i,node in enumerate(nodes)}
 
         if len(self.nodes)<=2:
             raise InvalidBubble("Not a valid source sink pair as bubble")
@@ -493,12 +471,10 @@ class Bubble:
         
         return (minwiggle,minwiggle)
 
-        # return (0,0)
-
 class Variant(Bubble):
     def __init__(self,bubble):
 
-        Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.nodes,bubble.ordD)
+        Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.source_idx,bubble.sink_idx,bubble.nodes)
         
         self.genotypes=[] #list of variant sequence
         self.vtype='undefined' #type definition of the variant

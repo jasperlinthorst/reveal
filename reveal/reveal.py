@@ -123,6 +123,7 @@ def main():
     parser_refine.add_argument("-o", dest="outfile", type=str, default=None, help="File to which realigned graph is to be written.")
     parser_refine.add_argument("--all", action="store_true", dest="all", default=False, help="Trigger realignment for all bubbles.")
     parser_refine.add_argument("--complex", action="store_true", dest="complex", default=False, help="Trigger realignment for all complex bubbles.")
+    parser_refine.add_argument("--nogaps", action="store_true", dest="nogaps", default=False, help="Skip realignment for bubbles that span gaps.")
     parser_refine.add_argument("--simple", action="store_true", dest="simple", default=False, help="Trigger realignment for all simple bubbles.")
     parser_refine.add_argument("--minsize", dest="minsize", type=int, default=0, help="Only realign bubbles if the smallest allele contains at least this many bases.")
     parser_refine.add_argument("--maxsize", dest="maxsize", type=int, default=10000, help="Only realign bubbles if the largest allele contains less than this many bases.")
