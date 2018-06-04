@@ -115,8 +115,6 @@ def refine_bubble_cmd(args):
     else:
         fn=args.outfile
 
-    prune_nodes(G)
-
     write_gfa(G,"",outputfile=fn)
 
 def replace_bubble(G,bubble,ng,path2start,path2end,nn):
@@ -173,6 +171,10 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
         for e0,e1,d in G.in_edges(endnode,data=True):
             G.add_edge(e0,bubble.sink,**d)
         G.remove_node(endnode)
+
+    # prune_nodes(G)
+
+    # contract(G,list(nx.topological_sort(G)))
 
     return G,nn
 
@@ -236,6 +238,11 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
                             sa64=kwargs['sa64'])
         T=idx.T
         seq2node(ng,T) #transfer sequence to node attributes
+
+    prune_nodes(ng)
+
+    contract(ng,list(nx.topological_sort(ng)))
+
 
     #map edge atts back to original graph
     for n1,n2,data in ng.edges(data=True):
@@ -393,7 +400,7 @@ def refine_all(G, **kwargs):
             distinctbubbles.append(realignbubbles[i])
             p=i
         else:
-            logging.debug("Skipping realignment for: <%d,%d> - is contained in <%d,%d>"%(realignbubbles[i].source,realignbubbles[i].sink,realignbubbles[p].source,realignbubbles[p].sink))
+            logging.debug("Skipping realignment for: <%s,%s> - is contained in <%s,%s>"%(realignbubbles[i].source, realignbubbles[i].sink, realignbubbles[p].source, realignbubbles[p].sink))
     
     logging.info("Done.")
 

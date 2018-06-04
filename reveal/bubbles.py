@@ -23,12 +23,13 @@ def bubbles(G):
     
     def superbubble(G):
         candidates=[]
+        entrance2candidateidx=dict()
         sspairs=[]
         #prevEnt=None
         prevEnti=None
         alternativeEntrance={}
         previousEntrance={}
-        
+
         ordD={}
         structural_variants=[]
 
@@ -48,6 +49,7 @@ def bubbles(G):
                 candidates.append((v,1))
             if entrance(G,v):
                 candidates.append((v,0))
+                entrance2candidateidx[(v,0)]=len(candidates)-1
                 #prevEnt=v
                 prevEnti=i
         
@@ -74,11 +76,11 @@ def bubbles(G):
             if candidates[-1][1]==0:
                 del candidates[-1]
             else:
-                reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs)
+                reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx)
         
         return ordD,ordD_,sspairs,structural_variants
     
-    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs):
+    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx):
         
         if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
             del candidates[-1]
@@ -113,9 +115,15 @@ def bubbles(G):
 
             while (candidates[-1][0] is not s):
                 if candidates[-1][1]==1:
+                    
+                    # ne=None
+                    # for candidate in candidates[entrance2candidateidx[(s,0)]+1:]:
+                    #     if candidate[1]==0:
+                    #         ne=candidate
                     ne=nextentrance(candidates,s)
+
                     if ne!=None:
-                        reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs)
+                        reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs,entrance2candidateidx)
                     else:
                         del candidates[-1]
                 else:
@@ -253,7 +261,7 @@ def variants_cmd(args):
             if v.vtype!=args.type and args.type!='all':
                 continue
             
-            genotypestr=",".join(sorted(v.genotypes))
+            genotypestr=",".join(v.genotypes)
             if args.nogaps:
                 if 'N' in genotypestr:
                     continue
@@ -482,7 +490,8 @@ class Variant(Bubble):
         self.vpos=dict() #key is sample, value is position within sample
 
         gt=list(self.G.successors(self.source))
-        gt.sort(key=lambda l: self.ordD[l])
+
+        # gt.sort(key=lambda l: self.ordD[l])
 
         if self.issimple():
             for v in gt:
@@ -491,7 +500,6 @@ class Variant(Bubble):
                 else:
                     s=self.G.node[v]['seq']
                     self.genotypes.append(s)
-            #self.genotypes.sort()
         else:
             for v in gt:
                 self.genotypes.append('N')

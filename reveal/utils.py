@@ -19,6 +19,40 @@ from math import log
 import uuid
 import subprocess
 
+def contract(G,topsort):
+    newtopsort=[]
+    stretches=[[]]    
+    pnode=topsort[0]
+    newtopsort=[topsort[0]]
+    for i,node in enumerate(topsort[1:]):
+        pred=list(G.predecessors(node))
+        suc=list(G.successors(pnode))
+
+        if pred==[pnode] and suc==[node]:
+            if len(stretches[-1])==0:
+                stretches[-1].append(pnode)
+            stretches[-1].append(node)
+        else:
+            if len(stretches[-1])!=0:
+                stretches.append([])
+            newtopsort.append(node)
+        pnode=node
+
+    for stretch in stretches:
+        if len(stretch)>0:
+            contract_nodes(G,stretch)
+
+    assert(len(newtopsort)==len(set(newtopsort)))
+
+    return newtopsort
+
+def contract_nodes(G,nodes):
+    logging.debug("Contract: Contracting nodes: %s"%nodes)
+    G.node[nodes[0]]['seq']="".join([G.node[n]['seq'] for n in nodes])
+    for n1,n2,data in G.out_edges(nodes[-1],data=True):
+        G.add_edge(nodes[0],n2,**data)
+    G.remove_nodes_from(nodes[1:])
+
 def MultiGraphToDiGraph(G):
     structural_variants=[]
     logging.debug("Converting MultiDigraph to DiGraph, by removing structural variant edges.")
