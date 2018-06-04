@@ -13,7 +13,7 @@ import logging
 import utils
 import traceback
 from utils import mem2mums
-import numpy as np
+import math
 
 # from matplotlib import pyplot as plt
 
@@ -44,7 +44,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     
     active=[left]
     processed=[]
-    
+
     for mum in mums:
         trace=False
         #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
@@ -74,7 +74,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                     if w > s: #as input is sorted by score
                         break
 
-                penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
+                penalty=utils.gapcost([amum[2][k]+amum[0] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
 
                 assert(penalty>=0)
 
@@ -104,13 +104,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 def segment(mums):
     d=dict()
     for mum in mums:
-        if isinstance(mum[2], dict):
-            k=tuple(sorted(mum[2].keys()))
-        elif isinstance(mum[2],tuple):
-            k=tuple(sorted([sp for gid,sp in mum[2]]))
-        else:
-            logging.fatal("Unknown format: %s"%str(spd))
-
+        k=tuple(sorted([sp for gid,sp in mum[2]]))
         if k in d:
             d[k].append(mum)
         else:
@@ -163,11 +157,32 @@ splitchain="largest"
 maxdepth=None #stop recursion when max depth is reached
 maxsize=None #stop recursion when all fragments in a bubble are smaller then maxsize
 # pcutoff=0.01
+
+def trim_overlap(mums):
+    coords=mums[0][2]
+    for coord in range(len(coords)):
+        
+        mums.sort(key=lambda m: m[2][coord][1])
+
+        trimmed=[mums[0]]
+        for mum in mums[1:]:
+            overlap = (trimmed[-1][2][coord][1]+trimmed[-1][0])-mum[2][coord][1]
+
+            if overlap>0:
+                trimmed[-1] = (trimmed[-1][0]-overlap, trimmed[-1][1], trimmed[-1][2])
+                trimmed.append( (mum[0]-overlap, mum[1], tuple((k,v+overlap) for k,v in mum[2]) ))
+                
+            else:
+                trimmed.append(mum)
+        mums=trimmed
+
+    return mums
+
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
         if len(mums)==0:
             return
-
+        
         if not precomputed:
             if maxdepth!=None:
                 if idx.depth>maxdepth:
@@ -194,32 +209,15 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
 
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
-
+            
             if len(mmums)==0:
                 logging.debug("No MUMS that span all input genomes, segment genomes.")
-                # print mums
-                # print idx.nsamples, idx.n
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2],len(mmums)))
 
-            mmums.sort(key=lambda mum: mum[0], reverse=True) #sort by size
-            tmp=[]
-            i=0
-            for mmum in mmums:
-                if i==maxmums and maxmums!=0:
-                    break
-                if len(mmum[2])>mmum[1]: #NON-UNIQUE MATCH, take all combinations
-                    # print "explode mmem to mums"
-                    for _mmum in mem2mums(mmum):
-                        tmp.append(_mmum)
-                        i+=1
-                        if i==maxmums and maxmums!=0:
-                            break
-                else:
-                    tmp.append(mmum)
-                    i+=1
+            mmums=trim_overlap(mmums)
 
-            mmums=tmp
+            mmums.sort(key=lambda mum: mum[0], reverse=True) #sort by size
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
 
@@ -316,7 +314,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 p=((.25**(n-1)))**l #probability of observing this match by random chance
 
                 if p>0:
-                    p=1-np.exp(np.log(1-p) * o) #correct for the number of tests we actually did
+                    p=1-math.exp(math.log(1-p) * o) #correct for the number of tests we actually did
                     
                 # p=1-((1-((.25**(n-1))**l))**o)
                 if p>pcutoff:
