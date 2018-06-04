@@ -115,6 +115,10 @@ def refine_bubble_cmd(args):
     else:
         fn=args.outfile
 
+    prune_nodes(G)
+
+    contract(G,list(nx.topological_sort(G)))
+
     write_gfa(G,"",outputfile=fn)
 
 def replace_bubble(G,bubble,ng,path2start,path2end,nn):
@@ -171,10 +175,6 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
         for e0,e1,d in G.in_edges(endnode,data=True):
             G.add_edge(e0,bubble.sink,**d)
         G.remove_node(endnode)
-
-    # prune_nodes(G)
-
-    # contract(G,list(nx.topological_sort(G)))
 
     return G,nn
 
@@ -238,11 +238,6 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
                             sa64=kwargs['sa64'])
         T=idx.T
         seq2node(ng,T) #transfer sequence to node attributes
-
-    prune_nodes(ng)
-
-    contract(ng,list(nx.topological_sort(ng)))
-
 
     #map edge atts back to original graph
     for n1,n2,data in ng.edges(data=True):
