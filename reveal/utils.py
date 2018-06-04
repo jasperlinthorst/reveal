@@ -138,7 +138,7 @@ def fasta_writer(fn,name_seq,lw=100):
             for i in range( (len(seq)/lw)+(len(seq) % lw > 0)):
                 ff.write(seq[i*lw:(i+1)*lw]+"\n")
 
-def gapcost(pointa,pointb,model="sumofpairs",convex=True,lambda_=1,epsilon_=0): #epsilon is mismatch penalty weight, lambda is indel penalty weight
+def gapcost(pointa,pointb,model="sumofpairs",convex=False,lambda_=1,epsilon_=0): #epsilon is mismatch penalty weight, lambda is indel penalty weight
     assert(len(pointa)==len(pointb))
     
     if model=="star-avg":
