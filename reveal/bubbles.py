@@ -262,8 +262,9 @@ def variants_cmd(args):
                 continue
             
             genotypestr=",".join(v.genotypes)
+            
             if args.nogaps:
-                if 'N' in genotypestr:
+                if v.spans_gap:
                     continue
 
             minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
@@ -481,18 +482,23 @@ class Bubble:
 
 class Variant(Bubble):
     def __init__(self,bubble):
-
+        
         Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.source_idx,bubble.sink_idx,bubble.nodes)
         
         self.genotypes=[] #list of variant sequence
         self.vtype='undefined' #type definition of the variant
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
-
-        gt=list(self.G.successors(self.source))
-
-        # gt.sort(key=lambda l: self.ordD[l])
-
+        self.spans_gap=False
+        
+        for node in self.nodes:
+            if 'N' in self.G.node[node]['seq']:
+                self.spans_gap=True
+                break
+        
+        gt=list(set(self.G.successors(self.source)) & set(self.nodes))
+        gt.sort(key=lambda l: self.ordD[l])
+        
         if self.issimple():
             for v in gt:
                 if v==self.sink:
