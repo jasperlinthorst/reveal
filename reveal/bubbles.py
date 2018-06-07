@@ -77,7 +77,7 @@ def bubbles(G):
                 del candidates[-1]
             else:
                 reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx)
-        
+
         return ordD,ordD_,sspairs,structural_variants
     
     def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx):
@@ -243,7 +243,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -292,10 +292,13 @@ def variants_cmd(args):
                             sys.stdout.write(">%s_%d_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,i))
                             sys.stdout.write("%s\n"%seq)
                 continue
-            
+
             sourcelen=len(G.node[v.source]['seq'])
             sinklen=len(G.node[v.sink]['seq'])
             
+            startpos=G.node[v.source]['offsets'][cds]+sourcelen
+            endpos=G.node[v.sink]['offsets'][cds]
+
             allelesizes=[]
 
             for gt in v.genotypes:
@@ -307,8 +310,9 @@ def variants_cmd(args):
             maxa=max(allelesizes)
             mina=min(allelesizes)
 
-            sys.stdout.write("%s\t%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
-                                                                    v.vpos[cds],
+            sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
+                                                                    startpos,
+                                                                    endpos,
                                                                     sourcelen,
                                                                     sinklen,
                                                                     maxa,
@@ -357,8 +361,9 @@ def variants_cmd(args):
                 if minflank<args.minflank:
                     continue
 
-                sys.stdout.write("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
+                sys.stdout.write("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
                                                                     G.node[v]['offsets'][cds]+len(G.node[v]['seq']),
+                                                                    'N/A',
                                                                     sourcelen,
                                                                     sinklen,
                                                                     'N/A',
@@ -482,7 +487,7 @@ class Bubble:
 
 class Variant(Bubble):
     def __init__(self,bubble):
-        
+
         Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.source_idx,bubble.sink_idx,bubble.nodes)
         
         self.genotypes=[] #list of variant sequence
@@ -490,15 +495,15 @@ class Variant(Bubble):
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
         self.spans_gap=False
-        
+
         for node in self.nodes:
             if 'N' in self.G.node[node]['seq']:
                 self.spans_gap=True
                 break
-        
+
         gt=list(set(self.G.successors(self.source)) & set(self.nodes))
         gt.sort(key=lambda l: self.ordD[l])
-        
+
         if self.issimple():
             for v in gt:
                 if v==self.sink:
