@@ -31,7 +31,8 @@ def unzip_graph(G,minunzip=0):
     nid+=1
 
     for b in bubbles.bubbles(G):
-        nid=unzip_bubble(G,b,minunzip=minunzip,idoffset=nid)
+        if isinstance(b,bubbles.Bubble):
+            nid=unzip_bubble(G,b,minunzip=minunzip,idoffset=nid)
 
 def unzip_bubble(G,b,minunzip=0,idoffset=0):
     
