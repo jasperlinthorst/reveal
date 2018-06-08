@@ -55,6 +55,7 @@ def contract_nodes(G,nodes):
 
 def MultiGraphToDiGraph(G):
     structural_variants=[]
+    toremove=[]
     logging.debug("Converting MultiDigraph to DiGraph, by removing structural variant edges.")
     orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
     refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
@@ -63,8 +64,8 @@ def MultiGraphToDiGraph(G):
         if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
             if type(e0)!=str and type(e1)!=str:
                 structural_variants.append((e0,e1,k,d))
-
-    G.remove_edges_from(structural_variants)
+            toremove.append((e0,e1))
+    G.remove_edges_from(toremove)
     G.graph['paths']=refpathnames
 
     return structural_variants
