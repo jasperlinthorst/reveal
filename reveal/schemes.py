@@ -256,67 +256,68 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             
             if len(relmums)==0:
                 logging.debug("No more significant MUMs.")
-
-            logging.debug("Chaining %d mums"%len(relmums))
-
-            chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
-
-            logging.debug("Selected chain of %d mums"%len(chainedmums))
-            if len(chainedmums)==0:
                 return
-
-            if splitchain=="balanced":
-                logging.debug("Selecting MUM from chain on position within chain.")
-                optsplit=None
-                for mum,score in chainedmums: #determine optimal split in chain
-                    lseq=0
-                    rseq=0
-                    for crd in mum[2]:
-                        lseq=mum[2][crd]
-                        assert(lseq>=0)
-                        rseq=right[2][crd]-mum[2][crd]+mum[0]
-                        assert(rseq>=0)
-                    if optsplit==None or abs(lseq-rseq)<optsplit:
-                        optsplit=abs(lseq-rseq)
-                        splitmum=mum
-            elif splitchain=="largest":
-                logging.debug("Selecting MUM from chain based on size.")
-                splitmum=sorted(chainedmums,key=lambda m:m[0][0])[-1][0]
-            else: #select at random
-                logging.debug("Selecting MUM from chain at random.")
-                splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
 
             skipleft=[]
             skipright=[]
-            if seedsize>0:
-                t=skipleft
-                scoreatsplit=0
-                for mum,score in chainedmums:
-                    if mum==splitmum:
-                        scoreatsplit=score
-                        t=skipright
-                        continue
-                    t.append( (mapping[tuple(mum[2].values())], score-scoreatsplit) )
-                    # t.append( mapping[tuple(mum[2].values())] )
-                skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=seedsize]
-                skipright=[(mum,score) for mum,score in skipright if mum[0]>=seedsize]
+
+            if len(relmums)==1:
+                splitmum=relmums[0]
+            else:
+                if len(relmums)>maxmums:
+                    logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mmums),maxmums))
+                    relmums=relmums[-maxmums:]
+
+                logging.debug("Chaining %d mums"%len(relmums))
+                chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
+                logging.debug("Selected chain of %d mums"%len(chainedmums))
+                if len(chainedmums)==0:
+                    return
+                if splitchain=="balanced":
+                    logging.debug("Selecting MUM from chain on position within chain.")
+                    optsplit=None
+                    for mum,score in chainedmums: #determine optimal split in chain
+                        lseq=0
+                        rseq=0
+                        for crd in mum[2]:
+                            lseq=mum[2][crd]
+                            assert(lseq>=0)
+                            rseq=right[2][crd]-mum[2][crd]+mum[0]
+                            assert(rseq>=0)
+                        if optsplit==None or abs(lseq-rseq)<optsplit:
+                            optsplit=abs(lseq-rseq)
+                            splitmum=mum
+                elif splitchain=="largest":
+                    logging.debug("Selecting MUM from chain based on size.")
+                    splitmum=sorted(chainedmums,key=lambda m:m[0][0])[-1][0]
+                else: #select at random
+                    logging.debug("Selecting MUM from chain at random.")
+                    splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
+
+                if seedsize>0:
+                    t=skipleft
+                    scoreatsplit=0
+                    for mum,score in chainedmums:
+                        if mum==splitmum:
+                            scoreatsplit=score
+                            t=skipright
+                            continue
+                        t.append( (mapping[tuple(mum[2].values())], score-scoreatsplit) )
+                        # t.append( mapping[tuple(mum[2].values())] )
+                    skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=seedsize]
+                    skipright=[(mum,score) for mum,score in skipright if mum[0]>=seedsize]
 
             splitmum=mapping[tuple(splitmum[2].values())]
 
-            if minlength==0:
-                
+            if minlength==0: #experimental, use significance to determine valid anchor length when minlength is set to 0
                 o=1
                 for p in left[2]:
                     o=o*(right[2][p]-left[2][p])
-
                 l=splitmum[0]
                 n=splitmum[1]
                 p=((.25**(n-1)))**l #probability of observing this match by random chance
-
                 if p>0:
                     p=1-math.exp(math.log(1-p) * o) #correct for the number of tests we actually did
-                    
-                # p=1-((1-((.25**(n-1))**l))**o)
                 if p>pcutoff:
                     logging.info("P-value for: %s (n=%d l=%d o=%d) is %.4g"%(str(splitmum),n,l,o,p))
                     return
