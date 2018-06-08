@@ -50,7 +50,6 @@ def bubbles(G):
             if entrance(G,v):
                 candidates.append((v,0))
                 entrance2candidateidx[(v,0)]=len(candidates)-1
-                #prevEnt=v
                 prevEnti=i
         
         #construct outparent
@@ -503,17 +502,39 @@ class Variant(Bubble):
 
         gt=list(set(self.G.successors(self.source)) & set(self.nodes))
         gt.sort(key=lambda l: self.ordD[l])
+        bsamples=set(self.G.node[self.source]['offsets'].keys())&set(self.G.node[self.sink]['offsets'].keys())
 
+        bsamplestmp=bsamples.copy()        
         if self.issimple():
-            for v in gt:
+            for i,v in enumerate(gt):
                 if v==self.sink:
                     self.genotypes.append('-')
                 else:
                     s=self.G.node[v]['seq']
                     self.genotypes.append(s)
+
+                for sampleid in self.G.node[v]['offsets'].keys():
+                    if sampleid in bsamplestmp:
+                        self.calls[bubble.G.graph['id2path'][sampleid]]=i
+                        bsamplestmp.discard(sampleid)
         else:
-            for v in gt:
-                self.genotypes.append('N')
+            self.vtype="complex"
+            seqd=dict()
+            for sid in bsamples:
+                seq=""
+                for v in self.nodes: #determine sequence through the complex bubble; use the entire path as genotype
+                    if sid in self.G.node[v]['offsets']:
+                        seq+=self.G.node[v]['seq']
+
+                if seq in seqd:
+                    seqd[seq].append(sid)
+                else:
+                    seqd[seq]=[sid]
+
+            self.genotypes=list(seqd.keys())
+            for i,k in enumerate(self.genotypes):
+                for sid in seqd[k]:
+                    self.calls[bubble.G.graph['id2path'][sid]]=i
         
         if self.issimple():
             if self.G.has_edge(self.source,self.sink):
@@ -527,22 +548,5 @@ class Variant(Bubble):
                 self.vtype='multi-allelic'
         
         n=self.G.node[self.source]
-        
         for s in n['offsets']:
             self.vpos[s]=n['offsets'][s]+len(n['seq'])+1
-
-        #make call, associate sample with the numerical value of the genotype
-        sourcesamples=set(self.G.node[self.source]['offsets'].keys())
-        tmpsource=sourcesamples.copy()
-        
-        for i,node in enumerate(gt):
-            n=self.G.node[node]
-            #for sample in n['offsets'].keys():
-            for sampleid in n['offsets'].keys():
-                #if sample not in tmpsource:
-                if sampleid not in tmpsource:
-                    continue
-                #self.calls[sample]=i
-                self.calls[bubble.G.graph['id2path'][sampleid]]=i
-                #tmpsource.discard(sample)
-                tmpsource.discard(sampleid)
