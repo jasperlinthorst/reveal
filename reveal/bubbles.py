@@ -241,7 +241,7 @@ def variants_cmd(args):
             logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['paths'])))
             sys.exit(1)
     
-    if not args.fastaout:
+    if not args.fastaout and not args.bedout:
         sys.stdout.write("#reference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
@@ -298,6 +298,10 @@ def variants_cmd(args):
             startpos=G.node[v.source]['offsets'][cds]+sourcelen
             endpos=G.node[v.sink]['offsets'][cds]
 
+            if args.bedout:
+                sys.stdout.write("%s\t%d\t%s\t%s\n"%(G.graph['id2path'][cds],startpos,endpos,v.vtype))
+                continue
+
             allelesizes=[]
 
             for gt in v.genotypes:
@@ -332,7 +336,11 @@ def variants_cmd(args):
             sys.stdout.write("\n")
 
         else: #structural variant, handle output differently
+            if args.fastaout or args.bedout:
+                continue
+
             v,u,d=b
+
             if type(v)==str or type(u)==str:
                 continue #just start/end
             else:

@@ -283,6 +283,7 @@ def main():
     parser_variants.add_argument("graph", nargs=1, help='Graph in gfa format from which bubbles are to be extracted.')
     parser_variants.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, if possible, should be used as a coordinate system or reference.")
     parser_variants.add_argument("--fasta", dest="fastaout", action="store_true", default=False, help="Output variant sequence in a fasta format.")
+    parser_variants.add_argument("--bed", dest="bedout", action="store_true", default=False, help="Output position of variants in bed format.")
     parser_variants.add_argument("--split", dest="split", action="store_true", default=False, help="Output a multi-fasta file per variant.")
     parser_variants.add_argument("--minsize", dest="minsize", default=0, type=int, help="Only output variants where max-allele size is larger than this many bp.")
     parser_variants.add_argument("--diffsize", dest="diffsize", default=0, type=int, help="Only output variants where the difference between the min- and max-allele size is larger than this many bp.")
