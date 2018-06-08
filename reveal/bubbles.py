@@ -283,12 +283,12 @@ def variants_cmd(args):
                     with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
                         for i,seq in enumerate(v.genotypes):
                             if seq!='-':
-                                of.write(">%s_%d_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,i))
+                                of.write(">%s_%d_%s_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
                                 of.write("%s\n"%seq)
                 else:
                     for i,seq in enumerate(v.genotypes):
                         if seq!='-':
-                            sys.stdout.write(">%s_%d_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,i))
+                            sys.stdout.write(">%s_%d_%s_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
                             sys.stdout.write("%s\n"%seq)
                 continue
 

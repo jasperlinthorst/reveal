@@ -287,7 +287,7 @@ def main():
     parser_variants.add_argument("--minsize", dest="minsize", default=0, type=int, help="Only output variants where max-allele size is larger than this many bp.")
     parser_variants.add_argument("--diffsize", dest="diffsize", default=0, type=int, help="Only output variants where the difference between the min- and max-allele size is larger than this many bp.")
     parser_variants.add_argument("--minflank", dest="minflank", default=0, type=int, help="Only output variants with an exact matching flanking sequence of at least this length.")
-    parser_variants.add_argument("--type", dest="type", default="all", choices=["all","snp","indel","multi-allelic","region","undefined"], help="Only output variants of this type.")
+    parser_variants.add_argument("--type", dest="type", default="all", choices=["all","snp","indel","multi-allelic","region","complex","undefined"], help="Only output variants of this type.")
     parser_variants.add_argument("--nogaps", dest="nogaps", default=True, action="store_true", help="Don't output variants that are caused by gaps (contain the N character).")
     parser_variants.add_argument("--gaps", dest="nogaps", default=True, action="store_false", help="Output variants that are caused by gaps (contain the N character).")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
