@@ -338,9 +338,9 @@ def variants_cmd(args):
         else: #structural variant, handle output differently
             if args.fastaout or args.bedout:
                 continue
-
+            
             v,u,d=b
-
+            
             if type(v)==str or type(u)==str:
                 continue #just start/end
             else:
@@ -530,9 +530,12 @@ class Variant(Bubble):
             seqd=dict()
             for sid in bsamples:
                 seq=""
-                for v in self.nodes: #determine sequence through the complex bubble; use the entire path as genotype
+                for v in self.nodes[1:-1]: #determine sequence through the complex bubble; use the entire path as genotype
                     if sid in self.G.node[v]['offsets']:
                         seq+=self.G.node[v]['seq']
+
+                if seq=="":
+                    seq="-"
 
                 if seq in seqd:
                     seqd[seq].append(sid)
