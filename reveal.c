@@ -814,8 +814,21 @@ void *aligner(void *arg) {
             time(&t1);
             fprintf(stderr,"Done (took %.f seconds).\n",difftime(t1,t0));
 #endif
+            
+            if (!PyTuple_Check(pickresult)){
+                PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
+                err_flag=1;
+                Py_DECREF(idx);
+                Py_DECREF(arglist);
+                // Py_DECREF(multimums);
+                PyGILState_Release(gstate);
+                pthread_mutex_unlock(&python);
 
-            if (pickresult==Py_None){
+                free(mmum.sp);
+                break;
+            }
+
+            if (PyTuple_Size(pickresult)==0){
                 //TODO 1: NO MORE MUMS, call prune nodes here!
                 Py_DECREF(idx);
                 Py_DECREF(arglist);
@@ -830,19 +843,6 @@ void *aligner(void *arg) {
                 
                 free(mmum.sp);
                 continue;
-            }
-            
-            if (!PyTuple_Check(pickresult)){
-                PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
-                err_flag=1;
-                Py_DECREF(idx);
-                Py_DECREF(arglist);
-                // Py_DECREF(multimums);
-                PyGILState_Release(gstate);
-                pthread_mutex_unlock(&python);
-
-                free(mmum.sp);
-                break;
             }
             
 #ifdef REVEALDEBUG

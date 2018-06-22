@@ -161,32 +161,37 @@ maxsize=None #stop recursion when all fragments in a bubble are smaller then max
 def trim_overlap(mums):
     coords=mums[0][2]
     for coord in range(len(coords)):
-        
-        mums.sort(key=lambda m: m[2][coord][1])
+        mums.sort(key=lambda m: (m[2][coord][1],-m[0])) #sort by start position, then size
+
+        #filter the partial matches that are now contained
+        mums=[mum for i,mum in enumerate(mums) if i==0 or mums[i-1][2][coord][1]+mums[i-1][0]<=mum[2][coord][1]+mum[0]]
 
         trimmed=[mums[0]]
         for mum in mums[1:]:
-            overlap = (trimmed[-1][2][coord][1]+trimmed[-1][0])-mum[2][coord][1]
-
+            pmum=trimmed[-1]
+            overlap = (pmum[2][coord][1]+pmum[0]) - mum[2][coord][1]
             if overlap>0:
-                trimmed[-1] = (trimmed[-1][0]-overlap, trimmed[-1][1], trimmed[-1][2])
-                trimmed.append( (mum[0]-overlap, mum[1], tuple((k,v+overlap) for k,v in mum[2]) ))
-                
+                if pmum[0]-overlap>0:
+                    trimmed[-1] = (pmum[0]-overlap, pmum[1], pmum[2])
+                else:
+                    del trimmed[-1]
+                if mum[0]-overlap>0:
+                    trimmed.append( (mum[0]-overlap, mum[1], tuple((k,v+overlap) for k,v in mum[2]) ))
             else:
                 trimmed.append(mum)
-        mums=trimmed
 
+        mums=trimmed
     return mums
 
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
         if len(mums)==0:
-            return
+            return ()
         
         if not precomputed:
             if maxdepth!=None:
                 if idx.depth>maxdepth:
-                    return
+                    return ()
 
             if maxsize!=None:
                 rpaths=[p for p in G.graph['paths'] if not p.startswith('*')]
@@ -205,7 +210,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     if ro[k]-lo[k]>maxsize:
                         break
                 else:
-                    return #no break, so all fragments in bubbles are smaller than maxsize
+                    return () #no break, so all fragments in bubbles are smaller than maxsize
 
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
@@ -256,7 +261,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             
             if len(relmums)==0:
                 logging.debug("No more significant MUMs.")
-                return
+                return ()
 
             skipleft=[]
             skipright=[]
@@ -272,7 +277,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
                 logging.debug("Selected chain of %d mums"%len(chainedmums))
                 if len(chainedmums)==0:
-                    return
+                    return ()
                 if splitchain=="balanced":
                     logging.debug("Selecting MUM from chain on position within chain.")
                     optsplit=None
@@ -320,7 +325,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     p=1-math.exp(math.log(1-p) * o) #correct for the number of tests we actually did
                 if p>pcutoff:
                     logging.info("P-value for: %s (n=%d l=%d o=%d) is %.4g"%(str(splitmum),n,l,o,p))
-                    return
+                    return ()
         else:
             logging.debug("Selecting MUM from precomputed chain")
             chainedmums=mums
@@ -336,8 +341,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
         return splitmum,skipleft,skipright
 
     except Exception:
-        print traceback.format_exc()
-        return
+        logging.fatal(traceback.format_exc())
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
