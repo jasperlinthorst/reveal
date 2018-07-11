@@ -93,6 +93,7 @@ def main():
     parser_rem.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
     parser_rem.add_argument("--maxbubblesize", dest="maxsize", type=int, default=None, help="Apply recursion until largest allele within a bubble is smaller than this size.")
     parser_rem.add_argument("--nocontigs", dest="contigs", default=True, action="store_false", help="Don't treat multi-fasta files as contigs, use every sequence as a target.")
+    parser_rem.add_argument("--notrim", dest="trim", default=True, action="store_false", help="Don't trim overlap between MUMs, thus more greedy positioning of indels.")
     parser_rem.set_defaults(func=rem.align_cmd)
 
     parser_unzip = subparsers.add_parser('unzip',prog="reveal unzip", description="Opens up bubbles to account for uncertainty of indel placement and edge-wander. Specify --source and --sink to unzip a specific bubble.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])

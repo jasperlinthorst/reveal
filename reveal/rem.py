@@ -531,14 +531,8 @@ def align_genomes(args):
     G=nx.MultiDiGraph()
 
     o=0
-    schemes.maxmums=args.maxmums
-    schemes.gcmodel=args.gcmodel
-    schemes.wscore=args.wscore
-    schemes.wpen=args.wpen
-    schemes.seedsize=args.seedsize
-    schemes.pcutoff=args.pcutoff
-    schemes.maxsize=args.maxsize
-
+    schemes.args=args
+    
     graph=False
     
     for i,sample in enumerate(args.inputfiles):

@@ -68,7 +68,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                 if amum[2][crd]+amum[0]>mum[2][crd]:
                     break
             else:
-                s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
+                s=score[amum[2][ref]]+(args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
 
                 if w!=None:
                     if w > s: #as input is sorted by score
@@ -78,7 +78,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
                 assert(penalty>=0)
 
-                tmpw=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(wpen*penalty)
+                tmpw=score[amum[2][ref]]+(args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(args.wpen*penalty)
 
                 if tmpw>w or w==None:
                     w=tmpw
@@ -153,18 +153,19 @@ def maptooffsets(mums):
         mapping[tuple(relmum[2].values())]=mum
     return relmums,mapping
 
-splitchain="largest"
-maxdepth=None #stop recursion when max depth is reached
-maxsize=None #stop recursion when all fragments in a bubble are smaller then maxsize
-# pcutoff=0.01
-
 def trim_overlap(mums):
     coords=mums[0][2]
     for coord in range(len(coords)):
-        mums.sort(key=lambda m: (m[2][coord][1],-m[0])) #sort by start position, then size
+        if len(mums)<=1: #by definition no more overlaps
+            break
+
+        mums.sort(key=lambda m: (m[2][coord][1],-m[0])) #sort by start position, then -1*size
 
         #filter the partial matches that are now contained
-        mums=[mum for i,mum in enumerate(mums) if i==0 or mums[i-1][2][coord][1]+mums[i-1][0]<=mum[2][coord][1]+mum[0]]
+        mums=[mum for i,mum in enumerate(mums) if (i==0 and mums[i+1][2][coord][1]+mums[i+1][0] > mum[2][coord][1]+mum[0] ) or mums[i-1][2][coord][1]+mums[i-1][0]<mum[2][coord][1]+mum[0]]
+
+        if len(mums)<=1: #by definition no more overlaps
+            break
 
         trimmed=[mums[0]]
         for mum in mums[1:]:
@@ -181,7 +182,12 @@ def trim_overlap(mums):
                 trimmed.append(mum)
 
         mums=trimmed
+
     return mums
+
+args=None
+splitchain="largest"
+maxdepth=None #stop recursion when max depth is reached
 
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
@@ -193,7 +199,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 if idx.depth>maxdepth:
                     return ()
 
-            if maxsize!=None:
+            if args.maxsize!=None:
                 rpaths=[p for p in G.graph['paths'] if not p.startswith('*')]
 
                 if idx.leftnode==None:
@@ -207,7 +213,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     ro=G.node[idx.rightnode]['offsets']
 
                 for k in set(lo.keys()) & set(ro.keys()):
-                    if ro[k]-lo[k]>maxsize:
+                    if ro[k]-lo[k]>args.maxsize:
                         break
                 else:
                     return () #no break, so all fragments in bubbles are smaller than maxsize
@@ -220,7 +226,11 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2],len(mmums)))
 
-            mmums=trim_overlap(mmums)
+            if args.trim:
+                logging.debug("Trimming overlap between mums.")
+                mmums=trim_overlap(mmums)
+                if len(mmums)==0:
+                    return ()
 
             mmums.sort(key=lambda mum: mum[0], reverse=True) #sort by size
 
@@ -269,12 +279,12 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             if len(relmums)==1:
                 splitmum=relmums[0]
             else:
-                if len(relmums)>maxmums:
-                    logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mmums),maxmums))
-                    relmums=relmums[-maxmums:]
+                if len(relmums)>args.maxmums:
+                    logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mmums),args.maxmums))
+                    relmums=relmums[-args.maxmums:]
 
                 logging.debug("Chaining %d mums"%len(relmums))
-                chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
+                chainedmums=chain(relmums,left,right,gcmodel=args.gcmodel)[::-1]
                 logging.debug("Selected chain of %d mums"%len(chainedmums))
                 if len(chainedmums)==0:
                     return ()
@@ -299,7 +309,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     logging.debug("Selecting MUM from chain at random.")
                     splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
 
-                if seedsize>0:
+                if args.seedsize>0:
                     t=skipleft
                     scoreatsplit=0
                     for mum,score in chainedmums:
@@ -309,8 +319,8 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                             continue
                         t.append( (mapping[tuple(mum[2].values())], score-scoreatsplit) )
                         # t.append( mapping[tuple(mum[2].values())] )
-                    skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=seedsize]
-                    skipright=[(mum,score) for mum,score in skipright if mum[0]>=seedsize]
+                    skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=args.seedsize]
+                    skipright=[(mum,score) for mum,score in skipright if mum[0]>=args.seedsize]
 
             splitmum=mapping[tuple(splitmum[2].values())]
 
@@ -323,7 +333,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 p=((.25**(n-1)))**l #probability of observing this match by random chance
                 if p>0:
                     p=1-math.exp(math.log(1-p) * o) #correct for the number of tests we actually did
-                if p>pcutoff:
+                if p>args.pcutoff:
                     logging.info("P-value for: %s (n=%d l=%d o=%d) is %.4g"%(str(splitmum),n,l,o,p))
                     return ()
         else:
