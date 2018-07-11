@@ -614,15 +614,22 @@ def align_genomes(args):
 
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs",maxsize=None):
-    #seq should be a list of objects that can be (multi-) aligned by reveal:
-    #   - tuple of the form (name,seq)
+
+#seq should be a list of objects that can be (multi-) aligned by reveal:
+#   - tuple of the form (name,seq)
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,\
+                maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs",maxsize=None,\
+                trim=True):
+    
+    kwargs = dict(locals()) #hack the kwargs into a dict so we can pass it to schemes as if it were the argparsed args object
+    class dict2class(object):
+        def __init__(self, d):
+            self.__dict__ = d
+    args=dict2class(kwargs)
+    schemes.args=args
     
     #global variables to simplify callbacks from c extension
     global t,G
-
-    # global reference
-    # reference=ref
 
     t=IntervalTree()
 
@@ -632,21 +639,12 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
         idx=reveallib.index()
     
     G=nx.DiGraph()
-    # H=G
 
     G.graph['paths']=[]
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
     G.graph['id2end']=dict()
     o=0
-
-    schemes.gcmodel=gcmodel
-    schemes.maxmums=maxmums
-    schemes.seedsize=seedsize
-    schemes.wpen=wpen
-    schemes.wscore=wscore
-    schemes.pcutoff=pcutoff
-    schemes.maxsize=maxsize
 
     graph=False
     

@@ -34,7 +34,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         sp2mum[mum[2][ref]]=mum
 
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-    # logging.trace("Initial cost is: %d"%minscore)
+    logging.trace("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
     end=right[2][ref]
@@ -92,6 +92,8 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
     assert(score[end]>=minscore)
 
+    logging.trace("Best score is: %d"%score[end])
+
     #backtrack
     path=[]
     while end!=start:
@@ -104,7 +106,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 def segment(mums):
     d=dict()
     for mum in mums:
-        k=tuple(sorted([sp for gid,sp in mum[2]]))
+        k=tuple(sorted([gid for gid,sp in mum[2]]))
         if k in d:
             d[k].append(mum)
         else:
@@ -285,9 +287,11 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
 
                 logging.debug("Chaining %d mums"%len(relmums))
                 chainedmums=chain(relmums,left,right,gcmodel=args.gcmodel)[::-1]
+
                 logging.debug("Selected chain of %d mums"%len(chainedmums))
                 if len(chainedmums)==0:
                     return ()
+
                 if splitchain=="balanced":
                     logging.debug("Selecting MUM from chain on position within chain.")
                     optsplit=None

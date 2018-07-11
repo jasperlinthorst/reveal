@@ -34,7 +34,7 @@ class TestReveal(TestCase):
         sys.stdout=bakout
 
     def test01_seqpair_align(self):
-        G,idx=rem.align([("1","ACTGATGTAGCTAGCTA"),("2","ACTAGCTAGCTAGTCAG")],minlength=1)
+        G,idx=rem.align([("1","ACTTGCTAGCTAGTCAG"),("2","ACTAGCTAGCTAGTGAG")],minlength=1)
         print G
         self.assertTrue(isinstance(G, nx.DiGraph))
         self.assertTrue(G.number_of_nodes()>2)
