@@ -716,11 +716,11 @@ void *aligner(void *arg) {
 #ifdef REVEALDEBUG
             // fprintf(stderr,"Initial.\n");
             //checkindex(idx);
-            fprintf(stderr,"Starting alignment cycle (%d)...\n", rw->threadid);
+            fprintf(stderr,"Starting alignment cycle (threadid=%d)\n", rw->threadid);
             fprintf(stderr,"samples=%d\n",idx->nsamples);
             fprintf(stderr,"depth=%d\n",idx->depth);
             fprintf(stderr,"n=%d\n",idx->n);
-            fprintf(stderr,"minl=%d...\n", rw->minl);
+            fprintf(stderr,"minl=%d\n", rw->minl);
             // fprintf(stderr,"wpen=%d...\n", rw->wpen);
             // fprintf(stderr,"wscore=%d...\n", rw->wscore);
 #endif
@@ -808,7 +808,6 @@ void *aligner(void *arg) {
 #endif
             PyObject *pickresult = PyEval_CallObjectWithKeywords(rw->mumpicker, arglist, keywds); //mumpicker returns intervals
             Py_DECREF(arglist);
-            // Py_DECREF(multimums);
 
 #ifdef REVEALDEBUG
             time(&t1);
@@ -819,8 +818,6 @@ void *aligner(void *arg) {
                 PyErr_SetString(PyExc_TypeError, "**** call to mumpicker failed");
                 err_flag=1;
                 Py_DECREF(idx);
-                Py_DECREF(arglist);
-                // Py_DECREF(multimums);
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
 
@@ -831,9 +828,8 @@ void *aligner(void *arg) {
             if (PyTuple_Size(pickresult)==0){
                 //TODO 1: NO MORE MUMS, call prune nodes here!
                 Py_DECREF(idx);
-                Py_DECREF(arglist);
-                // Py_DECREF(multimums);
                 Py_DECREF(pickresult);
+
                 PyGILState_Release(gstate);
                 pthread_mutex_unlock(&python);
 
