@@ -53,7 +53,7 @@ def main():
     
     parser_aln = subparsers.add_parser('align',prog="reveal align", description="Output a bash-script that decribes the various steps that need to be performed to construct a graph-based multi-genome for the input (draft-)genomes.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_aln.add_argument('reference', nargs=1, help='Reference assembly to which draft-asemblies should be organized (this may be a draft assembly as well, just used for organizing structural rearrangements).')
-    parser_aln.add_argument('inputfiles', nargs='*', help='(Multi-)Fasta files that specify the draft-assemblies that are to be aligned (.fasta).')
+    parser_aln.add_argument('inputfiles', nargs='+', help='(Multi-)Fasta files that specify the draft-assemblies that are to be aligned (.fasta).')
     parser_aln.add_argument("-o", "--output", dest="output", default="prg", help="Prefix for the filename of the resulting graph.")
     parser_aln.add_argument("-m", dest="m", default=20, type=int, help="Min length of an anchor to constrain the alignment.")
     parser_aln.add_argument("-n", dest="n", default=None, type=int, help="Number of genomes for anchor to constrain the alignment.")
@@ -68,7 +68,7 @@ def main():
     parser_aln.set_defaults(func=align.align)
 
     parser_rem = subparsers.add_parser('rem',prog="reveal rem", description="Use recursive exact matching to obtain a graph from multiple input genomes or other graphs.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
-    parser_rem.add_argument('inputfiles', nargs='*', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
+    parser_rem.add_argument('inputfiles', nargs='+', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
     parser_rem.add_argument("-o", "--output", dest="output", help="Prefix of the alignment graph.")
     parser_rem.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_rem.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
