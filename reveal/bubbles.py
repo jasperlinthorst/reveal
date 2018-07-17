@@ -558,6 +558,8 @@ class Variant(Bubble):
             else:
                 self.vtype='multi-allelic'
         
-        n=self.G.node[self.source]
-        for s in n['offsets']:
-            self.vpos[s]=n['offsets'][s]+len(n['seq'])+1
+        v=self.G.node[self.source]
+        t=self.G.node[self.sink]
+        o=set(v['offsets'].keys())&set(t['offsets'].keys())
+        for s in o:
+            self.vpos[s]=v['offsets'][s]+len(v['seq'])+1
