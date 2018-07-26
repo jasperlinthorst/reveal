@@ -1,6 +1,7 @@
 from utils import *
 from extract import extract,extract_path
 from rem import align,prune_nodes
+from random import shuffle
 import bubbles
 import schemes
 from multiprocessing.pool import Pool
@@ -17,8 +18,11 @@ def refine_bubble_cmd(args):
     
     # G=nx.MultiDiGraph() #TODO: make sure that refine can handle structural variant edges, so make sure we use a MultiDiGraph here!
     G=nx.DiGraph()
+
     read_gfa(args.graph[0],None,"",G)
     
+    logging.info("Paths through the graph: %s"%G.graph['paths'])
+
     if (args.source==None and args.sink==None) and (args.all or args.complex or args.simple):
         G=refine_all(G,
                             minlength=args.minlength,
@@ -117,7 +121,7 @@ def refine_bubble_cmd(args):
 
     prune_nodes(G)
 
-    contract(G,list(nx.topological_sort(G)))
+    contract(G,[n for n in nx.topological_sort(G) if type(n)!=str])
 
     write_gfa(G,"",outputfile=fn)
 
@@ -406,6 +410,8 @@ def refine_all(G, **kwargs):
         outputq = Queue()
         nworkers=kwargs['nproc']
         aworkers=[]
+
+        shuffle(distinctbubbles) #make sure not all the big telomeric bubbles and up with one worker
 
         if nworkers>len(distinctbubbles):
             nworkers=len(distinctbubbles)

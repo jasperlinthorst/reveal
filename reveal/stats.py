@@ -33,17 +33,31 @@ def stats(gfafile):
     stats["Number of rearrangement edges"]=len(struct)
 
     stats["Number of connected components"]=0
-    stats["A count"]=0
-    stats["C count"]=0
-    stats["G count"]=0
-    stats["T count"]=0
-    stats["N count"]=0
+    
+    stats["Count A"]=0
+    stats["Count C"]=0
+    stats["Count G"]=0
+    stats["Count T"]=0
+    stats["Count N"]=0
     for node,data in G.nodes(data=True):
-        stats["A count"]+=data['seq'].count('A')
-        stats["C count"]+=data['seq'].count('C')
-        stats["G count"]+=data['seq'].count('G')
-        stats["T count"]+=data['seq'].count('T')
-        stats["N count"]+=data['seq'].count('N')
+        stats["Count A"]+=data['seq'].count('A')
+        stats["Count C"]+=data['seq'].count('C')
+        stats["Count G"]+=data['seq'].count('G')
+        stats["Count T"]+=data['seq'].count('T')
+        stats["Count N"]+=data['seq'].count('N')
+
+    seqperngenomes=dict()
+    
+    i=1
+    for sample in G.graph['paths']:
+        seqperngenomes[i]=0
+        i+=1
+    
+    for node,data in G.nodes(data=True):
+        seqperngenomes[len([o for o in data['offsets'] if not G.graph['id2path'][o].startswith("*")])]+=len(data['seq'])
+
+    for n in seqperngenomes:
+        stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
 
     #for each connected component
     for sgi,sub in enumerate(nx.connected_components(G.to_undirected())):
@@ -53,6 +67,7 @@ def stats(gfafile):
         #determine samples in subgraph
         nsgsamples=1
         sgsamples=set()
+        sgsampleids=set()
         for node,data in sg.nodes(data=True):
             if len(data['offsets'])>nsgsamples:
                 nsgsamples=len([o for o in data['offsets'] if not sg.graph['id2path'][o].startswith("*")])
@@ -60,22 +75,10 @@ def stats(gfafile):
             for sid in data['offsets']:
                 if not sg.graph['id2path'][sid].startswith("*"):
                     sgsamples.add(G.graph['id2path'][sid])
+                    sgsampleids.add(sid)
         
         stats["Composition of component %d"%sgi]=",".join(sgsamples)
 
-        seqperngenomes=dict()
-        
-        i=1
-        for sample in sg.graph['paths']:
-            seqperngenomes[i]=0
-            i+=1
-        
-        for node,data in sg.nodes(data=True):
-            seqperngenomes[len([o for o in data['offsets'] if not sg.graph['id2path'][o].startswith("*")])]+=len(data['seq'])
-
-        for n in seqperngenomes:
-            stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
-        
         #count bubble stats
         complexbubbles=0
         simplebubbles=0
@@ -125,7 +128,7 @@ def stats(gfafile):
                 continue
             offsets=data['offsets']
             l=len(data['seq'])
-            if len(offsets)==nsgsamples:
+            if set(offsets.keys())==sgsampleids:
                 coords=tuple([offsets[k] for k in sorted(offsets.keys())])
                 chain.append((coords,l))
                 chainweight+=l*((len(offsets)*(len(offsets)-1))/2) #sumofpairs score!

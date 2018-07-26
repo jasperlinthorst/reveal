@@ -549,18 +549,18 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         if d['paths']==set(): #edge that is not traversed by any of the paths
             remove.append((n1,n2))
     if len(remove)>0:
-        logging.debug("Removing %d edges from the graph as they are not traversed..."%len(remove))
+        logging.info("Removing %d edges from the graph as they are not traversed..."%len(remove))
         graph.remove_edges_from(remove)
-        logging.debug("Done.")
+        logging.info("Done.")
 
     remove=[]
     for n,d in graph.nodes(data=True):
         if graph.node[n]['offsets']=={}: #node that is not traversed by any of the paths
             remove.append(n)
     if len(remove)>0:
-        logging.debug("Removing %d nodes from the graph as they are not traversed..."%len(remove))
+        logging.info("Removing %d nodes from the graph as they are not traversed..."%len(remove))
         graph.remove_nodes_from(remove)
-        logging.debug("Done.")
+        logging.info("Done.")
 
     logging.debug("Converting to undirected graph...")
     Gu=graph.to_undirected()
@@ -755,7 +755,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                         oute=[(u,v,d) for u,v,d in G.out_edges(node,data=True) if sid in d['paths']]
                         
                         if len(oute)==0:
-                            logging.warn("Path: \"%s\" doesnt reach end node, stops at %s!"%(sample,u))
+                            logging.warn("Path: \"%s\" (sid=%s) doesnt reach end node, stops at %s!"%(sample,sid,u))
                             break
                         elif len(oute)>1:
                             logging.error("Ambiguity in path for: %s"%sample)
