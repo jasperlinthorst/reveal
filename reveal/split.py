@@ -16,12 +16,10 @@ def split_cmd(args):
     else:
         G=nx.MultiDiGraph()
 
-    split(g,args.gfa[0])
+    split(G,args.gfa[0])
 
 def split(G,gfafile):
 
-    # G=nx.MultiDiGraph()
-    G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
 
     # remove=[]
