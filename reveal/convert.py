@@ -19,7 +19,8 @@ def convert(args):
         if graph.endswith(".gfa"): #gfa to gml/gfa
             utils.read_gfa(graph,None,None,g,minsamples=args.minsamples,
                                  maxsamples=args.maxsamples,
-                                 targetsample=args.targetsample)
+                                 targetsample=args.targetsample,
+                                 remap=False)
             if args.type=="gfa":
                 fn=graph.replace(".gfa",".rewrite.gfa")
                 graph=utils.write_gfa(g,"", outputfile=fn)

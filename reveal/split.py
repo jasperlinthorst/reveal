@@ -11,11 +11,17 @@ def split_cmd(args):
         logging.fatal("Use .gfa as extension of the gfa file.")
         return
     
-    split(args.gfa[0])
+    if args.nocycles:
+        G=nx.DiGraph()
+    else:
+        G=nx.MultiDiGraph()
 
-def split(gfafile):
-    G=nx.MultiDiGraph()
-    # G=nx.DiGraph()
+    split(g,args.gfa[0])
+
+def split(G,gfafile):
+
+    # G=nx.MultiDiGraph()
+    G=nx.DiGraph()
     read_gfa(gfafile,None,"",G)
 
     # remove=[]
@@ -54,7 +60,7 @@ def split(gfafile):
                 no[mapping[p]]=d['offsets'][p]
             sg.node[n]['offsets']=no
 
-        name="_".join([p for p in sg.graph['paths'] if not p.startswith("*")]).replace("|","").replace(" ","")[:200]
+        name="_".join([p for p in sg.graph['paths'] if not p.startswith("*")]).replace("|","_").replace(" ","_")[:200]
         #name=str(i)
         
         write_gfa(sg,None,outputfile="%s.gfa"%name)

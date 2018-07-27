@@ -13,6 +13,7 @@ def subgraph(args):
         return
 
     G=nx.DiGraph()
+
     read_gfa(args.inputfiles[0],None,"",G)
     
     topsort=list(nx.topological_sort(G))
@@ -35,7 +36,7 @@ def subgraph(args):
                     sink_idx=i
                     break
             if sink_idx<=source_idx:
-                logging.fatal("Invalide source/sink pair. Topsort indices: %d, %d"%(source_idx,sink_idx))
+                logging.fatal("Invalid source/sink pair. Topsort indices: %d, %d"%(source_idx,sink_idx))
                 return
 
             for node in topsort[source_idx:sink_idx+1]:
@@ -51,7 +52,7 @@ def subgraph(args):
                     sink_idx=i
                     break
             if sink_idx<=source_idx:
-                logging.fatal("Invalide source/sink pair. Topsort indices: %d, %d"%(source_idx,sink_idx))
+                logging.fatal("Invalid source/sink pair. Topsort indices: %d, %d"%(source_idx,sink_idx))
                 return
 
             for node in topsort[source_idx:sink_idx+1]:

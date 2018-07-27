@@ -128,7 +128,7 @@ def refine_bubble_cmd(args):
 def replace_bubble(G,bubble,ng,path2start,path2end,nn):
     assert(nn not in G)
 
-    bubblenodes=bubble.nodes[1:-1]
+    bubblenodes=bubble.nodes[1:-1] #exclude source and sink node
     
     for node in bubblenodes: #remove all bubblenodes from the original graph
         G.remove_node(node)
@@ -138,7 +138,7 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
         mapping[node]=nn
         nn+=1
     
-    ng=nx.relabel_nodes(ng,mapping)
+    ng=nx.relabel_nodes(ng,mapping) #relabel nodes according to a unique integer range
 
     for node,data in ng.nodes(data=True): #add nodes from newly aligned graph to original graph
         G.add_node(node,**data)
@@ -160,25 +160,27 @@ def replace_bubble(G,bubble,ng,path2start,path2end,nn):
         else:
             G.add_edge(endnode,bubble.sink,ofrom='+',oto='+',paths=set([sid]))
 
+
+    #SHOULD BE ABLE TO SKIP THIS HERE, AS THIS WILL BE DONE OVER THE ENTIRE GRAPH ANYWAY...
     #Just one possible path from source to start, contract nodes
-    if len(G.out_edges(bubble.source))==1 and type(bubble.source)!=str:
-        # assert(len(set(path2start.values()))==1)
-        startnode=mapping[path2start.values()[0][0]]
-        G.node[bubble.source]['seq']+=G.node[startnode]['seq']
-        for to in G[startnode]:
-            d=G[startnode][to]
-            G.add_edge(bubble.source,to,**d)
-        G.remove_node(startnode)
+    # if len(G.out_edges(bubble.source))==1 and type(bubble.source)!=str:
+    #     # assert(len(set(path2start.values()))==1)
+    #     startnode=mapping[path2start.values()[0][0]]
+    #     G.node[bubble.source]['seq']+=G.node[startnode]['seq']
+    #     for to in G[startnode]:
+    #         d=G[startnode][to]
+    #         G.add_edge(bubble.source,to,**d)
+    #     G.remove_node(startnode)
 
     #Just one possible path from end to sink, contract nodes
-    if len(G.in_edges(bubble.sink))==1 and type(bubble.sink)!=str:
-        # assert(len(set(path2end.values()))==1)
-        endnode=mapping[path2end.values()[0][0]]
-        G.node[bubble.sink]['seq']=G.node[endnode]['seq']+G.node[bubble.sink]['seq']
-        G.node[bubble.sink]['offsets']=G.node[endnode]['offsets']
-        for e0,e1,d in G.in_edges(endnode,data=True):
-            G.add_edge(e0,bubble.sink,**d)
-        G.remove_node(endnode)
+    # if len(G.in_edges(bubble.sink))==1 and type(bubble.sink)!=str:
+    #     # assert(len(set(path2end.values()))==1)
+    #     endnode=mapping[path2end.values()[0][0]]
+    #     G.node[bubble.sink]['seq']=G.node[endnode]['seq']+G.node[bubble.sink]['seq']
+    #     G.node[bubble.sink]['offsets']=G.node[endnode]['offsets']
+    #     for e0,e1,d in G.in_edges(endnode,data=True):
+    #         G.add_edge(e0,bubble.sink,**d)
+    #     G.remove_node(endnode)
 
     return G,nn
 
@@ -214,9 +216,9 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     for name,seq in aobjs:
         if len(seq)>200:
-            logging.debug("IN %s: %s...%s"%(name.rjust(4,' '),seq[:100],seq[-100:]))
+            logging.debug("IN %s: %s...%s (%d bp)"%(name.rjust(4,' '),seq[:100],seq[-100:],len(seq)))
         else:
-            logging.debug("IN %s: %s"%(name.rjust(4,' '),seq))
+            logging.debug("IN %s: %s (%d bp)"%(name.rjust(4,' '),seq,len(seq)))
 
     if kwargs['method']!="reveal_rem": #use custom multiple sequence aligner to refine bubble structure
         ng=msa2graph(aobjs,

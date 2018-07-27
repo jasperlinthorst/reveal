@@ -320,6 +320,7 @@ def main():
 
     parser_split = subparsers.add_parser('split', prog="reveal split", description="Split a graph file into a connected component per file.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_split.add_argument('gfa', nargs=1, help='GFA file which has to  be split into a GFA file per connected component.')
+    parser_split.add_argument("--nocycles",  action="store_true", dest="nocycles", default=False, help="Parse only the directed acyclic layout of the graph, so ignore strucural rearrangements (cycles) in the graph.")
     parser_split.set_defaults(func=split.split_cmd)
     
     args = parser.parse_args()
