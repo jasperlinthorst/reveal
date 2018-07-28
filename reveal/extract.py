@@ -8,7 +8,12 @@ def extract_cmd(args):
         logging.fatal("Invalid gfa file.")
         return
     width=args.width
-    G=nx.MultiDiGraph()
+
+    if args.nocycles:
+        G=nx.DiGraph()
+    else:
+        G=nx.MultiDiGraph()
+
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
     if args.all:

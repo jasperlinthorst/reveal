@@ -151,6 +151,7 @@ def main():
     parser_extract.add_argument("-t", dest="type", default="pathname", choices=["pathname","path"], help="Type of input, either pathname or comma-seperated sequence of node-ids.")
     parser_extract.add_argument("--width", dest="width", type=int, default=100 , help='Line width for fasta output.')
     parser_extract.add_argument("--all", dest="all", default=False, action="store_true", help="Extract all paths from the graph and output as fasta.")
+    parser_extract.add_argument("--nocycles",  action="store_true", dest="nocycles", default=False, help="Parse only the directed acyclic layout of the graph, so ignore strucural rearrangements (cycles) in the graph.")
     parser_extract.set_defaults(func=extract.extract_cmd)
     
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate a mumplot that shows all mums between two fasta files.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
