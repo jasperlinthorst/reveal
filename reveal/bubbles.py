@@ -171,8 +171,14 @@ def bubbles(G):
             sourcesamples=set(sourcenode['offsets'].keys())
             sinknode=G.node[u]
             sinksamples=set(sinknode['offsets'].keys())
+
+            if sinksamples!=sourcesamples:
+                logging.debug("Invalid bubble, between %s and %s"%(v,u))
+                continue
+
             if len(bubblenodes)==2: #only source sink, no variation
                 continue
+
             yield Bubble(G,v,u,ordD[v],ordD[u],bubblenodes)
         else:
             yield v,u,d
@@ -224,6 +230,7 @@ def variants_cmd(args):
     logging.debug("Reading graph...")
     read_gfa(args.graph[0],None,"",G)
     logging.debug("Done.")
+
     complexbubblenodes=[]
     
     if 'paths' in G.graph:
@@ -557,7 +564,7 @@ class Variant(Bubble):
                     self.vtype='region'
             else:
                 self.vtype='multi-allelic'
-        
+
         v=self.G.node[self.source]
         t=self.G.node[self.sink]
         o=set(v['offsets'].keys())&set(t['offsets'].keys())
