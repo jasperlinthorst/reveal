@@ -392,75 +392,78 @@ def refine_all(G, **kwargs):
 
         realignbubbles.append(b)
 
-    realignbubbles.sort(key=lambda b: b.source_idx)
-    distinctbubbles=[realignbubbles[0]]
-    p=0
-    i=1
-    for i in xrange(i,len(realignbubbles)):
-        if realignbubbles[i].source_idx >= realignbubbles[p].sink_idx:
-            distinctbubbles.append(realignbubbles[i])
-            p=i
-        else:
-            logging.debug("Skipping realignment for: <%s,%s> - is contained in <%s,%s>"%(realignbubbles[i].source, realignbubbles[i].sink, realignbubbles[p].source, realignbubbles[p].sink))
-    
-    logging.info("Done.")
-
-    logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
-    nn=max([node for node in G.nodes() if type(node)==int])+1
-
-    if kwargs['nproc']>1:
-        outputq = Queue()
-        nworkers=kwargs['nproc']
-        aworkers=[]
-
-        shuffle(distinctbubbles) #make sure not all the big telomeric bubbles and up with one worker
-
-        if nworkers>len(distinctbubbles):
-            nworkers=len(distinctbubbles)
-
-        chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
-        for i in range(0, len(distinctbubbles), chunksize):
-            p=Process(target=align_worker, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
-            p.start()
-            aworkers.append(p)
-
-        try:
-            graph_worker(G,nn,outputq,nworkers)
-        except:
-            logging.fatal("Failed to update graph with refined bubble! Signal workers to stop.")
-            for p in aworkers:
-                p.terminate()
-            outputq.close()
-            exit(1)
+    if len(realignbubbles)==0:
+        logging.info("No bubbles that qualify for realignment.")
+    else:
+        realignbubbles.sort(key=lambda b: b.source_idx)
+        distinctbubbles=[realignbubbles[0]]
+        p=0
+        i=1
+        for i in xrange(i,len(realignbubbles)):
+            if realignbubbles[i].source_idx >= realignbubbles[p].sink_idx:
+                distinctbubbles.append(realignbubbles[i])
+                p=i
+            else:
+                logging.debug("Skipping realignment for: <%s,%s> - is contained in <%s,%s>"%(realignbubbles[i].source, realignbubbles[i].sink, realignbubbles[p].source, realignbubbles[p].sink))
         
-        outputq.close()
-        logging.info("Waiting for workers to finish...")
-        for p in aworkers:
-            p.join()
         logging.info("Done.")
 
-    else:
-        for bubble in distinctbubbles:
-            G.node[bubble.source]['aligned']=1
-            G.node[bubble.sink]['aligned']=1
+        logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
+        nn=max([node for node in G.nodes() if type(node)==int])+1
 
-            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-            sg=G.subgraph(bnodes)
+        if kwargs['nproc']>1:
+            outputq = Queue()
+            nworkers=kwargs['nproc']
+            aworkers=[]
+
+            shuffle(distinctbubbles) #make sure not all the big telomeric bubbles and up with one worker
+
+            if nworkers>len(distinctbubbles):
+                nworkers=len(distinctbubbles)
+
+            chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
+            for i in range(0, len(distinctbubbles), chunksize):
+                p=Process(target=align_worker, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
+                p.start()
+                aworkers.append(p)
+
+            try:
+                graph_worker(G,nn,outputq,nworkers)
+            except:
+                logging.fatal("Failed to update graph with refined bubble! Signal workers to stop.")
+                for p in aworkers:
+                    p.terminate()
+                outputq.close()
+                exit(1)
             
-            offsets=dict()
-            for sid in G.node[bubble.source]['offsets']:
-                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+            outputq.close()
+            logging.info("Waiting for workers to finish...")
+            for p in aworkers:
+                p.join()
+            logging.info("Done.")
 
-            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-            paths=sourcesamples.intersection(sinksamples)
+        else:
+            for bubble in distinctbubbles:
+                G.node[bubble.source]['aligned']=1
+                G.node[bubble.sink]['aligned']=1
 
-            res=refine_bubble(sg,bubble,offsets,paths, **kwargs)
-            if res==None:
-                continue
-            else:
-                bubble,ng,path2start,path2end=res
-                G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+                bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+                sg=G.subgraph(bnodes)
+                
+                offsets=dict()
+                for sid in G.node[bubble.source]['offsets']:
+                    offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+
+                sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+                sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+                paths=sourcesamples.intersection(sinksamples)
+
+                res=refine_bubble(sg,bubble,offsets,paths, **kwargs)
+                if res==None:
+                    continue
+                else:
+                    bubble,ng,path2start,path2end=res
+                    G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
 
     return G
 
