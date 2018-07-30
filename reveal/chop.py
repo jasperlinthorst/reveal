@@ -28,6 +28,8 @@ def chop_cmd(args):
     
     logging.debug("Merging node sequence...")
     for node in G.nodes():
+        if type(node)==str: #skip start/end nodes
+            continue
         G.node[node]['seq']=G.node[node]['prefix']+G.node[node]['seq']+G.node[node]['suffix']
     logging.debug("Done.")
 
@@ -39,6 +41,8 @@ def chop_cmd(args):
         logging.debug("Write corresponding fasta file...")
         with open(fof,'w') as ff:
             for node in G.nodes():
+                if type(node)==str: #skip start/end nodes
+                    continue
                 name=">"+str(node)+"\n"
                 seq=G.node[node]['seq']
                 ff.write(name)
@@ -116,20 +120,23 @@ def checkedges(G,k=100):
                 update=True
                 continue #can use k-1 prefix of v as suffix of u
     for u,v,d in G.edges(data=True):
+        if type(u)==str or type(v)==str:
+            continue
         if d['overlap']==None:
             es.append((u,v))
     return es
 
 def chop(G,k=100,extend=True):
-    remove=[]
+    # remove=[]
     for node in G.nodes():
         if type(node)==str:
-            remove.append(node)
+            pass
+            # remove.append(node)
         else: #add prefix and suffix attributes
             G.node[node]['prefix']=""
             G.node[node]['suffix']=""
 
-    G.remove_nodes_from(remove)
+    # G.remove_nodes_from(remove)
     iteration=1
 
     es=checkedges(G,k=k)
@@ -140,7 +147,7 @@ def chop(G,k=100,extend=True):
         #determine subgraph for duplication
         sg=nx.DiGraph(es)
         nodes=list(sg.nodes())
-        nodes=[node for node in nodes if (len(sg.in_edges(node))>1 or len(sg.out_edges(node))>1)]# and len(G.node[node]['seq'])<k-1]
+        nodes=[node for node in nodes if (len(sg.in_edges(node))>1 or len(sg.out_edges(node))>1) and type(node)!=str]# and len(G.node[node]['seq'])<k-1]
         nodes.sort(key=lambda n: len(G.node[n]['seq']))
         d=set()
         dups=[]
@@ -178,6 +185,9 @@ def chop(G,k=100,extend=True):
         logging.info("Extending nodes with prefix/suffix...")
         #all edges can now be extended
         for u,v,d in G.edges(data=True):
+            if type(u)==str or type(v)==str:
+                continue
+
             assert(d['overlap']!=None)
             if d['overlap']==u:
                 G.node[v]['prefix']=G.node[u]['seq'][-(k-1):]
