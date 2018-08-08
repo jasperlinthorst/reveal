@@ -266,6 +266,7 @@ def main():
     parser_convert.add_argument("--partition",  action="store_true", dest="partition", default=False, help="Output graph as multiple subgraphs if possible.")
     parser_convert.add_argument("--nocycles",  action="store_true", dest="nocycles", default=False, help="Do not allow rearrangements (cycles) in graph.")
     parser_convert.add_argument("--to", dest="type", default="gml", choices=['gml','gfa','maf'], help="Filetype to convert to.")
+    parser_convert.add_argument("--aligned", dest="aligned", default=False, action="store_true", help="Whether multi fasta file is aligned.")
     parser_convert.set_defaults(func=convert.convert)
     
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])

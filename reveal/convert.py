@@ -33,13 +33,23 @@ def convert(args):
                 graph2maf(g,graph.replace(".gfa",".maf"))
 
         elif graph.endswith(".fa") or graph.endswith(".fasta") or graph.endswith(".fna"): #assume fasta to gfa
-            i=0
-            for name,seq in utils.fasta_reader(graph):
-                g.graph['paths'].append(os.path.basename(graph))
-                g.graph['path2id'][os.path.basename(graph)]=0
-                g.graph['id2path'][0]=os.path.basename(graph)
-                g.add_node(i,offsets={0:0},seq=seq)
-                i+=1
+            if args.aligned:
+                print "aln2graph"
+                seqs=[]
+                names=[]
+                for name,seq in utils.fasta_reader(graph):
+                    seqs.append(seq)
+                    names.append(name)
+                g=utils.aln2graph(seqs,names)
+            else:
+                i=0
+                for name,seq in utils.fasta_reader(graph):
+                    g.graph['paths'].append(os.path.basename(graph))
+                    g.graph['path2id'][os.path.basename(graph)]=0
+                    g.graph['id2path'][0]=os.path.basename(graph)
+                    g.add_node(i,offsets={0:0},seq=seq)
+                    i+=1
+
             filename=graph[:graph.rfind(".")]+".gfa"
             utils.write_gfa(g,"", outputfile=filename)
             logging.info("gfa graph written to: %s"%filename)
