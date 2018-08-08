@@ -9,7 +9,7 @@ from multiprocessing import Process,Queue
 import signal
 import probconslib
 import math
-
+import os
 
 def refine_bubble_cmd(args):
     if len(args.graph)<1:
@@ -48,7 +48,8 @@ def refine_bubble_cmd(args):
                             sa64=args.sa64,
                             constrans=args.constrans,
                             nrefinements=args.nrefinements,
-                            consgap=args.consgap
+                            consgap=args.consgap,
+                            uniqueonly=args.uniqueonly
                             )
     else:
         if args.source==None or args.sink==None:
@@ -107,7 +108,8 @@ def refine_bubble_cmd(args):
                                 sa64=args.sa64,
                                 constrans=args.constrans,
                                 nrefinements=args.nrefinements,
-                                consgap=args.consgap
+                                consgap=args.consgap,
+                                uniqueonly=args.uniqueonly
                                 )
 
         if res!=None:
@@ -194,25 +196,43 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     #TODO: if bubble contains structural variant edge, track these or simply refuse realignment!
 
-    d={}
     aobjs=[]
 
-    #extract all paths
-    for sid in paths:
-        seq=extract(sg,sg.graph['id2path'][sid])
-        if len(seq)>0:
-            if seq in d:
-                d[seq].append(str(sid))
-            else:
-                d[seq]=[str(sid)]
+    uniqueonly=False
 
-    if len(d)==1:
-        logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
-        return
+    if kwargs['uniqueonly']:
+        d={}
+        #extract all paths
+        for sid in paths:
+            seq=extract(sg,sg.graph['id2path'][sid])
+            if len(seq)>0:
+                if seq in d:
+                    d[seq].append(str(sid))
+                else:
+                    d[seq]=[str(sid)]
 
-    aobjs=[(",".join(d[seq]),seq) for seq in d]
+        if len(d)==1:
+            logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
+            return
 
-    logging.info("Realigning bubble between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
+        aobjs=[(",".join(d[seq]),seq) for seq in d]
+
+    else:
+        for sid in paths:
+            seq=extract(sg,sg.graph['id2path'][sid])
+            if len(seq)>0:
+                aobjs.append((str(sid),seq))
+
+                # if seq in d:
+                #     d[seq].append(str(sid))
+                # else:
+                #     d[seq]=[str(sid)]
+
+        if len(aobjs)==1:
+            logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
+            return
+
+    logging.info("Realigning bubble (pid=%s) between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
 
     for name,seq in aobjs:
         if len(seq)>200:
@@ -501,7 +521,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
             tempfiles.append("%s.fasta"%uid)
             tempfiles.append("%s.conf"%uid)
         elif msa=='pecan':
-            cmd="java -cp /Users/jasperlinthorst/Documents/phd/pecan bp/pecan/Pecan -G %s.fasta -F %s.*.fasta -l -p %s.conf %s && cat %s.fasta"%(uid,uid,uid,parameters,uid)
+            cmd="pecan -G %s.fasta -F %s.*.fasta -l -p %s.conf %s && cat %s.fasta"%(uid,uid,uid,parameters,uid)
             for i,(name,seq) in enumerate(aobjs): #pecan wants sequence in separate files
                 fasta_writer("%s.%d.fasta"%(uid,i),[(name,seq)])
                 tempfiles.append("%s.%d.fasta"%(uid,i))

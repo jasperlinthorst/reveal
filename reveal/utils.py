@@ -97,9 +97,9 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
                                 seq+='N'
                         else:
                             if toupper:
-                                seq+=base.upper()
+                                seq+=base.upper().replace("-","")
                             else:
-                                seq+=base
+                                seq+=base.replace("-","")
                 elif cutN>0:
                     for base in line.rstrip():
                         if base.upper()=='N':
@@ -115,14 +115,14 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
                                     sub+=1
                                 gapseq=""
                             if toupper:
-                                seq+=base.upper()
+                                seq+=base.upper().replace("-","")
                             else:
-                                seq+=base
+                                seq+=base.replace("-","")
                 else:
                     if toupper:
-                        seq+=line.upper().rstrip()
+                        seq+=line.upper().rstrip().replace("-","")
                     else:
-                        seq+=line.rstrip()
+                        seq+=line.rstrip().replace("-","")
         if seq!="":
             if cutN>0:
                 yield name+"_"+str(sub),seq
@@ -759,7 +759,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                         oute=[(u,v,d) for u,v,d in G.out_edges(node,data=True) if sid in d['paths']]
                         # logging.debug("node: %s oute: %s"%(node,str(oute)))
                         if len(oute)==0:
-                            logging.warn("Path: \"%s\" (sid=%s) doesnt reach end node, stops at %s!"%(sample,sid,u))
+                            logging.warn("Path: \"%s\" (sid=%s) doesnt reach end node, stops at %s!"%(sample,sid,node))
                             break
                         elif len(oute)>1:
                             logging.error("Ambiguity in path for: %s at node: %s"%(sample,node))

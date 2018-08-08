@@ -3,6 +3,7 @@ import utils
 import sys
 import logging
 import os
+import uuid
 
 def convert(args):
     for graph in args.graphs:
@@ -34,7 +35,6 @@ def convert(args):
 
         elif graph.endswith(".fa") or graph.endswith(".fasta") or graph.endswith(".fna"): #assume fasta to gfa
             if args.aligned:
-                print "aln2graph"
                 seqs=[]
                 names=[]
                 for name,seq in utils.fasta_reader(graph):
@@ -43,12 +43,22 @@ def convert(args):
                 g=utils.aln2graph(seqs,names)
             else:
                 i=0
-                for name,seq in utils.fasta_reader(graph):
-                    g.graph['paths'].append(os.path.basename(graph))
-                    g.graph['path2id'][os.path.basename(graph)]=0
-                    g.graph['id2path'][0]=os.path.basename(graph)
-                    g.add_node(i,offsets={0:0},seq=seq)
-                    i+=1
+                start=uuid.uuid4().hex
+                end=uuid.uuid4().hex
+                g.graph['startnodes']=[start]
+                g.graph['endnodes']=[end]
+                g.add_node(start,offsets=dict())
+                g.add_node(end,offsets=dict())
+                for i,v in enumerate(utils.fasta_reader(graph)):
+                    name,seq=v
+                    g.graph['paths'].append(name)
+                    g.graph['path2id'][name]=i
+                    g.graph['id2path'][i]=name
+                    g.node[start]['offsets'][i]=0
+                    g.node[start]['offsets'][i]=len(seq)
+                    g.add_node(i,offsets={i:0},seq=seq)
+                    g.add_edge(start,i,paths=set([i]))
+                    g.add_edge(i,end,paths=set([i]))
 
             filename=graph[:graph.rfind(".")]+".gfa"
             utils.write_gfa(g,"", outputfile=filename)
