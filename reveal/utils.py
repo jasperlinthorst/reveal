@@ -70,12 +70,14 @@ def MultiGraphToDiGraph(G):
 
     return structural_variants
 
-def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
+def fasta_reader(fn,truncN=False,toupper=True,cutN=0,keepdash=False):
     seq=""
     gapseq=""
     sub=0
     with open(fn,'r') as ff:
         for line in ff:
+            line=line.rstrip()
+
             if line.startswith(">"):
                 if seq!="":
                     if cutN>0:
@@ -83,26 +85,31 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
                         sub=0
                     else:
                         yield name,seq
-                name=line.rstrip().replace(">","").replace("\t","")
+                name=line.replace(">","").replace("\t","")
                 seq=""
             else:
+                if toupper:
+                    line=line.upper()
+                    
+                if not keepdash:
+                    line=line.replace("-","")
+
                 if truncN:
-                    for base in line.rstrip():
-                        if base.upper()=='N':
+                    for base in line:
+                        if base=='N':
                             if len(seq)==0:
                                 continue
                             elif seq[-1]=='N':
                                 continue
                             else:
                                 seq+='N'
+                        elif base=='-' and not keepdash:
+                            pass
                         else:
-                            if toupper:
-                                seq+=base.upper().replace("-","")
-                            else:
-                                seq+=base.replace("-","")
+                            seq+=base
                 elif cutN>0:
-                    for base in line.rstrip():
-                        if base.upper()=='N':
+                    for base in line:
+                        if base=='N':
                             gapseq+='N'
                         else:
                             if len(gapseq)<cutN:
@@ -114,15 +121,10 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
                                     seq=""
                                     sub+=1
                                 gapseq=""
-                            if toupper:
-                                seq+=base.upper().replace("-","")
-                            else:
-                                seq+=base.replace("-","")
+                            seq+=base
                 else:
-                    if toupper:
-                        seq+=line.upper().rstrip().replace("-","")
-                    else:
-                        seq+=line.rstrip().replace("-","")
+                    seq+=line
+
         if seq!="":
             if cutN>0:
                 yield name+"_"+str(sub),seq
@@ -1002,7 +1004,7 @@ def aln2graph(seqs,names,idoffset=0,confidence=None,minconf=0):
     ng.graph['id2path']=dict()
     ng.graph['id2end']=dict()
 
-    for name,seq in zip(names,seqs):
+    for name,seq in zip(names,seqs):        
         sid=len(ng.graph['paths'])
         ng.graph['path2id'][name]=sid
         ng.graph['id2path'][sid]=name
@@ -1014,6 +1016,7 @@ def aln2graph(seqs,names,idoffset=0,confidence=None,minconf=0):
 
     offsets={o:-1 for o in range(len(seqs))}
     nid=nn
+
     for i in xrange(len(seqs[0])):
         col={}
         base2node={}
