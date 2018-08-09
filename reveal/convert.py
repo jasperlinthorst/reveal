@@ -37,7 +37,7 @@ def convert(args):
             if args.aligned:
                 seqs=[]
                 names=[]
-                for name,seq in utils.fasta_reader(graph):
+                for name,seq in utils.fasta_reader(graph,keepdash=True):
                     seqs.append(seq)
                     names.append(name)
                 g=utils.aln2graph(seqs,names)
@@ -55,7 +55,7 @@ def convert(args):
                     g.graph['path2id'][name]=i
                     g.graph['id2path'][i]=name
                     g.node[start]['offsets'][i]=0
-                    g.node[start]['offsets'][i]=len(seq)
+                    g.node[end]['offsets'][i]=len(seq)
                     g.add_node(i,offsets={i:0},seq=seq)
                     g.add_edge(start,i,paths=set([i]))
                     g.add_edge(i,end,paths=set([i]))
