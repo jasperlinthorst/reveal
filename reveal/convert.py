@@ -169,18 +169,11 @@ def maf2graph(maffile):
         else:
             G.add_edge(pnode,endnode,paths=set([G.graph['path2id'][name]]),ofrom="+",oto="+")
 
-    print "Unaligned segments",unaligned
-
-    assert(nid not in G)
+    # print "Unaligned segments",unaligned
 
     alignments=[node for node in G if 'data' in G.node[node]]
-
-    assert(nid not in G)
     
     for node in alignments: #expand all alignments in the graph
-        print node,nid
-
-        assert(nid not in G)
 
         if 'data' in G.node[node]:
             seqs=[]
@@ -191,8 +184,6 @@ def maf2graph(maffile):
                 seqs.append(G.node[node]['data'][(file,name)]['aln'])
                 offsets[G.graph['path2id'][name]]=G.node[node]['data'][(file,name)]['start']
                 names.append(name)
-
-            assert(nid not in G)
 
             sg,nid=utils.aln2graph(seqs,names,idoffset=nid,path2id=G.graph['path2id'],offsets=offsets)
 
