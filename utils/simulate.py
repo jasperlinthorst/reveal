@@ -17,19 +17,19 @@ import math
 def mut(seq, seqids, idoffset, rate=0.0001, indelfrac=0.2, zipfd=1.7, maxindellength=2000,):
 
     p=[1/float(len(seq))]*len(seq) #uniform probability per position, TODO: generate regions that are more or less variable
-    
+
     #round up so we always introduce at least one variant per generation, so the rate of mutation will in the end be higher.
     npos=int(math.ceil(rate*len(seq))) #number of positions to sample
-    
+
     positions=np.random.choice(len(seq), npos, replace=False, p=p)
     positions=sorted(positions)
-    
+
     mutations=[]
     
     mutseq=""
     nseqids=[]
     offset=0
-    
+
     for pos in positions:
 
         if pos<offset: #position was previously removed by indel
@@ -360,7 +360,7 @@ def simulate(seq,tree,args):
         if node.up==None:
             node.name="root"
             continue
-        
+
         d=(node.dist/float(totd))*args.mrate
 
         if node.is_leaf():
@@ -390,6 +390,57 @@ def simulate(seq,tree,args):
             seqidsf.write("%d"%genomes[genome][1][-1])
 
     return fastas
+
+
+def print_results(args,performance):
+
+    print "reveal",\
+        "n=%d"%args.n,\
+        "r=%d"%args.mrate,\
+        "s=%d"%args.seed,\
+        "i=%d"%args.indelfrac,\
+        "c=%d"%args.minconf,\
+        "tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
+        "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
+        "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
+        "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
+        "f1=%.5f"%performance['reveal_summary']['f1'], \
+        "sensitivity=%.5f"%performance['reveal_summary']['sensitivity'], \
+        "specificity=%.5f"%performance['reveal_summary']['specificity'], \
+        "precision=%.5f"%performance['reveal_summary']['precision'], \
+        "runtime=%.2f"%performance['reveal_runtime'] \
+
+    print "mugsy",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['mugsy_matrices']['tp'])), \
+            "fp=%d"%sum(sum(performance['mugsy_matrices']['fp'])), \
+            "tn=%d"%sum(sum(performance['mugsy_matrices']['tn'])), \
+            "fn=%d"%sum(sum(performance['mugsy_matrices']['fn'])), \
+            "f1=%.5f"%performance['mugsy_summary']['f1'], \
+            "sensitivity=%.5f"%performance['mugsy_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['mugsy_summary']['specificity'], \
+            "precision=%.5f"%performance['mugsy_summary']['precision'], \
+            "runtime=%.2f"%performance['mugsy_runtime'] \
+
+    print "pecan",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['pecan_matrices']['tp'])),  \
+            "fp=%d"%sum(sum(performance['pecan_matrices']['fp'])),  \
+            "tn=%d"%sum(sum(performance['pecan_matrices']['tn'])),  \
+            "fn=%d"%sum(sum(performance['pecan_matrices']['fn'])), \
+            "f1=%.5f"%performance['pecan_summary']['f1'], \
+            "sensitivity=%.5f"%performance['pecan_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['pecan_summary']['specificity'], \
+            "precision=%.5f"%performance['pecan_summary']['precision'], \
+            "runtime=%.2f"%performance['pecan_runtime'] \
 
 def main():
     desc="""
@@ -436,7 +487,12 @@ def main():
     args.indelfrac=args.indelfrac/float(100)
 
     if os.path.exists(runid+"/"+runid+".pickle") and not args.force:
-        logging.warn("Experiment already was already performed, quit")
+        logging.warn("Experiment already was already performed...")
+        
+        #just output the previous results...
+        os.chdir(runid)
+        performance=pickle.load(open(runid+".pickle", "r"))
+        print_results(args,performance)
         sys.exit(0)
     
     if not os.path.exists(runid):
@@ -490,65 +546,19 @@ def main():
     performance['reveal_runtime']=runtime
     performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
 
-    print "reveal",\
-            "n=%d"%args.n,\
-            "r=%d"%args.mrate,\
-            "s=%d"%args.seed,\
-            "i=%d"%args.indelfrac,\
-            "c=%d"%args.minconf,\
-            "tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
-            "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
-            "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
-            "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
-            "f1=%.5f"%performance['reveal_summary']['f1'], \
-            "sensitivity=%.5f"%performance['reveal_summary']['sensitivity'], \
-            "specificity=%.5f"%performance['reveal_summary']['specificity'], \
-            "precision=%.5f"%performance['reveal_summary']['precision'], \
-            "runtime=%.2f"%runtime \
-
-
     #RUN MUGSY
     allpairs,runtime=mugsy(runid+"_mugsy",genomes,check=args.check)
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['mugsy_runtime']=runtime
     performance['mugsy_summary']=matrices2summary(performance['mugsy_matrices'])
-    print "mugsy",\
-            "n=%d"%args.n,\
-            "r=%d"%args.mrate,\
-            "s=%d"%args.seed,\
-            "i=%d"%args.indelfrac,\
-            "c=%d"%args.minconf,\
-            "tp=%d"%sum(sum(performance['mugsy_matrices']['tp'])), \
-            "fp=%d"%sum(sum(performance['mugsy_matrices']['fp'])), \
-            "tn=%d"%sum(sum(performance['mugsy_matrices']['tn'])), \
-            "fn=%d"%sum(sum(performance['mugsy_matrices']['fn'])), \
-            "f1=%.5f"%performance['mugsy_summary']['f1'], \
-            "sensitivity=%.5f"%performance['mugsy_summary']['sensitivity'], \
-            "specificity=%.5f"%performance['mugsy_summary']['specificity'], \
-            "precision=%.5f"%performance['mugsy_summary']['precision'], \
-            "runtime=%.2f"%runtime \
-
 
     #RUN PECAN
     allpairs,runtime=pecan(runid+"_pecan",genomes,check=args.check)#,minconf=conf)
     performance['pecan_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['pecan_runtime']=runtime
     performance['pecan_summary']=matrices2summary(performance['pecan_matrices'])
-    print "pecan",\
-            "n=%d"%args.n,\
-            "r=%d"%args.mrate,\
-            "s=%d"%args.seed,\
-            "i=%d"%args.indelfrac,\
-            "c=%d"%args.minconf,\
-            "tp=%d"%sum(sum(performance['pecan_matrices']['tp'])),  \
-            "fp=%d"%sum(sum(performance['pecan_matrices']['fp'])),  \
-            "tn=%d"%sum(sum(performance['pecan_matrices']['tn'])),  \
-            "fn=%d"%sum(sum(performance['pecan_matrices']['fn'])), \
-            "f1=%.5f"%performance['pecan_summary']['f1'], \
-            "sensitivity=%.5f"%performance['pecan_summary']['sensitivity'], \
-            "specificity=%.5f"%performance['pecan_summary']['specificity'], \
-            "precision=%.5f"%performance['pecan_summary']['precision'], \
-            "runtime=%.2f"%runtime \
+    
+    print_results(args,performance)
 
     if args.tmpdir!=None:
         for file in os.listdir(os.getcwd()):
