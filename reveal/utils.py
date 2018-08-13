@@ -386,11 +386,12 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     for line in f:
         if line.startswith('H'):
             pass
-        
         elif line.startswith('S'):
             s=line.strip().split('\t')
             nodeid=int(s[1])
-
+            if len(s)==2: #node with empty sequence, allow for now
+                s.append("")
+            
             if remap:
                 if graph.has_node(gnodeid):
                     logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
@@ -415,7 +416,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 if revcomp:
                     graph.add_node(nmapping[nodeid],seq=rc(s[2].upper()),aligned=0,offsets={})
                 else:
-                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})        
+                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})
         
         elif line.startswith('L'):
             edges.append(line)
@@ -736,7 +737,6 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 for edgeid in G[node][to]:
                     if 'cigar' in G[node][to][edgeid]:
                         cigar=G[node][to][edgeid]['cigar']
-
                     f.write("L\t"+str(mapping[node])+"\t"+G[node][to][edgeid]['ofrom']+"\t"+str(mapping[to])+"\t"+G[node][to][edgeid]['oto']+"\t"+(G[node][to][edgeid]['cigar'] if 'cigar' in G[node][to][edgeid] else "0M")+"\n")
             else:
                 if 'ofrom' in G[node][to] and 'oto' in G[node][to]:
@@ -745,16 +745,18 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                     f.write("L\t"+str(mapping[node])+"\t+\t"+str(mapping[to])+"\t+\t"+(G[node][to]['cigar'] if 'cigar' in G[node][to] else "0M")+"\n")
 
     #write paths
-    for sample in G.graph['paths']:
+    # for sample in G.graph['paths']:
+    for sample in G.graph['path2id']:
         sid=G.graph['path2id'][sample]
-        logging.info("Writing path: %s (sid=%d)"%(sample,sid))
+        logging.debug("Writing path: %s (sid=%d)"%(sample,sid))
         path=[]
         cigarpath=[]
         logging.debug("Startnodes in graph: %s"%G.graph['startnodes'])
+        logging.debug("Endnodes in graph: %s"%G.graph['endnodes'])
         for node in G.graph['startnodes']:
             if node in G: #might be a subgraph of the actual graph
                 if sid in G.node[node]['offsets']: #found the start of this path
-                    if type(node)!=str:
+                    if type(node)!=str: #skip nodes that mark begin/end of an alignment
                         path.append(str(mapping[node])+'+')
                         cigarpath.append("0M")
                     while True:
@@ -769,70 +771,20 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                         else:
                             v=oute[0][1]
                             d=oute[0][2]
-                            if type(v)==str: #end node
+                            # if type(v)==str: #end node
+                                # break
+                            if v in G.graph['endnodes']:
                                 break
-                            path.append(str(mapping[v]) + (d['oto'] if 'oto' in d else '+'))
-                            cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
-                            node=v
+                            elif type(v)==str: #skip nodes that mark begin/end of an alignment, but dont stop traversing
+                                node=v
+                                continue
+                            else:
+                                path.append(str(mapping[v]) + (d['oto'] if 'oto' in d else '+'))
+                                cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
+                                node=v
                     break
             else:
                 logging.debug("Startnode not in the specified graph!")
-
-        # subgraph=[]
-        # for e1,e2,d in G.edges(data=True):
-        #     if sid in d['paths']:
-        #         if type(e1)!=str and type(e2)!=str: #string nodes are dummy start/stop nodes, ignore
-        #             subgraph.append((e1,e2,d))
-
-        # path=[]
-        # cigarpath=[]
-
-        # if len(subgraph)>0:
-
-        #     logging.debug("Load subgraph...")
-        #     sg=nx.DiGraph(subgraph)
-        #     logging.debug("Done.")
-
-        #     for node in sg.nodes():
-        #         if len(sg[node])>1:
-        #             print "writing gml",sample
-        #             write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
-        #             print "done"
-        #         assert(len(sg[node])<2) #There should only one path!
-
-        #     # if (len([c for c in nx.connected_components(sg.to_undirected())] )!=1):
-        #     #     write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
-
-        #     logging.debug("Determine topsort...")
-        #     nodepath=list(nx.topological_sort(sg))
-        #     logging.debug("Done.")
-
-        #     if type(nodepath[0])==str and type(nodepath[-1])==str:
-        #         nodepath=nodepath[1:-1]
-
-        #     pn=nodepath[0]
-        #     for n in nodepath[1:]:
-        #         #assert(n in G[pn]) #path is unconnected in graph! Something went wrong..
-        #         if n not in G[pn]:
-        #             logging.error("Path %s spells a path that is not supported by the graph %s->%s (%s->%s)!"%(sample,str(mapping[n]),str(mapping[pn]),n,pn))
-        #             write_gml(sg,None,outputfile="%s_subgraph.gml"%sample)
-        #             break
-        #         else:
-        #             path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
-        #             cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
-                
-        #         if n==nodepath[-1]: #if last node
-        #             path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
-        #             cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
-        #         pn=n
-        # else: #Maybe just a single node, strictly not a path..
-        #     for node,data in G.nodes(data=True):
-        #         if sid in data['offsets'] and type(node)!=str:
-        #             path.append("%s+"%mapping[node]) #TODO: have no way of knowing what the original orientation was now...
-
-        #     if len(path)==0:
-        #         logging.debug("Sample %s not part of the graph."%sid)
-        #         continue
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(cigarpath)+"\n")
     
@@ -996,41 +948,58 @@ def seq2node(G,T,toupper=True,remap=False):
         G=nx.relabel_nodes(G,mapping,copy=False)
 
 #converts a list of aligned sequences to a graph
-def aln2graph(seqs,names,idoffset=0,confidence=None,minconf=0):
+def aln2graph(seqs,names,idoffset=0,confidence=None,minconf=0,path2id=None,offsets=None,addstartstop=True):
     nn=idoffset
     ng=nx.DiGraph()
-    ng.graph['paths']=[]
-    ng.graph['path2id']=dict()
-    ng.graph['id2path']=dict()
-    ng.graph['id2end']=dict()
 
-    for name,seq in zip(names,seqs):        
-        sid=len(ng.graph['paths'])
-        ng.graph['path2id'][name]=sid
-        ng.graph['id2path'][sid]=name
-        ng.graph['id2end'][sid]=len(seq)
-        ng.graph['paths'].append(name)
+    if path2id!=None:
+        for name in names:
+            assert(name in path2id)
+        ng.graph['paths']=names
+        ng.graph['path2id']=path2id
+        ng.graph['id2path']={path2id[p]:p for p in path2id}
+    else:
+        ng.graph['paths']=[]
+        ng.graph['path2id']=dict()
+        ng.graph['id2path']=dict()
+
+        for name,seq in zip(names,seqs):
+            sid=len(ng.graph['paths'])
+            ng.graph['path2id'][name]=sid
+            ng.graph['id2path'][sid]=name
+            ng.graph['paths'].append(name)
 
     if confidence==None:
         confidence=[100]*len(seqs[0])
 
-    offsets={o:-1 for o in range(len(seqs))}
+    # offsets={o:-1 for o in range(len(seqs))}
+
+    if offsets==None:
+        offsets={ng.graph['path2id'][p]:-1 for p in ng.graph['path2id']}
+    else:
+        offsets={sid:offsets[sid]-1 for sid in offsets}
+
     nid=nn
 
     for i in xrange(len(seqs[0])):
         col={}
         base2node={}
         sid2node={}
-
         p=confidence[i]
 
         for j in xrange(len(seqs)):
+            pid=ng.graph['path2id'][names[j]]
+
             if seqs[j][i] in col:
-                col[seqs[j][i]].add(j)
+                # col[seqs[j][i]].add(j)
+                col[seqs[j][i]].add(pid)
             else:
-                col[seqs[j][i]]=set([j])
+                # col[seqs[j][i]]=set([j])
+                col[seqs[j][i]]=set([pid])
+
             if seqs[j][i]!='-':
-                offsets[j]+=1
+                # offsets[j]+=1
+                offsets[pid]+=1
 
         for base in col:
             if i==0:
@@ -1185,28 +1154,29 @@ def aln2graph(seqs,names,idoffset=0,confidence=None,minconf=0):
             if sid not in path2end or data['offsets'][sid]>path2end[sid][1]:
                 path2end[sid]=(node,data['offsets'][sid])
 
-    start=uuid.uuid4().hex
-    ng.add_node(start,offsets=dict(),endpoint=True)
-    ng.graph['startnodes']=[start]
-    for sid in path2start:
-        v=start
-        t=path2start[sid][0]
-        ng.node[start]['offsets'][sid]=path2start[sid][1]
-        if ng.has_edge(v,t):
-            ng[v][t]['paths'].add(sid)
-        else:
-            ng.add_edge(v,t,paths=set([sid]))
+    if addstartstop:
+        start=uuid.uuid4().hex
+        ng.add_node(start,offsets=dict(),endpoint=True)
+        ng.graph['startnodes']=[start]
+        for sid in path2start:
+            v=start
+            t=path2start[sid][0]
+            ng.node[start]['offsets'][sid]=path2start[sid][1]
+            if ng.has_edge(v,t):
+                ng[v][t]['paths'].add(sid)
+            else:
+                ng.add_edge(v,t,paths=set([sid]),ofrom="+",oto="+")
 
-    end=uuid.uuid4().hex
-    ng.add_node(end,offsets=dict(),endpoint=True)
-    ng.graph['endnodes']=[end]
-    for sid in path2end:
-        v=path2end[sid][0]
-        t=end
-        ng.node[end]['offsets'][sid]=path2end[sid][1]+len(ng.node[path2end[sid][0]]['seq'])
-        if ng.has_edge(v,t):
-            ng[v][t]['paths'].add(sid)
-        else:
-            ng.add_edge(v,t,paths=set([sid]))
+        end=uuid.uuid4().hex
+        ng.add_node(end,offsets=dict(),endpoint=True)
+        ng.graph['endnodes']=[end]
+        for sid in path2end:
+            v=path2end[sid][0]
+            t=end
+            ng.node[end]['offsets'][sid]=path2end[sid][1]+len(ng.node[path2end[sid][0]]['seq'])
+            if ng.has_edge(v,t):
+                ng[v][t]['paths'].add(sid)
+            else:
+                ng.add_edge(v,t,paths=set([sid]),ofrom="+",oto="+")
 
-    return ng
+    return ng,nid
