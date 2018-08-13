@@ -12,22 +12,24 @@ import datetime
 import random
 import argparse
 import logging
+import math
 
 def mut(seq, seqids, idoffset, rate=0.0001, indelfrac=0.2, zipfd=1.7, maxindellength=2000,):
 
     p=[1/float(len(seq))]*len(seq) #uniform probability per position, TODO: generate regions that are more or less variable
-
-    npos=int(rate*len(seq)) #number of positions to sample
-
+    
+    #round up so we always introduce at least one variant per generation, so the rate of mutation will in the end be higher.
+    npos=int(math.ceil(rate*len(seq))) #number of positions to sample
+    
     positions=np.random.choice(len(seq), npos, replace=False, p=p)
     positions=sorted(positions)
-
+    
     mutations=[]
     
     mutseq=""
     nseqids=[]
     offset=0
-
+    
     for pos in positions:
 
         if pos<offset: #position was previously removed by indel
@@ -358,7 +360,7 @@ def simulate(seq,tree,args):
         if node.up==None:
             node.name="root"
             continue
-
+        
         d=(node.dist/float(totd))*args.mrate
 
         if node.is_leaf():
@@ -427,8 +429,10 @@ def main():
         break #just read one sequence
 
     #re-encode rates and fractions
-    args.mrate= (len(seq)/float(args.mrate)) / len(seq)
+    args.mrate= (len(seq)/float(args.mrate)) / float(len(seq))
     
+    print args.mrate
+
     args.indelfrac=args.indelfrac/float(100)
 
     if os.path.exists(runid+"/"+runid+".pickle") and not args.force:
