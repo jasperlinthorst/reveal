@@ -480,6 +480,29 @@ def main():
     #what were the commandline arguments for this run
     performance['args']=args
 
+    #RUN REVEAL
+    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc,check=args.check)
+    performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
+    performance['reveal_runtime']=runtime
+    performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
+
+    print "reveal",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
+            "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
+            "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
+            "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
+            "f1=%.5f"%performance['reveal_summary']['f1'], \
+            "sensitivity=%.5f"%performance['reveal_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['reveal_summary']['specificity'], \
+            "precision=%.5f"%performance['reveal_summary']['precision'], \
+            "runtime=%.2f"%runtime \
+
+
     #RUN MUGSY
     allpairs,runtime=mugsy(runid+"_mugsy",genomes,check=args.check)
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
@@ -501,6 +524,7 @@ def main():
             "precision=%.5f"%performance['mugsy_summary']['precision'], \
             "runtime=%.2f"%runtime \
 
+
     #RUN PECAN
     allpairs,runtime=pecan(runid+"_pecan",genomes,check=args.check)#,minconf=conf)
     performance['pecan_matrices']=performance2matrices(allpairs,treemap,args.n)
@@ -520,28 +544,6 @@ def main():
             "sensitivity=%.5f"%performance['pecan_summary']['sensitivity'], \
             "specificity=%.5f"%performance['pecan_summary']['specificity'], \
             "precision=%.5f"%performance['pecan_summary']['precision'], \
-            "runtime=%.2f"%runtime \
-
-    #RUN REVEAL
-    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc,check=args.check)
-    performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
-    performance['reveal_runtime']=runtime
-    performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
-
-    print "reveal",\
-            "n=%d"%args.n,\
-            "r=%d"%args.mrate,\
-            "s=%d"%args.seed,\
-            "i=%d"%args.indelfrac,\
-            "c=%d"%args.minconf,\
-            "tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
-            "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
-            "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
-            "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
-            "f1=%.5f"%performance['reveal_summary']['f1'], \
-            "sensitivity=%.5f"%performance['reveal_summary']['sensitivity'], \
-            "specificity=%.5f"%performance['reveal_summary']['specificity'], \
-            "precision=%.5f"%performance['reveal_summary']['precision'], \
             "runtime=%.2f"%runtime \
 
     if args.tmpdir!=None:
