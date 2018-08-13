@@ -74,7 +74,7 @@ def mut(seq, seqids, idoffset, rate=0.0001, indelfrac=0.2, zipfd=1.7, maxindelle
 
     return mutseq,nseqids,mutations,idoffset
 
-def reveal(run,fastas,m=20,minconf=0,nproc=1):
+def reveal(run,fastas,m=20,minconf=0,nproc=1,check=False):
     
     with open("run_reveal.sh",'w') as runfile:
         cmd1="reveal rem %s -m %d -o %s &> %s.rem.out"%(" ".join(fastas),m,run,run)
@@ -89,13 +89,14 @@ def reveal(run,fastas,m=20,minconf=0,nproc=1):
     t2 = datetime.datetime.now()
     
     gfafile=run+".realigned.gfa"
-    for f in fastas:
-        subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
-        subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
+    if check:
+        for f in fastas:
+            subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
+            subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
 
     return compare(gfafile,run),(t2-t1).total_seconds()
 
-def pecan(run,fastas,minconf=0):
+def pecan(run,fastas,minconf=0,check=False):
 
     with open("run_pecan.sh",'w') as runfile:
         cmd="pecan -G %s.fasta -F %s"%(run," ".join(fastas))
@@ -111,13 +112,14 @@ def pecan(run,fastas,minconf=0):
 
     gfafile="%s.gfa"%run
 
-    for f in fastas:
-        subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
-        subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
+    if check:
+        for f in fastas:
+            subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
+            subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
 
     return compare(gfafile,run),(t2-t1).total_seconds()
 
-def mugsy(run,fastas):
+def mugsy(run,fastas,check=False):
 
     with open("run_mugsy.sh",'w') as runfile:
         cmd="mugsy --directory %s --prefix %s %s &> %s_mugsy.out"%(os.getcwd(),run," ".join(fastas),run)
@@ -141,9 +143,10 @@ def mugsy(run,fastas):
     subprocess.check_output([cmd],shell=True)
 
     gfafile="%s.gfa"%run
-    for f in fastas:
-        subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
-        subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
+    if check:
+        for f in fastas:
+            subprocess.check_output(["reveal extract %s %s > tmp.fa"%(gfafile, f.replace(".fasta",""))],shell=True)
+            subprocess.check_call(["diff tmp.fa %s -I \'>\'"%f],shell=True)
     
     return compare(gfafile,run),(t2-t1).total_seconds()
 
@@ -401,7 +404,7 @@ def main():
     parser.add_argument("-l", "--log-level", type=int, dest="loglevel", default=20, help="Log level: 1=trace 10=debug 20=info 30=warn 40=error 50=fatal.")
     parser.add_argument("ancestral", type=str, help="Ancestral genome that corresponds to the root in the phylogenetic tree in fasta format.")
     parser.add_argument("-n", dest="n", type=int, required=True, help="Generate a population of this many samples (default 4).")
-    parser.add_argument("-r", dest="mrate", type=int, required=True, help="Rate of variation to be simulated, a value of 100 means 1 variant every 100 bases.")
+    parser.add_argument("-r", dest="mrate", type=int, required=True, help="Rate of variation to be simulated, a value of 100 means on average 1 variant every 100 bases.")
     parser.add_argument("-i", dest="indelfrac", type=int, required=True, help="Percentage of variants that is an indel.")
     parser.add_argument("-s", dest="seed", type=int, required=True, help="Seed value for generating random variants.")
     parser.add_argument("-c", dest="minconf", type=int, default=0, help="Confidence cut-off for REVEAL.")
@@ -409,6 +412,7 @@ def main():
     parser.add_argument("--force", dest="force", action="store_true", default=False, help="Force new alignments even when the same experiment was already performed.")
     parser.add_argument("--clean", dest="clean", action="store_true", default=False, help="Remove all files expect the summary pickle file after the experiment has run.")
     parser.add_argument("--tmp", dest="tmpdir", default=None, help="Use tmp-dir to write fasta and seqid files.")
+    parser.add_argument("--check", dest="check", action="store_true", default=False, help="Check that gfa files properly encode the input sequence.")
     parser.add_argument("-t", dest="tree", type=str, default=None, help="Use a predefined phylogenetic tree (in newick format).")
 
     args = parser.parse_args()
@@ -477,7 +481,7 @@ def main():
     performance['args']=args
 
     #RUN MUGSY
-    allpairs,runtime=mugsy(runid+"_mugsy",genomes)
+    allpairs,runtime=mugsy(runid+"_mugsy",genomes,check=args.check)
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['mugsy_runtime']=runtime
     performance['mugsy_summary']=matrices2summary(performance['mugsy_matrices'])
@@ -498,7 +502,7 @@ def main():
             "runtime=%.2f"%runtime \
 
     #RUN PECAN
-    allpairs,runtime=pecan(runid+"_pecan",genomes)#,minconf=conf)
+    allpairs,runtime=pecan(runid+"_pecan",genomes,check=args.check)#,minconf=conf)
     performance['pecan_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['pecan_runtime']=runtime
     performance['pecan_summary']=matrices2summary(performance['pecan_matrices'])
@@ -519,7 +523,7 @@ def main():
             "runtime=%.2f"%runtime \
 
     #RUN REVEAL
-    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc)
+    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc,check=args.check)
     performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['reveal_runtime']=runtime
     performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
@@ -540,7 +544,7 @@ def main():
             "precision=%.5f"%performance['reveal_summary']['precision'], \
             "runtime=%.2f"%runtime \
 
-    if args.tmpdir!="":
+    if args.tmpdir!=None:
         for file in os.listdir(os.getcwd()):
             os.remove(file) #clean up
         os.chdir(pwd+"/"+runid)
