@@ -429,14 +429,13 @@ def main():
     
     args.indelfrac=args.indelfrac/float(100)
 
-    if os.path.exists(runid) and not args.force:
+    if os.path.exists(runid+"/"+runid+".pickle") and not args.force:
         logging.warn("Experiment already was already performed, quit")
-        sys.exit(1)
-    else:
-        if not os.path.exists(runid):
-            os.mkdir(runid)
-        os.chdir(runid)
-        print os.getcwd()
+        sys.exit(0)
+    
+    if not os.path.exists(runid):
+        os.mkdir(runid)
+    os.chdir(runid)
 
     if args.seed!=None:
         random.seed(args.seed)
@@ -477,21 +476,45 @@ def main():
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['mugsy_runtime']=runtime
     performance['mugsy_summary']=matrices2summary(performance['mugsy_matrices'])
-    print "mugsy",sum(sum(performance['mugsy_matrices']['fp'])),sum(sum(performance['mugsy_matrices']['fn'])),runtime
+    print "mugsy","tp=%d"%sum(sum(performance['mugsy_matrices']['tp'])), \
+            "fp=%d"%sum(sum(performance['mugsy_matrices']['fp'])), \
+            "tn=%d"%sum(sum(performance['mugsy_matrices']['tn'])), \
+            "fn=%d"%sum(sum(performance['mugsy_matrices']['fn'])), \
+            "f1=%.5f"%performance['mugsy_summary']['f1'], \
+            "sensitivity=%.5f"%performance['mugsy_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['mugsy_summary']['specificity'], \
+            "precision=%.5f"%performance['mugsy_summary']['precision'], \
+            "runtime=%.2f"%runtime \
 
     #RUN PECAN
     allpairs,runtime=pecan(runid+"_pecan",genomes)#,minconf=conf)
     performance['pecan_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['pecan_runtime']=runtime
     performance['pecan_summary']=matrices2summary(performance['pecan_matrices'])
-    print "pecan",sum(sum(performance['pecan_matrices']['fp'])),sum(sum(performance['pecan_matrices']['fn'])),runtime
+    print "pecan","tp=%d"%sum(sum(performance['pecan_matrices']['tp'])),  \
+            "fp=%d"%sum(sum(performance['pecan_matrices']['fp'])),  \
+            "tn=%d"%sum(sum(performance['pecan_matrices']['tn'])),  \
+            "fn=%d"%sum(sum(performance['pecan_matrices']['fn'])), \
+            "f1=%.5f"%performance['pecan_summary']['f1'], \
+            "sensitivity=%.5f"%performance['pecan_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['pecan_summary']['specificity'], \
+            "precision=%.5f"%performance['pecan_summary']['precision'], \
+            "runtime=%.2f"%runtime \
 
     #RUN REVEAL
     allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc)
     performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['reveal_runtime']=runtime
     performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
-    print "reveal",sum(sum(performance['reveal_matrices']['fp'])),sum(sum(performance['reveal_matrices']['fn'])),runtime
+    print "reveal","tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
+            "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
+            "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
+            "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
+            "f1=%.5f"%performance['reveal_summary']['f1'], \
+            "sensitivity=%.5f"%performance['reveal_summary']['sensitivity'], \
+            "specificity=%.5f"%performance['reveal_summary']['specificity'], \
+            "precision=%.5f"%performance['reveal_summary']['precision'], \
+            "runtime=%.2f"%runtime \
 
     pickle.dump(performance,open(runid+".pickle", "wb"))
 
