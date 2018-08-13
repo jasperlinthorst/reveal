@@ -309,7 +309,6 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
     return bubble,ng,path2start,path2end
 
 def align_worker(G,chunk,outputq,kwargs,chunksize=500):
-    
     try:
         rchunk=[]
         for bubble in chunk:
@@ -441,12 +440,16 @@ def refine_all(G, **kwargs):
             if nworkers>len(distinctbubbles):
                 nworkers=len(distinctbubbles)
 
-            chunksize=int(math.ceil(len(distinctbubbles)/float(nworkers)))
-            for i in range(0, len(distinctbubbles), chunksize):
-                p=Process(target=align_worker, args=(G,distinctbubbles[i:i+chunksize],outputq,kwargs))
+            chunksize=int(math.floor(len(distinctbubbles)/float(nworkers)))
+            
+            for i in range(nworkers):
+                if i==nworkers-1:
+                    chunk=distinctbubbles[(i*chunksize):]
+                else:
+                    chunk=distinctbubbles[(i*chunksize):(i*chunksize)+chunksize]
+                p=Process(target=align_worker, args=(G,chunk,outputq,kwargs))
                 p.start()
                 aworkers.append(p)
-
             try:
                 graph_worker(G,nn,outputq,nworkers)
             except:
@@ -571,13 +574,13 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
             seqs[ng.graph['path2id'][name]]=seq
         confidence=aln[1]
 
-        for i,seq in enumerate(seqs):
-            if len(seq)>200:
-                logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
-                logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
-            else:
-                logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
-                logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
+    for i,seq in enumerate(seqs):
+        if len(seq)>200:
+            logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
+            # logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
+        else:
+            logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
+            # logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
     
     offsets={o:-1 for o in range(len(seqs))}
     nid=nn
