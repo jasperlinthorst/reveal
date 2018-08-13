@@ -340,7 +340,7 @@ def matrices2summary(matrices):
 
 def simulate(seq,tree,args):
     ancestralgenomes={"root":(seq,range(len(seq)))}
-    
+
     idoffset=len(seq)
     genomes=dict()
 
@@ -408,15 +408,13 @@ def main():
     parser.add_argument("--nproc", dest="nproc", type=int, default=1, help="Use multi-processing for REVEAL.")
     parser.add_argument("--force", dest="force", action="store_true", default=False, help="Force new alignments even when the same experiment was already performed.")
     parser.add_argument("--clean", dest="clean", action="store_true", default=False, help="Remove all files expect the summary pickle file after the experiment has run.")
-
-    # parser.add_argument("-p", dest="prefix", type=str, required=True, help="Output prefix for fasta, seqid, tree and pickle files.")
-
+    parser.add_argument("--tmp", dest="tmpdir", default=None, help="Use tmp-dir to write fasta and seqid files.")
     parser.add_argument("-t", dest="tree", type=str, default=None, help="Use a predefined phylogenetic tree (in newick format).")
 
     args = parser.parse_args()
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=args.loglevel)
 
-    runid="%s_%s_%s_%s_%s_%s"%(os.path.basename(args.ancestral).replace(".","_"), 
+    runid="%s_n%s_r%s_i%s_s%s_c%s"%(os.path.basename(args.ancestral).replace(".","_"), 
                             args.n, args.mrate, args.indelfrac, args.seed, args.minconf)
 
     logging.info("Starting run with id: %s"%runid)
@@ -435,6 +433,13 @@ def main():
     
     if not os.path.exists(runid):
         os.mkdir(runid)
+
+    if args.tmpdir!=None:
+        pwd=os.getcwd()
+        os.chdir(args.tmpdir)
+        if not os.path.exists(runid):
+            os.mkdir(runid)
+
     os.chdir(runid)
 
     if args.seed!=None:
@@ -476,7 +481,13 @@ def main():
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['mugsy_runtime']=runtime
     performance['mugsy_summary']=matrices2summary(performance['mugsy_matrices'])
-    print "mugsy","tp=%d"%sum(sum(performance['mugsy_matrices']['tp'])), \
+    print "mugsy",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['mugsy_matrices']['tp'])), \
             "fp=%d"%sum(sum(performance['mugsy_matrices']['fp'])), \
             "tn=%d"%sum(sum(performance['mugsy_matrices']['tn'])), \
             "fn=%d"%sum(sum(performance['mugsy_matrices']['fn'])), \
@@ -491,7 +502,13 @@ def main():
     performance['pecan_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['pecan_runtime']=runtime
     performance['pecan_summary']=matrices2summary(performance['pecan_matrices'])
-    print "pecan","tp=%d"%sum(sum(performance['pecan_matrices']['tp'])),  \
+    print "pecan",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['pecan_matrices']['tp'])),  \
             "fp=%d"%sum(sum(performance['pecan_matrices']['fp'])),  \
             "tn=%d"%sum(sum(performance['pecan_matrices']['tn'])),  \
             "fn=%d"%sum(sum(performance['pecan_matrices']['fn'])), \
@@ -506,7 +523,14 @@ def main():
     performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['reveal_runtime']=runtime
     performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
-    print "reveal","tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
+
+    print "reveal",\
+            "n=%d"%args.n,\
+            "r=%d"%args.mrate,\
+            "s=%d"%args.seed,\
+            "i=%d"%args.indelfrac,\
+            "c=%d"%args.minconf,\
+            "tp=%d"%sum(sum(performance['reveal_matrices']['tp'])), \
             "fp=%d"%sum(sum(performance['reveal_matrices']['fp'])), \
             "tn=%d"%sum(sum(performance['reveal_matrices']['tn'])), \
             "fn=%d"%sum(sum(performance['reveal_matrices']['fn'])), \
@@ -515,6 +539,11 @@ def main():
             "specificity=%.5f"%performance['reveal_summary']['specificity'], \
             "precision=%.5f"%performance['reveal_summary']['precision'], \
             "runtime=%.2f"%runtime \
+
+    if args.tmpdir!="":
+        for file in os.listdir(os.getcwd()):
+            os.remove(file) #clean up
+        os.chdir(pwd+"/"+runid)
 
     pickle.dump(performance,open(runid+".pickle", "wb"))
 
