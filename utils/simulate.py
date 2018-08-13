@@ -74,20 +74,19 @@ def mut(seq, seqids, idoffset, rate=0.0001, indelfrac=0.2, zipfd=1.7, maxindelle
 
     return mutseq,nseqids,mutations,idoffset
 
-def reveal(run,fastas,m=20,minconf=0):
+def reveal(run,fastas,m=20,minconf=0,nproc=1):
     
-    t1 = datetime.datetime.now()
-    cmd="reveal rem %s -m %d -o %s &> %s.rem.out"%(" ".join(fastas),m,run,run)
-    logging.debug("CMD: %s"%cmd)
-    subprocess.check_output([cmd],shell=True)
-    cmd="reveal unzip -u10 %s.gfa &> %s.unzip.out"%(run,run)
-    logging.debug("CMD: %s"%cmd)
-    subprocess.check_output([cmd],shell=True)
-    cmd="reveal refine --all --minconf=%d --nproc=4 %s.gfa &> %s.refine.out"%(minconf,run,run)
-    logging.debug("CMD: %s"%cmd)
-    t2 = datetime.datetime.now()
+    with open("run_reveal.sh",'w') as runfile:
+        cmd1="reveal rem %s -m %d -o %s &> %s.rem.out"%(" ".join(fastas),m,run,run)
+        cmd2="reveal unzip -u10 %s.gfa &> %s.unzip.out"%(run,run)
+        cmd3="reveal refine --all --minconf=%d --nproc=%d %s.gfa &> %s.refine.out"%(minconf,nproc,run,run)
+        runfile.write(cmd1+"\n")
+        runfile.write(cmd2+"\n")
+        runfile.write(cmd3+"\n")
 
-    out=subprocess.check_output([cmd],shell=True)
+    t1 = datetime.datetime.now()
+    subprocess.check_output(["sh run_reveal.sh"],shell=True)
+    t2 = datetime.datetime.now()
     
     gfafile=run+".realigned.gfa"
     for f in fastas:
@@ -98,10 +97,12 @@ def reveal(run,fastas,m=20,minconf=0):
 
 def pecan(run,fastas,minconf=0):
 
+    with open("run_pecan.sh",'w') as runfile:
+        cmd="pecan -G %s.fasta -F %s"%(run," ".join(fastas))
+        runfile.write(cmd+"\n")
+
     t1 = datetime.datetime.now()
-    cmd="pecan -G %s.fasta -F %s"%(run," ".join(fastas))
-    logging.debug("CMD: %s"%cmd)
-    subprocess.check_output([cmd],shell=True)
+    subprocess.check_output(["sh run_pecan.sh"],shell=True)
     t2 = datetime.datetime.now()
 
     cmd="reveal convert %s.fasta --aligned"%run
@@ -117,12 +118,15 @@ def pecan(run,fastas,minconf=0):
     return compare(gfafile,run),(t2-t1).total_seconds()
 
 def mugsy(run,fastas):
-    cmd="mugsy --directory %s --prefix %s %s &> %s_mugsy.out"%(os.getcwd(),run," ".join(fastas),run)
-    logging.debug("CMD: %s"%cmd)
+
+    with open("run_mugsy.sh",'w') as runfile:
+        cmd="mugsy --directory %s --prefix %s %s &> %s_mugsy.out"%(os.getcwd(),run," ".join(fastas),run)
+        runfile.write(cmd+"\n")
+    
     for i in range(10):
         try:
             t1 = datetime.datetime.now()
-            out=subprocess.check_output([cmd],shell=True)
+            out=subprocess.check_output(["sh run_mugsy.sh"],shell=True)
             t2 = datetime.datetime.now()
         except:
             print "Mugsy run failed! (%d) retry..."%i
@@ -401,7 +405,9 @@ def main():
     parser.add_argument("-i", dest="indelfrac", type=int, required=True, help="Percentage of variants that is an indel.")
     parser.add_argument("-s", dest="seed", type=int, required=True, help="Seed value for generating random variants.")
     parser.add_argument("-c", dest="minconf", type=int, default=0, help="Confidence cut-off for REVEAL.")
+    parser.add_argument("--nproc", dest="nproc", type=int, default=1, help="Use multi-processing for REVEAL.")
     parser.add_argument("--force", dest="force", action="store_true", default=False, help="Force new alignments even when the same experiment was already performed.")
+    parser.add_argument("--clean", dest="clean", action="store_true", default=False, help="Remove all files expect the summary pickle file after the experiment has run.")
 
     # parser.add_argument("-p", dest="prefix", type=str, required=True, help="Output prefix for fasta, seqid, tree and pickle files.")
 
@@ -471,7 +477,6 @@ def main():
     performance['mugsy_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['mugsy_runtime']=runtime
     performance['mugsy_summary']=matrices2summary(performance['mugsy_matrices'])
-    
     print "mugsy",sum(sum(performance['mugsy_matrices']['fp'])),sum(sum(performance['mugsy_matrices']['fn'])),runtime
 
     #RUN PECAN
@@ -482,13 +487,18 @@ def main():
     print "pecan",sum(sum(performance['pecan_matrices']['fp'])),sum(sum(performance['pecan_matrices']['fn'])),runtime
 
     #RUN REVEAL
-    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf)
+    allpairs,runtime=reveal(runid+"_reveal",genomes,minconf=args.minconf,nproc=args.nproc)
     performance['reveal_matrices']=performance2matrices(allpairs,treemap,args.n)
     performance['reveal_runtime']=runtime
     performance['reveal_summary']=matrices2summary(performance['reveal_matrices'])
     print "reveal",sum(sum(performance['reveal_matrices']['fp'])),sum(sum(performance['reveal_matrices']['fn'])),runtime
 
     pickle.dump(performance,open(runid+".pickle", "wb"))
+
+    if args.clean:
+        for file in os.listdir(os.getcwd()):
+            if file!=runid+".pickle":
+                os.remove(file)
 
 if __name__ == '__main__':
     main()
