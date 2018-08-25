@@ -559,7 +559,7 @@ class Variant(Bubble):
                 self.vtype='indel'
             elif len(self.genotypes)==2:
                 if len(self.genotypes[0])==1 and len(self.genotypes[1])==1:
-                    self.vtype='snp'
+                    self.vtype='snv'
                 else:
                     self.vtype='region'
             else:

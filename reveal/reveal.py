@@ -132,6 +132,7 @@ def main():
     parser_refine.add_argument("--maxcumsize", dest="maxcumsize", type=int, default=None, help="Maximum length of the cumulative sum of all paths that run through the bubble.")
     parser_refine.add_argument("--mincumsize", dest="mincumsize", type=int, default=0, help="Minimum length of the cumulative sum of all paths that run through the bubble.")
     parser_refine.add_argument("--minconf", dest="minconf", type=float, default=0, choices=range(0,101), metavar="[0-100]", help="Use cutoff on confidence values from the MSA in graph construction ().")
+    parser_refine.add_argument("--uniqueonly", dest="uniqueonly", default=False, action="store_true", help="Only consider unique haplotypes for multiple sequence alignment.")
     parser_refine.add_argument("-c","--consistency", dest="constrans", type=int, default=2, help="Number of consistency transformations to apply before alignment (only applies to reveal_probcons).")
     parser_refine.add_argument("-r","--iterative-refinement", dest="nrefinements", type=int, default=100, help="Number of iterative refinements to apply after alignment (only applies to reveal_probcons).")
     parser_refine.add_argument("--no-gap-consistency", dest="consgap", action="store_false", default=True, help="Don't consider gaps in consistency transform (only applies to reveal_probcons).")
@@ -266,6 +267,7 @@ def main():
     parser_convert.add_argument("--partition",  action="store_true", dest="partition", default=False, help="Output graph as multiple subgraphs if possible.")
     parser_convert.add_argument("--nocycles",  action="store_true", dest="nocycles", default=False, help="Do not allow rearrangements (cycles) in graph.")
     parser_convert.add_argument("--to", dest="type", default="gml", choices=['gml','gfa','maf'], help="Filetype to convert to.")
+    parser_convert.add_argument("--aligned", dest="aligned", default=False, action="store_true", help="Whether multi fasta file is aligned.")
     parser_convert.set_defaults(func=convert.convert)
     
     parser_subgraph = subparsers.add_parser('subgraph', prog="reveal subgraph", description="Extract subgraph from gfa by specified node ids.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])

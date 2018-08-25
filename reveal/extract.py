@@ -17,7 +17,7 @@ def extract_cmd(args):
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
     if args.all:
-        args.input=G.graph['paths']
+        args.input=sorted(G.graph['paths'])
     
     try:
         i=0
