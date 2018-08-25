@@ -1,9 +1,10 @@
+import gzip
 import networkx as nx
 import logging
 
 #OVERRIDE intervaltree to bug in incorrect __eq__ function
 import intervaltree
-class IntervalPatched(intervaltree.Interval):    
+class IntervalPatched(intervaltree.Interval):
     def __eq__(self,other):
         if type(self)==type(other)==Interval:
             return super(intervaltree.Interval,self).__eq__(other)
@@ -21,7 +22,7 @@ import subprocess
 
 def contract(G,topsort):
     newtopsort=[]
-    stretches=[[]]    
+    stretches=[[]]
     pnode=topsort[0]
     newtopsort=[topsort[0]]
     for i,node in enumerate(topsort[1:]):
@@ -61,7 +62,7 @@ def MultiGraphToDiGraph(G):
     refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
     refpathnames=[p for p in G.graph['paths'] if not p.startswith('*')]
     for e0,e1,k,d in G.edges(keys=True,data=True):
-        if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
+        if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event
             if type(e0)!=str and type(e1)!=str:
                 structural_variants.append((e0,e1,k,d))
             toremove.append((e0,e1))
@@ -74,7 +75,14 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0):
     seq=""
     gapseq=""
     sub=0
-    with open(fn,'r') as ff:
+    name = ""
+
+    open_func = open
+    fname_parts = fn.split(".")
+    if "gz" in fname_parts:
+        open_func = gzip.open
+
+    with open_func(fn,'rt') as ff:
         for line in ff:
             if line.startswith(">"):
                 if seq!="":
@@ -141,7 +149,7 @@ def fasta_writer(fn,name_seq,lw=100):
 
 def gapcost(pointa,pointb,model="sumofpairs",convex=False,lambda_=1,epsilon_=0): #epsilon is mismatch penalty weight, lambda is indel penalty weight
     assert(len(pointa)==len(pointb))
-    
+
     if model=="star-avg":
         return abs(sum([pointa[i]-pointb[i] for i in range(len(pointa))]))/len(pointa)
     elif model=="star-med":
@@ -198,7 +206,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     plt.title("REVEAL "+" ".join(sys.argv[1:]))
     maxx=0
     maxy=0
-    
+
     minx=None
     miny=None
 
@@ -221,7 +229,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
             l=node.end-node.begin #or interval as node
         if l<minlength:
             continue
-        
+
         s1t=False
         s2t=False
 
@@ -249,7 +257,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
 
         if s1t and s2t:
             anchors.append((data['offsets'][s1],data['offsets'][s2],l))
-    
+
     anchors.sort(key=lambda a: a[2],reverse=True)
 
     if len(anchors)>10000:
@@ -263,15 +271,15 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         minx=0
     if miny==None:
         miny=0
-    
+
     plt.plot(minx,miny,'bx')
     plt.plot(maxx,maxy,'bx')
-    
+
     if region!=None:
         rstart,rend=region.split(":")
         plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
         plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
-    
+
     if interactive:
         plt.show()
     else:
@@ -279,16 +287,16 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
 
 def read_fasta(fasta, index, tree, graph, contigs=True):
     logging.info("Reading fasta: %s ..." % fasta)
-    
+
     if 'paths' not in graph.graph:
         graph.graph['paths']=list()
-    
+
     if 'id2path' not in graph.graph:
         graph.graph['id2path']=dict()
-    
+
     if 'path2id' not in graph.graph:
         graph.graph['path2id']=dict()
-    
+
     if 'id2end' not in graph.graph:
         graph.graph['id2end']=dict()
 
@@ -356,22 +364,22 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     nmapping={} #temp mapping object for nodeids in gfa file
     edges=[] #tmp list for edges
     paths=[]
-    
+
     i=0
     gnodeid=graph.number_of_nodes()+1
-    
+
     if 'paths' not in graph.graph:
         graph.graph['paths']=list()
-    
+
     if 'id2path' not in graph.graph:
         graph.graph['id2path']=dict()
-    
+
     if 'path2id' not in graph.graph:
         graph.graph['path2id']=dict()
     else:
         i=len(graph.graph['path2id'])
         assert(i not in graph.graph['id2path'])
-    
+
     if 'id2end' not in graph.graph:
         graph.graph['id2end']=dict()
 
@@ -384,7 +392,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     for line in f:
         if line.startswith('H'):
             pass
-        
+
         elif line.startswith('S'):
             s=line.strip().split('\t')
             nodeid=int(s[1])
@@ -393,7 +401,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 if graph.has_node(gnodeid):
                     logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
                     sys.exit(1)
-            
+
             if index!=None:
                 if revcomp:
                     intv=index.addsequence(rc(s[2]).upper())
@@ -413,11 +421,11 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 if revcomp:
                     graph.add_node(nmapping[nodeid],seq=rc(s[2].upper()),aligned=0,offsets={})
                 else:
-                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})        
-        
+                    graph.add_node(nmapping[nodeid],seq=s[2].upper(),aligned=0,offsets={})
+
         elif line.startswith('L'):
             edges.append(line)
-        
+
         elif line.startswith('P'): #traverse paths to add offset values
             paths.append(line)
 
@@ -435,7 +443,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
 
         if len(e)>5:
             tags['cigar']=e[5]
-        
+
         if '*' in e: #there are additional tags parse them
             for tag in e[7:]:
                 key,ttype,value=tag.split(':')
@@ -459,35 +467,35 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         cols=line.rstrip().split("\t")
         sample=cols[1]
         # logging.debug("Split done for %s."%sample)
-        
+
         if type(graph)==nx.DiGraph:
             if sample.startswith("*"):
                 logging.debug("DiGraph as input, so exclude path: %s"%sample)
                 continue
-        
+
         logging.debug("Adding path: %s"%sample)
 
         if sample in graph.graph['paths']:
             logging.fatal("ERROR: Graph already contains path for: %s"%sample)
             sys.exit(1)
-        
+
         graph.graph['paths'].append(sample)
-        
+
         if sample in graph.graph['path2id']:
             logging.fatal("ERROR: Graph already contains path for: %s"%sample)
             sys.exit(1)
-        
+
         sid=len(graph.graph['path2id'])
-        
+
         if sid in graph.graph['id2path']:
             logging.fatal("ERROR: Id %d already linked to a path in the graph."%sid)
             sys.exit(1)
-        
+
         graph.graph['path2id'][sample]=sid
         graph.graph['id2path'][sid]=sample
 
         o=0
-        
+
         # logging.debug("Split into tuple.")
         if len(cols)>=3:
             path=[(nid[:-1],nid[-1:]) for nid in cols[2].split(',')]
@@ -504,7 +512,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     o+=node[1]-node[0]
                 else:
                     logging.warn("Node %s has unknown sequence content."%node)
-                
+
                 if pi==0:
                     pnode=node
                     pnid=nid
@@ -528,7 +536,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 pnode=node
                 pnid=nid
                 porientation=orientation
-        
+
         # logging.debug("Loop over path done.")
 
         start=uuid.uuid4().hex
@@ -540,9 +548,9 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.add_node(end,offsets={sid:o},endpoint=True)
         graph.add_edge(nmapping[int(path[-1][0])],end,paths={sid},ofrom=path[-1][1],oto='+')
         endnodes.add(end)
-        
+
         graph.graph['id2end'][sid]=o
-    
+
     #remove nodes and edges that are not associated to any path
     remove=[]
     for n1,n2,d in graph.edges(data=True):
@@ -583,7 +591,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                 endmerge.add(node)
 
         if len(endmerge)>0:
-            endnode=uuid.uuid4().hex            
+            endnode=uuid.uuid4().hex
             graph.add_node(endnode,offsets={},seq="",endpoint=True) #add dummy node for end of each sequence in the subgraph
             graph.graph['endnodes'].append(endnode)
 
@@ -602,7 +610,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                         else:
                             for p in graph[pnode][node]['paths']:
                                 graph[pnode][endnode]['paths'].add(p)
-        
+
         if len(startmerge)>0:
             startnode=uuid.uuid4().hex
             graph.add_node(startnode,offsets={},seq="",endpoint=True) #add dummy node for start of each sequence in the subgraph
@@ -637,12 +645,12 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
                     if data['offsets'][graph.graph['path2id'][sample]]+ (node[1]-node[0]) >maxp:
                         maxp=data['offsets'][graph.graph['path2id'][sample]]+(node[1]-node[0])
             genome2length[sample]=maxp
-        
+
         for sample in graph.graph['paths']:
             for node,data in graph.nodes(data=True):
                 if graph.graph['path2id'][sample] in data['offsets']:
                     graph.node[node]['offsets'][graph.graph['path2id'][sample]]=genome2length[sample]-(graph.node[node]['offsets'][graph.graph['path2id'][sample]]+(node[1]-node[0]))
-        
+
         graph.reverse(copy=False)
 
 #simply write sequence without the graph topology
@@ -671,19 +679,19 @@ def write_fasta(G,T,outputfile="reference.fasta"):
     f.close()
 
 def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=True):
-    
+
     if not outputfile.endswith(".gfa"):
         outputfile+=".gfa"
-    
+
     f=open(outputfile,'wb')
     sep=';'
     f.write('H\tVN:Z:1.0\tCL:Z:%s\n'%" ".join(sys.argv))
-    
+
     sample2id=dict()
     sample2id=G.graph['path2id']
 
     mapping={}
-    
+
     if type(G)==nx.DiGraph or type(G)==nx.classes.graphviews.SubDiGraph:
         iterator=nx.topological_sort(G)
         logging.debug("Writing gfa in topological order.")
@@ -720,13 +728,13 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             else:
                 f.write('S\t'+str(mapping[node])+'\t')
-        
+
         f.write("\n")
-        
+
         for to in G[node]:
             if type(to)==str:
                 continue
-            
+
             if type(G)==nx.MultiDiGraph:
                 for edgeid in G[node][to]:
                     if 'cigar' in G[node][to][edgeid]:
@@ -753,7 +761,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                         cigarpath.append("0M")
                     while True:
                         oute=[(u,v,d) for u,v,d in G.out_edges(node,data=True) if sid in d['paths']]
-                        
+
                         if len(oute)==0:
                             logging.warn("Path: \"%s\" (sid=%s) doesnt reach end node, stops at %s!"%(sample,sid,u))
                             break
@@ -812,7 +820,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         #         else:
         #             path.append("%d%s"% (mapping[pn], sg[pn][n]['ofrom'] if 'ofrom' in sg[pn][n] else '+') )
         #             cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
-                
+
         #         if n==nodepath[-1]: #if last node
         #             path.append("%d%s"% (mapping[n], sg[pn][n]['oto'] if 'oto' in sg[pn][n] else '+') )
         #             cigarpath.append("%s"% (sg[pn][n]['cigar'] if 'cigar' in sg[pn][n] else '0M') )
@@ -827,7 +835,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         #         continue
 
         f.write("P\t"+sample+"\t"+",".join(path)+"\t"+",".join(cigarpath)+"\n")
-    
+
     f.close()
 
 def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
@@ -839,10 +847,10 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
         logging.debug("Graph contains %d samples"%totn)
     else:
         totn=0
-    
+
     for key in G.graph:
         G.graph[key]=str(G.graph[key])
-    
+
     if type(G)==nx.MultiDiGraph:
         for n1,n2,k,d in G.edges(keys=True,data=True):
             for key in d:
@@ -859,16 +867,16 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
     for n,d in G.nodes(data=True):
         mapping[n]=str(n)
         d=G.node[n]
-        
+
         if 'offsets' in d:
             G.node[n]['n']=len(d['offsets'])
-        
+
         for key in d:
             v=d[key]
 
             if type(v)!=str and type(v)!=int:
                 G.node[n][key]=str(v)
-        
+
         if 'seq' not in G.node[n]:
             if isinstance(n,Interval):
                 G.node[n]['seq']=T[n.begin:n.end].upper()
@@ -877,11 +885,11 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
         G.node[n]['l']=len(G.node[n]['seq'])
         # G.node[n]['seqstart']=G.node[n]['seq'][:20]
         G.node[n]['seqend']=G.node[n]['seq'][-20:]
-    
+
     G=nx.relabel_nodes(G,mapping)
 
     outputfiles=[]
-    
+
     if partition:
         logging.debug("Trying to partion graph into subgraphs of size %d."%hwm)
         i=0
@@ -902,7 +910,7 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
                         outputfiles.append(fn)
                         sgn=[n]
                         i+=1
-            
+
             if len(sgn)>1:
                 sg=G.subgraph(sgn)
                 fn=outputfile+'.'+str(i)+'.gml'
@@ -914,11 +922,11 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
             outputfile=outputfile+'.gml'
         nx.write_gml(G,outputfile)
         outputfiles.append(outputfile)
-    
+
     return outputfiles
 
 def kdtree(points, k, depth=0):
-    n=len(points)    
+    n=len(points)
     if n==0:
         return None
     if n==1:
@@ -955,7 +963,7 @@ def range_search(kdtree, qstart, qend):
                 else:
                     points.append(tree)
             continue
-        
+
         splitvalue=tree['split']
 
         if splitvalue>=qstart[splitdim] and splitvalue<=qend[splitdim]: #intersect
