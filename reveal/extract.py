@@ -2,6 +2,7 @@ import networkx as nx
 import utils
 import sys
 import logging
+import re
 
 def extract_cmd(args):
     if not args.graph[0].endswith(".gfa"):
@@ -69,15 +70,36 @@ def extract(G,sample):
 
         inito=subgraph[path[0]][subgraph[path[0]].keys()[0]]['ofrom']
 
-        subgraph.add_edge(0,path[0],ofrom='+',oto=inito)
+        subgraph.add_edge(0,path[0],ofrom='+',oto=inito,cigar="0M")
         pnode=0
 
         for node in path:
+            logging.debug("Node: %s"%node)
             o=subgraph[pnode][node]['oto']
+            
+            offset=0
+            if 'cigar' in subgraph[pnode][node]:
+                cigar=subgraph[pnode][node]['cigar']
+                a=re.findall(r'(\d+)(\w)', cigar)
+                for l,t in a: #determine offset within the segment to allow for overlapping segments
+                    if t=='M' or t=='I' or t=='S' or t=='P': #source of the edge (pnode) is considered the reference
+                        offset+=int(l)
+                logging.debug("Edge contains cigar string, adjust offset to: %d"%offset)
+                
             if o=="+":
-                seq+=G.node[node]['seq'] # --> seq content should come from the original graph
+                s=G.node[node]['seq']
             else:
-                seq+=utils.rc(G.node[node]['seq'])
+                s=utils.rc(G.node[node]['seq'])
+            
+            logging.debug(s)
+            logging.debug(len(s))
+
+            logging.debug(s[offset:])
+
+            assert(len(s)>=offset)
+
+            seq+=s[offset:]
+
             pnode=node
 
     else: #has to be a single node
