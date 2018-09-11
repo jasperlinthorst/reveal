@@ -25,6 +25,10 @@ def contract(G,topsort):
     pnode=topsort[0]
     newtopsort=[topsort[0]]
     for i,node in enumerate(topsort[1:]):
+        
+        assert(type(node)!=str)
+        assert(type(pnode)!=str)
+
         pred=list(G.predecessors(node))
         suc=list(G.successors(pnode))
 
@@ -391,7 +395,7 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
             nodeid=int(s[1])
             if len(s)==2: #node with empty sequence, allow for now
                 s.append("")
-            
+
             if remap:
                 if graph.has_node(gnodeid):
                     logging.fatal("Id space for nodes is larger than total number of nodes in the graph.")
@@ -780,7 +784,8 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                                 continue
                             else:
                                 path.append(str(mapping[v]) + (d['oto'] if 'oto' in d else '+'))
-                                cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
+                                if type(node)!=str:
+                                    cigarpath.append(d['cigar'] if 'cigar' in d else "0M")
                                 node=v
                     break
             else:
