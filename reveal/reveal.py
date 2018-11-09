@@ -9,6 +9,7 @@ import time
 #reveal imports
 import schemes
 import transform
+import transformold
 import plot
 import utils
 import merge
@@ -181,42 +182,61 @@ def main():
     parser_comp.set_defaults(func=comp.comp_cmd)
     
 
+    # #the old transform method
+    # parser_transform = subparsers.add_parser('transform', prog="reveal transform", description="Transform a draft assembly into a graph that encodes the structural order of assembled segments with respect to a finished reference assembly.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    # parser_transform.add_argument('reference', help='(Multi-)fasta reference sequence.')
+    # parser_transform.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
+    # parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
+    # parser_transform.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (if set to 0, try to extract all MUMs).")
+    # parser_transform.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
+    # parser_transform.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to do MUM extraction (max: 2 proc) and mapping (max: number of contigs) in parallel (increases mem usage!).")
+    # parser_transform.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
+    # parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
+    # parser_transform.add_argument("--graph", dest="outputtype", choices=["graph","fasta"], default="graph", help="Output a graph or fasta representation of the transformed genome.")
+    # parser_transform.add_argument("--structonly", dest="allcontigs", action="store_false", default=True, help="Only output paths for contigs that contain structural rearrangements.")
+    # # parser_transform.add_argument("--filter", dest="filtermums", action="store_true", default=False, help="Reduce search space by filtering exact matches.")
+    # parser_transform.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
+    # parser_transform.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
+    # parser_transform.add_argument("--order", dest="order", default="chains", choices=["contigs","chains"], help="Determine the order for either contigs or chains.")
+    # parser_transform.add_argument("--mineventsize", dest="mineventsize", type=int, default=200, help="Maximal distance between clusters/mums for chaining.")
+    # parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000, help="Minimal sum of the length of the MUMs in a chain before its considered.")
+    # parser_transform.add_argument("--maxmums", dest="maxmums", type=int, default=0, help="Max number of MUMs to consider for chaining (when 0 use all).")
+    # parser_transform.add_argument("--cutn", dest="cutn", type=int, default=1000, help="Cut contigs at N-stretches longer than this value, to force re-estimation of gapsizes (set to 0, to switch off).")
+    # parser_transform.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
+    # parser_transform.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
+    # parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
+    # parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
+    # parser_transform.add_argument("--extiter", dest="extiter", type=int, default=3, help="Number of extension iterations using locally unique MUMs.")
+    # parser_transform.add_argument("--maxextend", dest="maxextend", type=int, default=1000, help="Size of the region to try to inspect for locally unique MUMs.")
+    # parser_transform.add_argument("--ml", dest="minlocallength", type=int, default=20, help="Min size of locally unique mums.")
+    # parser_transform.add_argument("--unmapped", dest="outputunmapped", action="store_true", default=False, help="Output a unmappable sequence to a separate fasta file.")
+    # parser_transform.set_defaults(func=transform.transform)
 
-
-
+    
     parser_transform = subparsers.add_parser('transform', prog="reveal transform", description="Transform a draft assembly into a graph that encodes the structural order of assembled segments with respect to a finished reference assembly.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
-    parser_transform.add_argument('reference', help='(Multi-)fasta reference sequence.')
-    parser_transform.add_argument('contigs', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
-    parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of fasta file for the \'finished\' genome.")
+
+    parser_transform.add_argument('reference', nargs=1, help='(Multi-)fasta reference sequence.')
+    parser_transform.add_argument('contigs', nargs='+', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
+    
+    parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of gfa file for the \'transformed\' genome.")
     parser_transform.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (if set to 0, try to extract all MUMs).")
     parser_transform.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
-    
-    parser_transform.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to do MUM extraction (max: 2 proc) and mapping (max: number of contigs) in parallel (increases mem usage!).")
-    parser_transform.add_argument("--gcmodel", dest="gcmodel", choices=["sumofpairs","star-avg","star-med"], default="sumofpairs", help="Which gap-cost model to use for multi-alignment.")
     parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
-    parser_transform.add_argument("--graph", dest="outputtype", choices=["graph","fasta"], default="graph", help="Output a graph or fasta representation of the transformed genome.")
-    parser_transform.add_argument("--structonly", dest="allcontigs", action="store_false", default=True, help="Only output paths for contigs that contain structural rearrangements.")
-    # parser_transform.add_argument("--filter", dest="filtermums", action="store_true", default=False, help="Reduce search space by filtering exact matches.")
-    parser_transform.add_argument("--plotall", dest="plotall", action="store_true", default=False, help="Plot all matches, instead of only the chained matches.")
-    parser_transform.add_argument("--split", dest="split", action="store_true", default=False, help="Split the \'finished\' genome by chromosome.")
-    parser_transform.add_argument("--order", dest="order", default="chains", choices=["contigs","chains"], help="Determine the order for either contigs or chains.")
+
+    parser_transform.add_argument("--rc", dest="rearrangecost", default=10000, type=int, help="Cost for chaining translocated segments.")
+    parser_transform.add_argument("--ic", dest="inversioncost", default=1, type=int, help="Cost for chaining inverted segments.")
     
-    parser_transform.add_argument("--mineventsize", dest="mineventsize", type=int, default=200, help="Maximal distance between clusters/mums for chaining.")
-    parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000, help="Minimal sum of the length of the MUMs in a chain before its considered.")
-    
-    parser_transform.add_argument("--maxmums", dest="maxmums", type=int, default=0, help="Max number of MUMs to consider for chaining (when 0 use all).")
-    parser_transform.add_argument("--cutn", dest="cutn", type=int, default=1000, help="Cut contigs at N-stretches longer than this value, to force re-estimation of gapsizes (set to 0, to switch off).")
-    parser_transform.add_argument("--fixedgapsize", dest="fixedsize", action="store_true", default=False, help="Do not estimate gapsize based on reference, instead use fixed gapsizes of length that can be set with \'gapsize\'.")
-    parser_transform.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
-    
+    parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
     parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
-    parser_transform.add_argument("--extiter", dest="extiter", type=int, default=3, help="Number of extension iterations using locally unique MUMs.")
-    parser_transform.add_argument("--maxextend", dest="maxextend", type=int, default=1000, help="Size of the region to try to inspect for locally unique MUMs.")
-    parser_transform.add_argument("--ml", dest="minlocallength", type=int, default=20, help="Min size of locally unique mums.")
-    
-    parser_transform.add_argument("--unmapped", dest="outputunmapped", action="store_true", default=False, help="Output a unmappable sequence to a separate fasta file.")
-    parser_transform.set_defaults(func=transform.transform)
+
+    parser_transform.add_argument("--noopt", dest="optimise", action="store_false", default=True, help="Don't perform naive optimisation of the glocal chain.")
+    parser_transform.add_argument("--heap", dest="useheap", action="store_true", default=False, help="Use a priority queue to compute an optimal chain.")
+    parser_transform.add_argument("--lastn", dest="lastn", type=int, default=50, help="Number of anchors to evaluate while chaining fragments.")
+
+    parser_transform.add_argument("--greedy", dest="greedy", action="store_true", default=False, help="Assign overlap between anchors in a greedy manner. Large anchors become larger.")
+
+    parser_transform.set_defaults(func=transform.transform_cmd)
 
 
 
@@ -248,14 +268,17 @@ def main():
     parser_finish.add_argument("--gapsize", dest="gapsize", type=int, default=100, help="Use this number of N's between adjacent (only in case of fixedgapsizes) or  partially overlapping contigs.")
     
     parser_finish.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
-    parser_finish.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
+    parser_finish.add_argument("--mincluster", dest="mincluster", type=int, default=20, help="Max space between adjacent MUMs in a cluster.")
     
     parser_finish.add_argument("--extiter", dest="extiter", type=int, default=3, help="Number of iterations of alignment extension.")
     parser_finish.add_argument("--maxextend", dest="maxextend", type=int, default=200, help="Size of the region to try to inspect for locally unique MUMs.")
     parser_finish.add_argument("--ml", dest="minlocallength", type=int, default=20, help="Min size of locally unique mums.")
     
     parser_finish.add_argument("--nounmapped", dest="outputunmapped", action="store_false", default=True, help="Do not output unmappable sequence to a separate fasta file.")
-    parser_finish.set_defaults(func=transform.transform)
+    parser_finish.set_defaults(func=transformold.transform)
+
+
+
 
     parser_convert = subparsers.add_parser('convert', prog="reveal convert", description="Convert gfa graph to gml.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_convert.add_argument('graphs', nargs='*', help='The gfa graph to convert to gml.')

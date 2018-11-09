@@ -94,6 +94,75 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
             continue;//not unique
         }
         //match is not a repeat and is maximally unique
+
+        if (index->rc==1){
+            bStart=index->nsep[0] + (index->nT - bStart - index->LCP[i]);
+        }
+
+#ifdef SA64
+        PyObject *mum=Py_BuildValue("I,(L,L),i",index->LCP[i],aStart,bStart,index->rc);
+#else
+        PyObject *mum=Py_BuildValue("I,(i,i),i",index->LCP[i],aStart,bStart,index->rc);
+#endif
+
+        if (PyList_Append(mums,mum)==0){
+            Py_DECREF(mum);
+        } else {
+            Py_DECREF(mum); //append increments reference count!
+            return NULL;
+        }
+    }
+    return mums;
+}
+
+
+PyObject * getmums_rem(RevealIndex *index, PyObject *args, PyObject *keywds){
+    int minl=0;
+    lcp_t lb,la;
+
+    if (args!=NULL) {
+        if (!PyArg_ParseTuple(args, "i", &minl))
+            return NULL;
+    }
+    
+    saidx_t i=0,aStart,bStart;
+    PyObject *mums=PyList_New(0);
+
+    for (i=1;i<index->n;i++){
+        if (index->LCP[i]<minl){
+            continue;
+        }
+        if (((index->SA[i])>(index->nsep[0])) == ((index->SA[i-1])>(index->nsep[0]))) { //repeat
+            continue;
+        }
+        if ((index->SA[i])<(index->SA[i-1])) {
+            aStart=index->SA[i];
+            bStart=index->SA[i-1];
+        } else {
+            aStart=index->SA[i-1];
+            bStart=index->SA[i];
+        }
+        if (aStart>0 && bStart>0){ //if not it has to be maximal!
+            if (!((index->T[aStart-1]!=index->T[bStart-1]) || (index->T[aStart-1]=='N') || (index->T[aStart-1]=='$') || (islower(index->T[aStart-1])) )) {
+                continue; //not maximal
+            }
+        }
+        if (i==index->n-1) { //is it the last value in the array, then only check predecessor
+            lb=index->LCP[i-1];
+            la=0;
+        } else {
+            lb=index->LCP[i-1];
+            la=index->LCP[i+1];
+        }
+        if (lb>=index->LCP[i] || la>=index->LCP[i]){
+            continue;//not unique
+        }
+        //match is not a repeat and is maximally unique
+
+        if (index->rc==1){
+            bStart=index->nsep[0] + (index->n - bStart - index->LCP[i]);
+        }
+
 #ifdef SA64
         PyObject *mum=Py_BuildValue("I,i,((i:L),(i:L))",index->LCP[i],2,0,aStart,1,bStart);
 #else
@@ -109,7 +178,6 @@ PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds){
     }
     return mums;
 }
-
 
 
 int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
@@ -592,34 +660,6 @@ void split(RevealIndex *idx, uint8_t *D, RevealIndex *i_leading, RevealIndex *i_
     }
 }
 
-void checkindex(RevealIndex* idx){
-    saidx_t i=0;
-    int l=0, j=0;
-    for (i=0; i<idx->n; i++) {
-        l=idx->LCP[i];
-        assert(l>=0);
-        if (l==0){
-            continue;
-        }
-
-        j=l-1;
-
-        //for (j=0; j<l; j++){
-
-            if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
-                #ifdef SA64
-                fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",(long long)i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
-                #else
-                fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
-                #endif
-            }
-
-            assert(idx->T[idx->SA[i]+j]<=90); //check it wasn't matched
-            assert(idx->T[idx->SA[i]+j]>64); //check it does not contain sentinel
-        //}
-    }
-}
-
 void bubble_sort(RevealIndex* idx, PyObject* matching_intervals){
 
     lcp_t tmpLCP;
@@ -629,12 +669,15 @@ void bubble_sort(RevealIndex* idx, PyObject* matching_intervals){
 
     iter=PyObject_GetIter(matching_intervals);
     while ((tup=PyIter_Next(iter))){
-    #ifdef SA64
-        PyArg_ParseTuple(tup,"LL",&begin,&end);
-    #else
-        PyArg_ParseTuple(tup,"ii",&begin,&end);
-    #endif
         
+        #ifdef SA64
+        PyArg_ParseTuple(tup,"LL",&begin,&end);
+        #else
+        PyArg_ParseTuple(tup,"ii",&begin,&end);
+        #endif
+
+        // fprintf(stderr,"BUBBLE SORT: %d-%d: (%.100s)-(%.100s)\n",begin,end,idx->T+begin,idx->T+end-100);
+
         for (i=0; i<idx->n; i++) { // for each suffix
 
             if ( (idx->SA[i] < begin) && ((idx->SA[i]+idx->LCP[i]) > begin) ){ // if match overlaps the start position
@@ -684,9 +727,9 @@ void bubble_sort(RevealIndex* idx, PyObject* matching_intervals){
 /* Alignment Thread */
 void *aligner(void *arg) {
 
-#ifdef REVEALDEBUG
+    #ifdef REVEALDEBUG
     time_t t0,t1;
-#endif
+    #endif
 
     RevealWorker *rw = arg;
     PyGILState_STATE gstate;
@@ -713,7 +756,7 @@ void *aligner(void *arg) {
         
         if (hasindex==1) {
 
-#ifdef REVEALDEBUG
+            #ifdef REVEALDEBUG
             // fprintf(stderr,"Initial.\n");
             //checkindex(idx);
             fprintf(stderr,"Starting alignment cycle (threadid=%d)\n", rw->threadid);
@@ -723,7 +766,7 @@ void *aligner(void *arg) {
             fprintf(stderr,"minl=%d\n", rw->minl);
             // fprintf(stderr,"wpen=%d...\n", rw->wpen);
             // fprintf(stderr,"wscore=%d...\n", rw->wscore);
-#endif
+            #endif
             assert(idx->nsamples>0);
 
             RevealMultiMUM mmum;
@@ -760,10 +803,10 @@ void *aligner(void *arg) {
             if (PyList_Size(idx->skipmums)==0){
                 Py_INCREF(Py_False);
                 precomputed=Py_False;
-#ifdef REVEALDEBUG
+                #ifdef REVEALDEBUG
                 time(&t0);
                 fprintf(stderr,"Extracting new mums... %d\n",rw->minn);
-#endif
+                #endif
                 if (((RevealIndex *) idx->main)->nsamples>2){
                     PyObject *args = PyTuple_New(0);
                     PyObject *kwargs = Py_BuildValue("{s:i, s:i}", "minlength", rw->minl, "minn", rw->minn);
@@ -775,7 +818,7 @@ void *aligner(void *arg) {
                     Py_DECREF(args);
                 } else {
                     PyObject *args = Py_BuildValue("(i)", rw->minl);
-                    multimums = getmums(idx,args,NULL);
+                    multimums = getmums_rem(idx,args,NULL);
                     Py_DECREF(args);
                 }
 
@@ -1300,14 +1343,166 @@ void *aligner(void *arg) {
 
 
 
+void checkindex(RevealIndex* idx){
+    saidx_t i=0;
+    int l=0, j=0;
+
+    for (i=0; i<idx->n; i++) {
+        l=idx->LCP[i];
+        assert(l>=0);
+        if (l==0){
+            continue;
+        }
+
+        j=l-1;
+
+        //for (j=0; j<l; j++){
+
+            if (!(idx->T[idx->SA[i]+j]<=90 && idx->T[idx->SA[i]+j]>64)){
+                #ifdef SA64
+                fprintf(stderr,"i=%lld; l=%d j=%d --> %c %c %c\n",(long long)i,l,j,idx->T[idx->SA[i]+j-1],idx->T[idx->SA[i]+j],idx->T[idx->SA[i]+j+1]);
+                #else
+                fprintf(stderr,"i=%d; l=%d j=%d --> %c %c %c\n",i,l,j,idx->T[idx->SA[i]+j-1], idx->T[idx->SA[i]+j], idx->T[idx->SA[i]+j+1]);
+
+                fprintf(stderr,"SA[%d]=%d %d %.100s\n",i-1,idx->SA[i-1],idx->LCP[i-1],idx->T+(idx->SA[i-1]));
+                fprintf(stderr,"SA[%d]=%d %d %.100s\n",i,idx->SA[i],idx->LCP[i],idx->T+(idx->SA[i]));
+                fprintf(stderr,"SA[%d]=%d %d %.100s\n",i+1,idx->SA[i+1],idx->LCP[i+1],idx->T+(idx->SA[i+1]));
+                // fprintf(stderr,"%d\n",idx->SO[idx->SA[i]+j]-1);
+                // fprintf(stderr,"%d\n",idx->SO[idx->SA[i]+j]);
+                // fprintf(stderr,"%d\n",idx->SO[idx->SA[i]+j]+1);
+
+                #endif
+            }
+
+            // i=4179; l=5 j=4 --> t a t
+
+            assert(idx->T[idx->SA[i]+j]<=90); //check it wasn't matched
+            assert(idx->T[idx->SA[i]+j]>64); //check it does not contain sentinel
+        //}
+    }
+}
 
 
+PyObject* extract(RevealIndex* idx, PyObject* args, PyObject *keywds) {
+    PyObject *intervals;
+    PyArg_ParseTuple(args,"O",&intervals);
+    uint8_t *D=calloc(idx->n,sizeof(uint8_t));
 
+    PyObject *iter;
+    PyObject *tup;
+    saidx_t i=0,j=0,begin,end,_begin,_end;
 
+    saidx_t matching=0;
 
+    iter=PyObject_GetIter(intervals);
 
+    int x=0;
+    while ((tup=PyIter_Next(iter))){
 
+        #ifdef SA64
+            PyArg_ParseTuple(tup,"LL",&begin,&end);
+        #else
+            PyArg_ParseTuple(tup,"ii",&begin,&end);
+        #endif
 
+        // fprintf(stderr,"before remap %d-%d: (%.100s)-(%.100s)\n",begin,end,idx->T+begin,idx->T+end-100);
+        // fprintf(stderr,"nsep=%d n=%d nT=%d\n",idx->nsep[0],idx->n, idx->nT);
+
+        if (idx->rc==1 && begin>idx->nsep[0]) { //map qry coordinates back to correct intervals
+            _begin= idx->nsep[0]+(idx->nT - begin - (end-begin));
+            _end=   idx->nsep[0]+(idx->nT - begin);
+            begin=_begin;
+            end=_end;
+            assert(begin<end);
+
+            #ifdef SA64
+                PyObject *tup_=Py_BuildValue("(L,L)",begin,end);
+            #else
+                PyObject *tup_=Py_BuildValue("(i,i)",begin,end);
+            #endif
+
+            PyList_SetItem(intervals,x,tup_);
+        }
+
+        // fprintf(stderr,"before marking %d-%d: (%.100s)-(%.100s)\n",begin,end,idx->T+begin,idx->T+end-100);
+
+        for (j=begin; j<end; j++){
+            D[idx->SAi[j]]=3; //matching  ************
+            idx->T[j]=tolower(idx->T[j]); //mark suffixes in T
+            matching++;
+        }
+
+        // fprintf(stderr,"after marking %d-%d: (%.100s)-(%.100s)\n",begin,end,idx->T+begin,idx->T+end-100);
+
+        x++;
+        Py_DECREF(tup);
+    }
+
+    Py_DECREF(iter);
+
+    // fprintf(stderr,"Allocate new SA and LCP...%d %d\n",idx->n,matching);
+    saidx_t *_SA=malloc((idx->n-matching)*sizeof(saidx_t));    
+    lcp_t *_LCP=malloc((idx->n-matching)*sizeof(lcp_t));
+    
+    lcp_t minlcp=0;
+    j=1;
+
+    // fprintf(stderr,"Mark matching suffixes... %d %d\n",idx->n,matching);
+
+    _LCP[0]=0;
+    for (i=1; i<idx->n; i++){
+        assert(j<=i);
+        if (D[i]!=3){ //not a matching suffix, add to the new SA
+            _SA[j]=idx->SA[i];
+            idx->SAi[_SA[j]]=j;
+
+            if (D[i-1]==3){
+
+                if (minlcp<idx->LCP[i]){
+                    _LCP[j]=minlcp;
+                } else {
+                    _LCP[j]=idx->LCP[i];
+                }
+                
+            } else {
+                _LCP[j]=idx->LCP[i];
+            }
+
+            j++;
+        } else {
+            if (D[i-1]!=3){ //first match suffix
+                minlcp=idx->LCP[i];
+            } else {
+                if (idx->LCP[i]<minlcp) {
+                    minlcp=idx->LCP[i];
+                }
+            }
+        }
+    }
+
+    // fprintf(stderr,"Free up old SA and LCP...\n");
+    if (idx->SA!=NULL){
+        free(idx->SA);
+    }
+    
+    if (idx->LCP!=NULL){
+        free(idx->LCP);
+    }
+
+    idx->SA=_SA;
+    idx->LCP=_LCP;
+    idx->n=idx->n-matching;
+
+    // bubble_sort(idx, tmpIntervals);
+    bubble_sort(idx, intervals);
+
+    // fprintf(stderr,"Checkindex.\n");
+    // checkindex(idx);
+    // fprintf(stderr,"Done.\n");
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
 
 
 

@@ -1,5 +1,6 @@
 import networkx as nx
 import logging
+import gzip
 
 #OVERRIDE intervaltree to bug in incorrect __eq__ function
 import intervaltree
@@ -78,7 +79,13 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0,keepdash=False):
     seq=""
     gapseq=""
     sub=0
-    with open(fn,'r') as ff:
+
+    if fn.endswith(".gz"):
+        fopen=gzip.open
+    else:
+        fopen=open
+
+    with fopen(fn,'r') as ff:
         for line in ff:
             line=line.rstrip()
 
@@ -714,6 +721,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
             mapping[node]=node
 
     for i,node in enumerate(iterator):
+        
         i+=1
         data=G.node[node]
         seq=""
@@ -729,6 +737,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
                 seq=T[node[0]:node[0]+G.node[node]['l']].upper()
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             else:
+                logging.error("Node type unknown: %s"%node)
                 f.write('S\t'+str(mapping[node])+'\t')
         
         f.write("\n")
@@ -884,8 +893,61 @@ def write_gml(G,T,outputfile="reference",partition=False,hwm=4000):
     
     return outputfiles
 
+def mum_kdtree(mums, depth=0):
+    n=len(mums)
+    if n==0:
+        return None
+    if n==1:
+        return mums[0]
+    k=len(mums[0][1]) #k-tuple with startpositions
+    splitdim=depth % k
+    smums=sorted(mums,key=lambda m: m[1][splitdim])
+    splitvalue=smums[n/2][1][splitdim] #take median for splitting
+    if splitvalue==smums[0][1][splitdim]:
+        splitvalue+=1
+    left=[p for p in smums if p[1][splitdim] < splitvalue]
+    right=[p for p in smums if p[1][splitdim] >= splitvalue]
+    return { 'left': mum_kdtree(left, depth=depth+1) , 'split' : splitvalue, 'right': mum_kdtree(right, depth=depth+1) }
+
+def mum_range_search(kdtree, qstart, qend):
+    k=len(qstart)
+    points=[]
+    stack=[(kdtree,0)]
+    while len(stack)!=0:
+        tree,depth=stack.pop()
+        splitdim=depth%k
+
+        if tree==None: #something is wrong
+            continue
+
+        if isinstance(tree,tuple): #reached leaf, tree==point
+            if tree[1][splitdim]>=qstart[splitdim] and tree[1][splitdim]<=qend[splitdim]:
+                #check ik point is contained in the range query
+                for d in range(k):
+                    if tree[1][d]>=qstart[d] and tree[1][d]<=qend[d]:
+                        continue
+                    else:
+                        break
+                else:
+                    points.append(tree)
+            continue
+
+        splitvalue=tree['split']
+        
+        if splitvalue>=qstart[splitdim] and splitvalue<=qend[splitdim]: #intersect
+            if splitvalue != qstart[splitdim]: #equal values go right
+                stack.append((tree['left'],depth+1))
+            stack.append((tree['right'],depth+1))
+        elif splitvalue < qstart[splitdim]:
+            stack.append((tree['right'],depth+1))
+        else:
+            stack.append((tree['left'],depth+1))
+    return points
+
+
+
 def kdtree(points, k, depth=0):
-    n=len(points)    
+    n=len(points)
     if n==0:
         return None
     if n==1:

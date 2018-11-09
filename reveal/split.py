@@ -44,6 +44,7 @@ def split(G,gfafile):
             sg.graph['path2id'][G.graph['id2path'][sid]]=len(sgsamples)
             sgsamples.append(G.graph['id2path'][sid])
         
+        sgsamples.sort()
         sg.graph['paths']=sgsamples
         
         for e1,e2,d in sg.edges(data=True):

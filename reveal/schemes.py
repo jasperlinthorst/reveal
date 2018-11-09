@@ -34,7 +34,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         sp2mum[mum[2][ref]]=mum
 
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-    logging.trace("Initial cost is: %d"%minscore)
+    logging.debug("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
     end=right[2][ref]
@@ -68,7 +68,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                 if amum[2][crd]+amum[0]>mum[2][crd]:
                     break
             else:
-                s=score[amum[2][ref]]+(args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
+                s=score[amum[2][ref]] + (args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))
 
                 if w!=None:
                     if w > s: #as input is sorted by score
@@ -78,9 +78,11 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
                 assert(penalty>=0)
 
-                tmpw=score[amum[2][ref]]+(args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(args.wpen*penalty)
+                # tmpw=score[amum[2][ref]] + (args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2))) - (args.wpen*penalty)
+                tmpw=s - (args.wpen*penalty)
 
                 if tmpw>w or w==None:
+                    logging.trace("mum: %s --> %s = penalty: %d and score at amum: %d, score at mum: %d"%(str(mum),str(amum),penalty,s,tmpw))
                     w=tmpw
                     best=amum
 
@@ -90,9 +92,8 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
         processed.append(mum)
 
-    assert(score[end]>=minscore)
-
-    logging.trace("Best score is: %d"%score[end])
+    logging.debug("Best score is: %d"%score[end])
+    logging.trace("Min score is: %d"%minscore)
 
     #backtrack
     path=[]
@@ -135,7 +136,9 @@ def lookup(mum):
     qlpoint=dict()
     qrpoint=dict()
     for pos in sp:
-        node=iter(ts[pos]).next()
+        t=ts[pos]
+        assert(len(t)==1)
+        node=iter(t).next()
         ndata=G.node[node]
         nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2path'][o].startswith("*")])
         n+=len(nsamples)
@@ -223,7 +226,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
             
-            if len(mmums)==0:
+            if len(mmums)==0 and idx.nsamples>2:
                 logging.debug("No MUMS that span all input genomes, segment genomes.")
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2],len(mmums)))

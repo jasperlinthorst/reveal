@@ -102,12 +102,12 @@ def maf2graph(maffile):
             elif line.startswith("s"):
                 cols=line.rstrip().split()
                 if '.' in cols[1]: #TODO: use db parameter to specificy a single mfa file with all sequence
-                    file,name=cols[1].split('.')
+                    file,name=cols[1][:cols[1].find('.')],cols[1][cols[1].find('.')+1:]
                     files.add(file)
                 else:
                     file=None #args.db?
                     name=cols[1]
-                
+
                 if name not in G.graph['path2id']:
                     G.graph['path2id'][name]=len(G.graph['path2id'])
                     G.node[startnode]['offsets'][G.graph['path2id'][name]]=0
@@ -119,15 +119,25 @@ def maf2graph(maffile):
                                                   }
     nid+=1
 
+    remove=[]
+    for node,d in G.nodes(data=True):
+        if 'data' in d and len(d['data'])==1: #multiplicity of 1, strictly not an alignment
+            remove.append(node)
+
+    G.remove_nodes_from(remove)
+
     db=dict() #map name to sequence
     for file in files:
         for name,seq in utils.fasta_reader(file+".fasta"): #guess that the original file has a ".fasta" extension
+            name=name.split()[0]
             key=(file,name)
             if key in db:
                 logging.fatal("Non unique contig-name: %s. quit."%name)
                 sys.exit(1)
             else:
                 db[key]=seq
+
+    remove=[]
 
     #for every sequence, check that none of the alignments overlap, otherwise assignment is not 1-1
     for file,name in db:
@@ -154,7 +164,8 @@ def maf2graph(maffile):
                 nid+=1
             elif start<pend:
                 logging.fatal("Overlapping alignments for sequence: %s.%s --> (%d,%d) and (%d,%d)."%(file,name,pstart,pend,start,end))
-                sys.exit(1)
+                remove.append(node)
+                # sys.exit(1)
             else: #no gap, just connect subsequent intervals
                 G.add_edge(pnode,node,paths=set([G.graph['path2id'][name]]),ofrom="+",oto="+")
 
@@ -168,6 +179,8 @@ def maf2graph(maffile):
             nid+=1
         else:
             G.add_edge(pnode,endnode,paths=set([G.graph['path2id'][name]]),ofrom="+",oto="+")
+
+    G.remove_nodes_from(remove)
 
     # print "Unaligned segments",unaligned
 
@@ -232,41 +245,47 @@ def graph2maf(G,filename):
         G.remove_edges_from(toremove)
 
     sizes={sid:0 for sid in G.graph['id2path']}
-    longest=0
+    
     with open(filename,'w') as maf:
-        for node in nx.topological_sort(G):
-            if type(node)!=str:
-                go=max([0]+[G.node[pred]['graphoffset']+len(G.node[pred]['seq']) for pred in G.predecessors(node) if type(pred)!=str])
-                G.node[node]['graphoffset']=go
-                
-                if go+len(G.node[node]['seq'])>longest:
-                    longest=go+len(G.node[node]['seq'])
 
-                for k in G.node[node]['offsets']:
-                    if G.node[node]['offsets'][k]+len(G.node[node]['seq'])>sizes[k]:
-                        sizes[k]=G.node[node]['offsets'][k]+len(G.node[node]['seq'])
-        
-        ml=max([len(p) for p in G.graph['paths']])
-
-        maf.write("##maf version=1\n")
-        maf.write("a\n")
-        for path in G.graph['paths']:
-            o=0
-            sl=0
-            maf.write("s %s %d %d + %-10d "%(path.ljust(ml), 0, sizes[G.graph['path2id'][path]], sizes[G.graph['path2id'][path]]) )
-            sid=G.graph['path2id'][path]
-            for node in nx.topological_sort(G):
-                if type(node)!=str and sid in G.node[node]['offsets']:
-                    while o<G.node[node]['graphoffset']:
-                        maf.write("-")
-                        o+=1
-                    sl+=len(G.node[node]['seq'].replace("-",""))
-                    maf.write("%s"%G.node[node]['seq'])
-                    o+=len(G.node[node]['seq'])
+        for g in nx.weakly_connected_component_subgraphs(G):
             
-            maf.write("-"*(longest-o)) #pad with dash so all lines are equally long
+            longest=0
+            sids=set()
+            for node in nx.topological_sort(g):
+                if type(node)!=str:
+                    go=max([0]+[G.node[pred]['graphoffset']+len(G.node[pred]['seq']) for pred in G.predecessors(node) if type(pred)!=str])
+                    G.node[node]['graphoffset']=go
+                    
+                    if go+len(G.node[node]['seq'])>longest:
+                        longest=go+len(G.node[node]['seq'])
+
+                    for k in G.node[node]['offsets']:
+                        sids.add(k)
+                        if G.node[node]['offsets'][k]+len(G.node[node]['seq'])>sizes[k]:
+                            sizes[k]=G.node[node]['offsets'][k]+len(G.node[node]['seq'])
+            
+            ml=max([len(p) for p in G.graph['paths']])
+
+            maf.write("##maf version=1\n")
+            maf.write("a\n")
+            for sid in sids:
+                path=G.graph['id2path'][sid]
+                o=0
+                sl=0
+                maf.write("s %s %d %d + %-10d "%(path.ljust(ml), 0, sizes[G.graph['path2id'][path]], sizes[G.graph['path2id'][path]]) )
+                for node in nx.topological_sort(g):
+                    if type(node)!=str and sid in G.node[node]['offsets']:
+                        while o<G.node[node]['graphoffset']:
+                            maf.write("-")
+                            o+=1
+                        sl+=len(G.node[node]['seq'].replace("-",""))
+                        maf.write("%s"%G.node[node]['seq'])
+                        o+=len(G.node[node]['seq'])
+                
+                maf.write("-"*(longest-o)) #pad with dash so all lines are equally long
+                maf.write("\n")
             maf.write("\n")
-        maf.write("\n")
 
 
 

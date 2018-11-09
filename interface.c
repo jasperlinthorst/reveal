@@ -133,8 +133,46 @@ int build_SO(RevealIndex *index){
     return 0;
 }
 
-static PyObject *construct(RevealIndex *self, PyObject *args)
+char comp_tab[] = {
+      0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+     16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+     32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+     48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+     64, 'T', 'V', 'G', 'H', 'E', 'F', 'C', 'D', 'I', 'J', 'M', 'L', 'K', 'N', 'O',
+    'P', 'Q', 'Y', 'S', 'A', 'A', 'B', 'W', 'X', 'R', 'Z',  91,  92,  93,  94,  95,
+     64, 't', 'v', 'g', 'h', 'e', 'f', 'c', 'd', 'i', 'j', 'm', 'l', 'k', 'n', 'o',
+    'p', 'q', 'y', 's', 'a', 'a', 'b', 'w', 'x', 'r', 'z', 123, 124, 125, 126, 127
+};
+
+
+static void revcomp(char * T, saidx_t n) {
+    saidx_t c0, c1, i;
+    for (i = 0; i < n>>1; ++i) { // reverse complement sequence
+        c0 = comp_tab[(int)T[i]];
+        c1 = comp_tab[(int)T[n - 1 - i]];
+        T[i] = c1;
+        T[n - 1 - i] = c0;
+    }
+    if (n & 1) // if uneven length; complement the remaining base
+        T[n>>1] = comp_tab[(int)T[n>>1]];
+}
+
+static PyObject *construct(RevealIndex *self, PyObject *args, PyObject *keywds)
 {
+    static char *kwlist[] = {"rc",NULL};
+    int rc=0; /* Whether we want to construct the reverse complement of the ESA */
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "|i", kwlist, &rc))
+        return NULL;
+
+    if (rc==1) {
+        self->rc=1;
+        char *T_   = self->T + self->nsep[0];
+        saidx_t n_ = self->n - self->nsep[0];
+        revcomp(T_,n_);
+    } else {
+        self->rc=0;
+    }
 
     if (self->n==0){
         PyErr_SetString(RevealError, "No text to index.");
@@ -150,10 +188,20 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         fprintf(stderr," Done.\n");
     }
     
+    if (self->SA!=NULL){
+        free(self->SA);
+    }
+
+    self->nT=self->n;
+
     self->SA=malloc(sizeof(saidx_t)*self->n);
     if (self->SA==NULL){
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SA.");
         return NULL;
+    }
+
+    if (self->SAi!=NULL){
+        free(self->SAi);
     }
 
     self->SAi = malloc(sizeof(saidx_t)*(self->n)); //inverse of SA
@@ -161,7 +209,7 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
         PyErr_SetString(RevealError, "Failed to allocate enough memory for SAi.");
         return NULL;
     }
-       
+    
     if (self->safile[0]==0){
         //fprintf(stderr,"Sorting suffixes...");
 #ifdef SA64
@@ -185,11 +233,13 @@ static PyObject *construct(RevealIndex *self, PyObject *args)
     
     //fill the inverse array
     saidx_t i;
-    //fprintf(stderr,"Filling inverse suffix array...");
     for (i=0; i<self->n; i++) {
         self->SAi[self->SA[i]]=i;
     }
-    //fprintf(stderr," Done.\n");
+
+    if (self->LCP!=NULL){
+        free(self->LCP);
+    }
 
     self->LCP=malloc(sizeof(lcp_t)*self->n);
     
@@ -366,15 +416,75 @@ static PyObject *align(RevealIndex *self, PyObject *args, PyObject *keywds)
     }
 };
 
+PyObject *reveal_reduce(RevealIndex *self)
+{
+    fprintf(stderr, "Reduce...\n");
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+
+
+
+
+
+
+
+//Create a copy of the current index
+RevealIndex* copy(RevealIndex *self, PyObject *args, PyObject *kwds)
+{
+    RevealIndex *newidx=newIndex();
+    
+    newidx->T=malloc(self->n*sizeof(char));
+    memcpy(newidx->T,self->T,self->n*sizeof(char));
+    
+    newidx->SA=malloc(self->n*sizeof(saidx_t));
+    memcpy(newidx->SA,self->SA,self->n*sizeof(saidx_t));
+
+    newidx->SAi=malloc(self->n*sizeof(saidx_t));
+    memcpy(newidx->SAi,self->SAi,self->n*sizeof(saidx_t));
+
+    newidx->LCP=malloc(self->n*sizeof(saidx_t));
+    memcpy(newidx->LCP,self->LCP,self->n*sizeof(lcp_t));
+
+    if (self->SO!=NULL) {
+        newidx->SO=malloc(self->n*sizeof(uint16_t));
+        memcpy(newidx->SO,self->SO,self->n*sizeof(uint16_t));
+    } else {
+        newidx->SO=NULL;
+    }
+    
+
+    newidx->nsep=malloc((self->nsamples)*sizeof(saidx_t));
+    memcpy(newidx->nsep,self->nsep,self->nsamples*sizeof(saidx_t));
+
+    newidx->n=self->n;
+    newidx->nT=self->nT;
+    newidx->nsamples=self->nsamples;
+
+    self->SO=NULL;
+    self->depth=0;
+    self->safile="";
+    self->lcpfile="";
+    self->cache=0;
+
+    return newidx;
+}
+
+
+
 static PyMethodDef reveal_methods[] = {
     { "align", (PyCFunction) align, METH_VARARGS|METH_KEYWORDS },
+    { "copy", (PyCFunction) copy, METH_VARARGS|METH_KEYWORDS },
     { "addsample", (PyCFunction) addsample, METH_VARARGS },
     { "addsequence", (PyCFunction) addsequence, METH_VARARGS },
-    { "construct", (PyCFunction) construct, METH_VARARGS },
+    { "construct", (PyCFunction) construct, METH_VARARGS|METH_KEYWORDS },
     { "getmultimums", (PyCFunction) getmultimums, METH_VARARGS|METH_KEYWORDS },
     { "getmultimems", (PyCFunction) getmultimems, METH_VARARGS|METH_KEYWORDS },
     { "getmums", (PyCFunction) getmums, METH_VARARGS|METH_KEYWORDS },
     { "splitindex", (PyCFunction) splitindex, METH_VARARGS|METH_KEYWORDS },
+    { "extract", (PyCFunction) extract, METH_VARARGS|METH_KEYWORDS },
+    {"__reduce__", (PyCFunction) reveal_reduce, METH_NOARGS, "For pickle"},
     { NULL, NULL }
 };
 
@@ -390,6 +500,7 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
     self->nsep=NULL;
     self->depth=0;
     self->n=0;
+    self->nT=0;
     self->nsamples=0;
     self->samples = PyList_New(0);
     self->nodes = PySet_New(0);
@@ -401,7 +512,8 @@ reveal_init(RevealIndex *self, PyObject *args, PyObject *kwds)
 
     self->safile="";
     self->lcpfile="";
-    
+    self->cache=0;
+
     static char *kwlist[] = {"sa","lcp","cache",NULL};
     
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ssi", kwlist, &self->safile, &self->lcpfile, &self->cache))
@@ -672,7 +784,7 @@ static PyGetSetDef reveal_getseters[] = {
 
 static void
 reveal_dealloc(RevealIndex *self)
-{    
+{   
 #ifdef REVEALDEBUG
     fprintf(stderr,"Dealloc index of size %zd\n",self->n);
 #endif

@@ -24,9 +24,6 @@ def chop_cmd(args):
     if args.check:
         Gorg=G.copy()
 
-
-    # for comp in nx.weakly_connected_component_subgraphs(graph):
-
     chop(G,k=args.k,extend=args.extend)
     
     logging.debug("Merging node sequence...")
@@ -34,6 +31,7 @@ def chop_cmd(args):
         if type(node)==str: #skip start/end nodes
             continue
         G.node[node]['seq']=G.node[node]['prefix']+G.node[node]['seq']+G.node[node]['suffix']
+    
     logging.debug("Done.")
 
     logging.debug("Write overlap graph...")
@@ -110,7 +108,6 @@ def checkedges(G,k=100):
         d['overlap']=None
     es=[]
     
-
     update=True
     while update:
         update=False
@@ -215,7 +212,7 @@ def chop(G,k=100,extend=True):
         
         topsort=list(nx.topological_sort(G))[1:-1]
         topsort=[v for v in topsort if type(v)!=str]
-        # print "topsort",topsort[0],topsort[-1]
+        
         utils.contract(G,topsort)
         logging.info("Contracting done.")
 
