@@ -659,8 +659,6 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
     end=(rlength-2,rlength-2,rlength+qlength,rlength+qlength,0,0,0,0)
     endrc=(rlength-2,rlength-2,rlength,rlength,1,0,0,0)
 
-    syntenyblocks.append(start)
-    syntenyblocks.append(startrc)
     syntenyblocks.append(end)
     syntenyblocks.append(endrc)
 
@@ -669,7 +667,7 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
     else: #sort by qry
         c1,c2=2,0
 
-    syntenyblocks.sort(key=lambda s: (s[c1],s[5])) #order by reference position
+    syntenyblocks.sort(key=lambda s: (s[c1],s[5]) ) #order by reference position
 
     qryorder = sorted(xrange(len(syntenyblocks)), key= lambda i: syntenyblocks[c2][2]) #qry order
     qryorder_inv = sorted(xrange(len(syntenyblocks)), key=qryorder.__getitem__) #inverse qry order
@@ -678,8 +676,12 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
 
     if useheap:
         heap=sortedcontainers.SortedList()
+        heap.add((0,start))
+        heap.add((0,startrc))
     else:
-        heap=[None]*len(syntenyblocks)
+        heap=[None]*(len(syntenyblocks)+2)
+        heap[0]=(0,start)
+        heap[1]=(0,startrc)
 
     G=dict()
 
@@ -696,15 +698,7 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         s1,e2,s2,e2,o,score,refid,ctgid=block
         score=score*2
 
-        # qi=qryorder_inv[ri] #index within the qryorder of blocks
         assert(score>=0)
-
-        if block==start or block==startrc:
-            if useheap:
-                heap.add((score,block))
-            else:
-                heap[ri]=(score,block)
-            continue
 
         bestscore=None
         bestblock=None
@@ -713,8 +707,9 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         if useheap:
             iterator=heap[::-1]#[:lastn]
         else:
-            s=(ri-lastn) if (ri-lastn)>0 else 0
-            iterator=heap[s:ri][::-1]
+            s=((ri+2)-lastn) if ((ri+2)-lastn)>0 else 0
+            assert(s<(ri+2))
+            iterator=heap[s:ri+2][::-1]
 
         for cscore,pblock in iterator:
             
@@ -726,7 +721,8 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
                         break
             
             c=min((rearrangecost,gapcost(pblock,block,inversioncost=inversioncost)))
-            
+            assert(c>=0)
+
             if bestscore==None or cscore-c > bestscore:
                 bestscore=cscore-c
                 bestblock=pblock
@@ -737,7 +733,7 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         if useheap:
             heap.add((cscore,block))
         else:
-            heap[ri]=(cscore,block)
+            heap[ri+2]=(cscore,block)
         
         if maxscore==None or maxscore<cscore:
             maxscore=cscore
@@ -1064,7 +1060,8 @@ def remove_overlap_conservative_blocks(anchors):
 
                 assert(anchor[coord+1]>_anchors[-1][coord+1])
 
-                while pl<=overlap and overlap>0:
+                while pl<=overlap and overlap>0 and pscore>overlap:
+                    _anchors.pop()
                     ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=_anchors[-1]
                     overlap=(_anchors[-1][coord+1]) - anchor[coord]
                     pl=pe1-ps1
