@@ -666,7 +666,11 @@ reveal_getnsep(RevealIndex *self, void *closure)
 
     int i;
     for (i = 0; i < (self->nsamples-1); i++) {
+#ifdef SA64
+        PyObject *num = Py_BuildValue("L", self->nsep[i]);
+#else
         PyObject *num = Py_BuildValue("i", self->nsep[i]);
+#endif
         if (!num) {
             Py_DECREF(lst);
             return NULL;
