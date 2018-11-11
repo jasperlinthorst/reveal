@@ -641,12 +641,13 @@ def chainscore(chain, rearrangecost=1000, inversioncost=1):
 
 def update_progress(i,n):
     fullbar=100
-    done="#"*int(fullbar*((i+1)/float(n)))
-    todo=" "*(fullbar-int(fullbar*((i+1)/float(n))))
-    sys.stdout.write('\r[%s%s]'%(done,todo))
-    if i+1==n:
-        sys.stdout.write('\n')
-    sys.stdout.flush()
+    if (i+1) % (n/fullbar if n>fullbar else 1)==0 or i+1==n:
+        done=int(fullbar*((i+1)/float(n)))
+        todo=fullbar-done
+        sys.stdout.write('\r[%s%s]'%("#"*done," "*todo))
+        if i+1==n:
+            sys.stdout.write('\n')
+        sys.stdout.flush()
 
 
 def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0):
@@ -667,12 +668,10 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
     else: #sort by qry
         c1,c2=2,0
 
-    syntenyblocks.sort(key=lambda s: (s[c1],s[5]) ) #order by reference position
+    syntenyblocks.sort(key=lambda s: (s[c1],s[5]) ) #order by reference position, then score
 
-    qryorder = sorted(xrange(len(syntenyblocks)), key= lambda i: syntenyblocks[c2][2]) #qry order
-    qryorder_inv = sorted(xrange(len(syntenyblocks)), key=qryorder.__getitem__) #inverse qry order
-
-    useheap=False
+    # qryorder = sorted(xrange(len(syntenyblocks)), key= lambda i: syntenyblocks[c2][2]) #qry order
+    # qryorder_inv = sorted(xrange(len(syntenyblocks)), key=qryorder.__getitem__) #inverse qry order
 
     if useheap:
         heap=sortedcontainers.SortedList()
@@ -720,7 +719,11 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
                     if cscore<=bestscore:
                         break
             
-            c=min((rearrangecost,gapcost(pblock,block,inversioncost=inversioncost)))
+            if pctgid==ctgid:
+                c=min((rearrangecost,gapcost(pblock,block,inversioncost=inversioncost)))
+            else:
+                c=rearrangecost
+            
             assert(c>=0)
 
             if bestscore==None or cscore-c > bestscore:
@@ -1050,6 +1053,11 @@ def remove_overlap_conservative_blocks(anchors):
 
             if overlap > 0: #overlap
                 
+                if score<=overlap:
+                    continue
+
+                assert(score-overlap >= 0)
+
                 if o==0:
                     anchor=(s1+overlap,e1,s2+overlap,e2,o,score-overlap if overlap<score else 0,refid,ctgid)
                 else:
@@ -1060,19 +1068,23 @@ def remove_overlap_conservative_blocks(anchors):
 
                 assert(anchor[coord+1]>_anchors[-1][coord+1])
 
-                while pl<=overlap and overlap>0 and pscore>overlap:
+                while pl<=overlap or pscore<=overlap:
                     _anchors.pop()
                     ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=_anchors[-1]
                     overlap=(_anchors[-1][coord+1]) - anchor[coord]
+                    if overlap<0:
+                        break
                     pl=pe1-ps1
 
-                if po==0:
-                    _anchors[-1]=(ps1,pe1-overlap,ps2,pe2-overlap,po,pscore-overlap if overlap<pscore else 0,prefid,pctgid)
-                else:
-                    if coord==0:
-                        _anchors[-1]=(ps1,pe1-overlap, ps2+overlap,pe2, po,pscore-overlap if overlap<pscore else 0,prefid,pctgid)
+                if overlap>0:                    
+                    assert(pscore-overlap >= 0)
+                    if po==0:
+                        _anchors[-1]=(ps1,pe1-overlap,ps2,pe2-overlap,po,pscore-overlap if overlap<pscore else 0,prefid,pctgid)
                     else:
-                        _anchors[-1]=(ps1+overlap,pe1,ps2,pe2-overlap,po,pscore-overlap if overlap<pscore else 0,prefid,pctgid)
+                        if coord==0:
+                            _anchors[-1]=(ps1,pe1-overlap, ps2+overlap,pe2, po,pscore-overlap if overlap<pscore else 0, prefid,pctgid)
+                        else:
+                            _anchors[-1]=(ps1+overlap,pe1,ps2,pe2-overlap,po,pscore-overlap if overlap<pscore else 0, prefid,pctgid)
             
             _anchors.append(anchor)
 
@@ -1119,6 +1131,12 @@ def remove_overlap_greedy_blocks(anchors):
             if overlap > 0: #overlap
 
                 if pscore > score: #update current anchor
+
+                    if score<=overlap:
+                        continue
+
+                    assert(score-overlap >= 0)
+
                     if o==0:
                         anchor=(s1+overlap,e1,s2+overlap,e2,o,score-overlap if overlap<score else 0,refid,ctgid)
                     else:
@@ -1130,14 +1148,21 @@ def remove_overlap_greedy_blocks(anchors):
                     _anchors.append(anchor)
                 else:
 
-                    while pl<=overlap and overlap>0:
+                    while pl<=overlap or pscore<=overlap:
                         _anchors.pop()
                         ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=_anchors[-1]
                         overlap=(_anchors[-1][coord+1]) - anchor[coord]
+                        if overlap<0:
+                            break
                         pl=pe1-ps1
 
                     if overlap>0:
-                    
+                        
+                        assert(pl>overlap)
+                        assert(pscore>overlap)
+
+                        assert(pscore-overlap >= 0)
+
                         if po==0:
                             _anchors[-1]=(ps1,pe1-overlap,ps2,pe2-overlap,po,pscore-overlap if overlap<pscore else 0,prefid,pctgid)
                         else:
