@@ -21,16 +21,8 @@ def split_cmd(args):
 def split(G,gfafile):
 
     read_gfa(gfafile,None,"",G)
-
-    # remove=[]
-    # for node in G:
-    #     if type(node)==str:
-    #         remove.append(node)
     
-    # G.remove_nodes_from(remove)
-    
-    for i,sub in enumerate(nx.connected_components(G.to_undirected())):
-        sg=nx.subgraph(G,sub)
+    for i,sg in enumerate(nx.weakly_connected_component_subgraphs(G)):
         sids=set()
         for node in sg.nodes():
             for sid in sg.node[node]['offsets']:
@@ -60,6 +52,6 @@ def split(G,gfafile):
             sg.node[n]['offsets']=no
 
         name="_".join([p for p in sg.graph['paths'] if not p.startswith("*")]).replace("|","_").replace(" ","_")[:200]
-        #name=str(i)
         
+        logging.info("Write component (%d, size=%d) to: %s"%(i,len(sg.nodes()),name))
         write_gfa(sg,None,outputfile="%s.gfa"%name)
