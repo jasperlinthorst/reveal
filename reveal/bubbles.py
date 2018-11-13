@@ -188,36 +188,91 @@ def bubbles_cmd(args):
         logging.fatal("Specify a gfa file to extract bubbles.")
         return
     
-    G=nx.MultiDiGraph()
+    G=nx.DiGraph()
     read_gfa(args.graph[0],None,"",G)
-    
-    allcomplexnodes=[]
+
     sys.stdout.write("#source\tsink\tsubgraph\ttype\n")
-    for b in bubbles(G):
-        if type(b)!=tuple:
-            t=b.issimple()
-            sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source if type(b.source)!=str else '<start>',
-                                                b.sink if type(b.sink)!=str else '<end>',
-                                                ",".join([str(x) for x in b.nodes if type(x)!=str]),
-                                                'simple' if t else 'complex'))
+    for i,g in enumerate(nx.weakly_connected_component_subgraphs(G)):
+        logging.info("Reporting bubbles for subgraph: %d"%i)
+        allcomplexnodes=[]
+        for b in bubbles(g):
+            if type(b)!=tuple:
+                t=b.issimple()
+                sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source if type(b.source)!=str else '<start>',
+                                                    b.sink if type(b.sink)!=str else '<end>',
+                                                    ",".join([str(x) for x in b.nodes if type(x)!=str]),
+                                                    'simple' if t else 'complex'))
 
-            if not t:
-                if args.exportcomplex:
-                    if args.separate:
-                        sg=G.subgraph(set(b.nodes))
-                        if args.gml:
-                            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".%d.%d.complex.gml"%(b.source,b.sink)),partition=False)
+                if not t:
+                    if args.exportcomplex:
+                        if args.separate:
+                            sg=g.subgraph(set(b.nodes))
+                            if args.gml:
+                                write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".%d.%d.complex.gml"%(b.source,b.sink)),partition=False)
+                            else:
+                                write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa","%d.%d.complex.gfa"%(b.source,b.sink)))
                         else:
-                            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa","%d.%d.complex.gfa"%(b.source,b.sink)))
-                    else:
-                        allcomplexnodes+=b.nodes
+                            allcomplexnodes+=b.nodes
 
-    if args.exportcomplex and not args.separate:
-        sg=G.subgraph(allcomplexnodes)
-        if args.gml:
-            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+        if args.exportcomplex and not args.separate:
+            sg=g.subgraph(allcomplexnodes)
+            if args.gml:
+                write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+            else:
+                write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+
+
+def rearrangements_cmd(args):
+
+    G=nx.MultiDiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
+    
+    logging.debug("Reading graph...")
+    read_gfa(args.graph[0],None,"",G)
+    logging.debug("Done.")
+
+    logging.info("Determine rearrangement edges...")
+    if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
+        rearrangements=MultiGraphToDiGraph(G)
+    logging.info("Done (%d)."%len(rearrangements))
+
+    gori=sorted([p for p in G.graph['paths'] if not p.startswith('*')])
+
+    cds=G.graph['path2id'][args.reference] if args.reference in G.graph['path2id'] else G.graph['path2id'][gori[0]]
+
+    sys.stdout.write("#reference\tapproximate_pos\tcontigs\tsource\tsink\tinvert\n")
+
+    for b in rearrangements:
+        v,u,k,d=b
+        
+        if type(v)==str or type(u)==str:
+            continue #just start/end
         else:
-            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+            
+            if cds not in G.node[u]['offsets']: #TODO: walk the graph until we find a node that has
+                for p in G.node[u]['offsets'].keys():
+                    if not G.graph['id2path'][p].startswith("*"):
+                        vcds=p
+                        break
+                else:
+                    vcds=G.node[u]['offsets'].keys()[0]
+            else:
+                vcds=cds
+
+            vpos=G.node[u]['offsets'][vcds]
+
+            contigids=[]
+            for p in d['paths']:
+                path=G.graph['id2path'][p]
+                if path.startswith("*"):
+                    contigids.append(path)
+
+            sys.stdout.write("%s\t"*6 % (G.graph['id2path'][vcds], vpos, contigids, v, u, d['oto']==d['ofrom']))
+            
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    logging.info("Done")
+
 
 def variants_cmd(args):
     if len(args.graph)<1:
@@ -225,27 +280,27 @@ def variants_cmd(args):
         return
     
     reference=args.reference
-    G=nx.MultiDiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
+    g=nx.DiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
     
     logging.debug("Reading graph...")
-    read_gfa(args.graph[0],None,"",G)
+    read_gfa(args.graph[0],None,"",g)
     logging.debug("Done.")
 
     complexbubblenodes=[]
     
-    if 'paths' in G.graph:
-        gori=sorted([p for p in G.graph['paths'] if not p.startswith('*')])
+    if 'paths' in g.graph:
+        gori=sorted([p for p in g.graph['paths'] if not p.startswith('*')])
     else:
         gori=[]
-    
+
     if args.reference==None:
         args.reference=gori[0]
         logging.warn("No reference specified as a coordinate system, use %s where possible."%args.reference)
     else:
-        if args.reference in G.graph['path2id']:
-            args.reference=G.graph['path2id'][args.reference]
+        if args.reference in g.graph['path2id']:
+            args.reference=g.graph['path2id'][args.reference]
         else:
-            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['paths'])))
+            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(g.graph['paths'])))
             sys.exit(1)
     
     if not args.fastaout and not args.bedout:
@@ -253,149 +308,94 @@ def variants_cmd(args):
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
-    
-    for b in bubbles(G):
-        if type(b)!=tuple:
-            v=Variant(b)
-            
-            if v.maxsize<args.minsize:
+
+    for b in bubbles(g):
+
+        v=Variant(b)
+        
+        if v.maxsize<args.minsize:
+            continue
+
+        if v.maxsize-v.minsize<args.diffsize:
+            continue
+
+        if v.vtype!=args.type and args.type!='all':
+            continue
+        
+        genotypestr=",".join(v.genotypes)
+        
+        if args.nogaps:
+            if v.spans_gap:
                 continue
 
-            if v.maxsize-v.minsize<args.diffsize:
-                continue
+        minflank=min([len(g.node[v.source]['seq']),len(g.node[v.sink]['seq'])])
+        
+        if minflank<args.minflank:
+            continue
 
-            if v.vtype!=args.type and args.type!='all':
-                continue
-            
-            genotypestr=",".join(v.genotypes)
-            
-            if args.nogaps:
-                if v.spans_gap:
-                    continue
+        if args.reference in v.vpos:
+            cds=args.reference
+        else:
+            for cds in v.vpos.keys():
+                if not g.graph['id2path'][cds].startswith('*'): #use ref layout if its there
+                    break
 
-            minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
-            
-            if minflank<args.minflank:
-                continue
-
-            if args.reference in v.vpos:
-                cds=args.reference
-            else:
-                for cds in v.vpos.keys():
-                    if not G.graph['id2path'][cds].startswith('*'): #use ref layout if its there
-                        break
-
-            if args.fastaout:
-                if args.split:
-                    with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
-                        for i,seq in enumerate(v.genotypes):
-                            if seq!='-':
-                                of.write(">%s_%d_%s_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
-                                of.write("%s\n"%seq)
-                else:
+        if args.fastaout:
+            if args.split:
+                with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
                     for i,seq in enumerate(v.genotypes):
                         if seq!='-':
-                            sys.stdout.write(">%s_%d_%s_%s_%s_%d\n"%(G.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
-                            sys.stdout.write("%s\n"%seq)
-                continue
-
-            sourcelen=len(G.node[v.source]['seq'])
-            sinklen=len(G.node[v.sink]['seq'])
-            
-            startpos=G.node[v.source]['offsets'][cds]+sourcelen
-            endpos=G.node[v.sink]['offsets'][cds]
-
-            if args.bedout:
-                sys.stdout.write("%s\t%d\t%s\t%s\n"%(G.graph['id2path'][cds],startpos,endpos,v.vtype))
-                continue
-
-            allelesizes=[]
-
-            for gt in v.genotypes:
-                if gt=='-':
-                    allelesizes.append(0)
-                else:
-                    allelesizes.append(len(gt))
-
-            maxa=max(allelesizes)
-            mina=min(allelesizes)
-
-            sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
-                                                                    startpos,
-                                                                    endpos,
-                                                                    sourcelen,
-                                                                    sinklen,
-                                                                    maxa,
-                                                                    mina,
-                                                                    maxa-mina,
-                                                                    v.source if type(v.source)!=str else '<start>',
-                                                                    v.sink if type(v.sink)!=str else '<end>',
-                                                                    G.node[v.source]['seq'][-20:] if v.source in G else '-',
-                                                                    G.node[v.sink]['seq'][:20] if v.sink in G else '-',
-                                                                    v.vtype,
-                                                                    genotypestr))
-            for sample in gori:
-                if sample in v.calls:
-                    sys.stdout.write("\t%s"%v.calls[sample])
-                else:
-                    sys.stdout.write("\t-")
-            
-            sys.stdout.write("\n")
-
-        else: #structural variant, handle output differently
-            if args.fastaout or args.bedout:
-                continue
-            
-            v,u,d=b
-            
-            if type(v)==str or type(u)==str:
-                continue #just start/end
+                            of.write(">%s_%d_%s_%s_%s_%d\n"%(g.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
+                            of.write("%s\n"%seq)
             else:
-                if args.reference in G.node[v]['offsets']:
-                    cds=args.reference
-                
-                vcontigid=None
-                for p in G.node[v]['offsets']:
-                    if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
-                        cds=p
-                    else:
-                        vcontigid=p
+                for i,seq in enumerate(v.genotypes):
+                    if seq!='-':
+                        sys.stdout.write(">%s_%d_%s_%s_%s_%d\n"%(g.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
+                        sys.stdout.write("%s\n"%seq)
+            continue
 
-                ucontigid=None
-                for p in G.node[u]['offsets']:
-                    if not G.graph['id2path'][p].startswith("*"): #make sure we output something useful instead of a location on a contig
-                        cdsu=p
-                    else:
-                        ucontigid=p
+        sourcelen=len(g.node[v.source]['seq'])
+        sinklen=len(g.node[v.sink]['seq'])
+        
+        startpos=g.node[v.source]['offsets'][cds]+sourcelen
+        endpos=g.node[v.sink]['offsets'][cds]
 
-                minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
-                sourcelen=len(G.node[v]['seq'])
-                sinklen=len(G.node[u]['seq'])
+        if args.bedout:
+            sys.stdout.write("%s\t%d\t%s\t%s\n"%(g.graph['id2path'][cds],startpos,endpos,v.vtype))
+            continue
 
-                if minflank<args.minflank:
-                    continue
+        allelesizes=[]
 
-                sys.stdout.write("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],
-                                                                    G.node[v]['offsets'][cds]+len(G.node[v]['seq']),
-                                                                    'N/A',
-                                                                    sourcelen,
-                                                                    sinklen,
-                                                                    'N/A',
-                                                                    'N/A',
-                                                                    'N/A',
-                                                                    v,
-                                                                    u,
-                                                                    G.graph['id2path'][ucontigid] if ucontigid!=None else "N/A",
-                                                                    G.graph['id2path'][vcontigid] if vcontigid!=None else "N/A",
-                                                                    'struct_inv' if d['ofrom']!=d['oto'] else 'struct',
-                                                                    G.graph['id2path'][cds]+" <--> "+G.graph['id2path'][cdsu]))
-                for sample in gori:
-                    if G.graph['path2id'][sample] in d['paths']:
-                        sys.stdout.write("\t1")
-                    else:
-                        sys.stdout.write("\t0")
-                
-                sys.stdout.write("\n")
+        for gt in v.genotypes:
+            if gt=='-':
+                allelesizes.append(0)
+            else:
+                allelesizes.append(len(gt))
+
+        maxa=max(allelesizes)
+        mina=min(allelesizes)
+
+        sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
+                                                                startpos,
+                                                                endpos,
+                                                                sourcelen,
+                                                                sinklen,
+                                                                maxa,
+                                                                mina,
+                                                                maxa-mina,
+                                                                v.source if type(v.source)!=str else '<start>',
+                                                                v.sink if type(v.sink)!=str else '<end>',
+                                                                g.node[v.source]['seq'][-20:] if v.source in g else '-',
+                                                                g.node[v.sink]['seq'][:20] if v.sink in g else '-',
+                                                                v.vtype,
+                                                                genotypestr))
+        for sample in gori:
+            if sample in v.calls:
+                sys.stdout.write("\t%s"%v.calls[sample])
+            else:
+                sys.stdout.write("\t-")
+        
+        sys.stdout.write("\n")
 
         sys.stdout.flush()
 
