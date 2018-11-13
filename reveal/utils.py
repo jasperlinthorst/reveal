@@ -264,13 +264,19 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
             anchors.append((data['offsets'][s1],data['offsets'][s2],l))
     
     anchors.sort(key=lambda a: a[2],reverse=True)
-
-    if len(anchors)>10000:
-        logging.info("More than 10000 anchors, showing only the largest 10000.")
-        anchors=anchors[:10000]
-
+    
+    #plot all lines with one call to plot
+    xlist,ylist= [],[]
+    
     for s1,s2,l in anchors:
-        plt.plot([s1, s1+l], [s2, s2+l], 'r-')
+        xlist.append(s1)
+        xlist.append(s1+l)
+        xlist.append(None)
+        ylist.append(s2)
+        ylist.append(s2+l)
+        ylist.append(None)
+
+    plt.plot(xlist,ylist,'r-')
 
     if minx==None:
         minx=0
@@ -577,11 +583,11 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         logging.info("Removing %d nodes from the graph as they are not traversed..."%len(remove))
         graph.remove_nodes_from(remove)
         logging.info("Done.")
-    
+
     logging.debug("Extracting subgraphs...")
     conncomp=[comp for comp in nx.weakly_connected_components(graph)]
     logging.debug("Done.")
-    
+
     #merge start/end nodes per connected component in the graph
     for i,comp in enumerate(conncomp):
         logging.debug("Inspecting connected component: %d (%d)"%(i,len(comp)))
