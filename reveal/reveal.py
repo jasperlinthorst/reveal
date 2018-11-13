@@ -158,7 +158,7 @@ def main():
     
     parser_plot = subparsers.add_parser('plot', prog="reveal plot", description="Generate a mumplot that shows all mums between two fasta files.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_plot.add_argument('fastas', nargs='*', help='Two fasta files for which a mumplot should be generated.')
-    parser_plot.add_argument("-m", dest="minlength", type=int, default=100, help="Minimum length of exact matches to vizualize.")
+    parser_plot.add_argument("-m", dest="minlength", type=int, default=20, help="Minimum length of exact matches to vizualize.")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot.")
     parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("--maxmums", dest="maxmums", type=int, default=10000, help="Cap the number of MUMs to draw.")
@@ -224,7 +224,7 @@ def main():
     parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
 
     parser_transform.add_argument("--rc", dest="rearrangecost", default=10000, type=int, help="Cost for chaining translocated segments.")
-    parser_transform.add_argument("--ic", dest="inversioncost", default=1, type=int, help="Cost for chaining inverted segments.")
+    parser_transform.add_argument("--ic", dest="inversioncost", default=0, type=int, help="Cost for chaining inverted segments.")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
@@ -320,6 +320,11 @@ def main():
     parser_variants.add_argument("--gaps", dest="nogaps", default=True, action="store_false", help="Output variants that are caused by gaps (contain the N character).")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
     
+    parser_rearrangements = subparsers.add_parser('rearrangements', prog="reveal rearrangements", description="Report on edges in the graph that describe rearrangements.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_rearrangements.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, should be used as a coordinate system or reference.")
+    parser_rearrangements.add_argument("graph", nargs=1, help='Graph in gfa format for rearrangement edges are reported.')
+    parser_rearrangements.set_defaults(func=bubbles.rearrangements_cmd)
+
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
     parser_merge.add_argument("-o", dest="outprefix", type=str, default=None, help="Prefix of the file to which merged graph is written.")
