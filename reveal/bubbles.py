@@ -397,6 +397,8 @@ def variants_cmd(args):
                 
                 sys.stdout.write("\n")
 
+        sys.stdout.flush()
+
 class InvalidBubble(Exception):
     pass
 
