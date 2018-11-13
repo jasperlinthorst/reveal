@@ -577,16 +577,11 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         logging.info("Removing %d nodes from the graph as they are not traversed..."%len(remove))
         graph.remove_nodes_from(remove)
         logging.info("Done.")
-
-    # logging.debug("Converting to undirected graph...")
-    # Gu=graph.to_undirected()
-    # logging.debug("Done.")
-
+    
     logging.debug("Extracting subgraphs...")
-    # conncomp=nx.connected_components(Gu)
-    conncomp=[list(comp) for comp in nx.weakly_connected_component_subgraphs(graph)]
+    conncomp=[comp for comp in nx.weakly_connected_components(graph)]
     logging.debug("Done.")
-
+    
     #merge start/end nodes per connected component in the graph
     for i,comp in enumerate(conncomp):
         logging.debug("Inspecting connected component: %d (%d)"%(i,len(comp)))
@@ -721,7 +716,7 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
             mapping[node]=node
 
     for i,node in enumerate(iterator):
-        
+
         i+=1
         data=G.node[node]
         seq=""
