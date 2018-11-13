@@ -90,63 +90,20 @@ def plot(args):
         qrylength=qrylength-1
         idx.construct()
         
-        print "Extracting mums..."
-        #mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
-        # mmems=[(mem[0],mem[1],[sp for gid,sp in mem[2]],0) for mem in idx.getmums(args.minlength)]
-        # mmems=[(mem[0],2,[sp for sp in mem[1]],0) for mem in idx.getmums(args.minlength)]
-        mmems=idx.getmums(args.minlength)#[(mem[0],mem[1]) for mem in idx.getmums(args.minlength)]
-
+        logging.info("Extracting mums...")
+        mmems=idx.getmums(args.minlength)
+        logging.info("Done.")
+        
         sep=idx.nsep[0]
 
         if args.rc:
             
             #get mums for reverse orientation
             idx.construct(rc=True)
-
-            # if args.sa64:
-            #     idx=reveallib64.index()
-            # else:
-            #     idx=reveallib.index()
             
-            # sample=args.fastas[0]
-            # idx.addsample(sample)
-            # for name,seq in fasta_reader(sample):
-            #     idx.addsequence(seq.upper())
-            
-            # sample=args.fastas[1]
-            # idx.addsample(sample)
-
-            # qryintvs=[]
-            # for name,seq in fasta_reader(sample):
-            #     intv=idx.addsequence(rc(seq.upper()))
-            #     qryintvs.append(intv)
-            
-            # idx.construct()
-            
-            print "Extracting RC mums..."
+            logging.info("Extracting RC mums...")
             mmems+=idx.getmums(args.minlength)
-            
-            # vi=iter(qryintvs)
-            # v=vi.next()
-            
-            #tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
-            # tmp=[(m[0],m[1],sorted([sp for gid,sp in m[2]])) for m in tmp] #make sure start positions are sorted
-            # tmp=[(m[0],2,sorted([sp for sp in m[1]])) for m in tmp]
-            # tmp=[(m[0],m[1]) for m in tmp]
-            # tmp.sort(key=lambda l: l[2][1]) #sort by query pos
-            
-            # nmmems=[]
-            # for mem in tmp:
-            #     if mem[2][1]>v[1]:
-            #         v=vi.next()
-            #     start,end=v
-            #     newqstart=end-(mem[2][1]-start)-mem[0]
-            #     ntup=(mem[0],mem[1],(mem[2][0],newqstart),1)
-            #     nmmems.append(ntup)
-            
-            # mmems+=nmmems
-            
-            print "done."
+            logging.info("Done.")
      
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
@@ -163,7 +120,10 @@ def plot(args):
         mmems.sort(key=lambda mem: mem[0],reverse=True) #sort by size
         mmems=mmems[:args.maxmums] #take the n largest
     
-    print "Drawing",len(mmems),"matches."
+    logging.info("Drawing %d matches."%len(mmems))
+    
+    xlist,rcxlist = [],[]
+    ylist,rcylist = [],[]
     
     for mem in mmems:
         # sps=sorted(mem[2])
@@ -176,11 +136,25 @@ def plot(args):
         ep2=sp2+l
         
         if sp1>=start and ep1<=end:
+            
             if mem[2]==0:
-                plt.plot([sp1,ep1],[sp2,ep2],'r-')
+                xlist.append(sp1)
+                xlist.append(ep1)
+                ylist.append(sp2)
+                ylist.append(ep2)
+                xlist.append(None)
+                ylist.append(None)    
             else:
-                plt.plot([ep1,sp1],[sp2,ep2],'g-')
-    
+                rcxlist.append(ep1)
+                rcxlist.append(sp1)
+                rcylist.append(sp2)
+                rcylist.append(ep2)
+                rcxlist.append(None)
+                rcylist.append(None)
+
+    plt.plot(xlist,ylist,'r-')
+    plt.plot(rcxlist,rcylist,'g-')
+
     for p in ctgoffsets:
         plt.axhline(y=p,linewidth=.5,color='black',linestyle='solid')
     
@@ -230,15 +204,6 @@ def plot(args):
             rstart,rend=region.split(":") #should be rectangle with alfa here
             plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
             plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
-
-    # plt.title("")
-    # plt.xticks([], [])
-    # plt.yticks([], [])
-    # plt.xlabel("")
-    # plt.ylabel("")
-
-    # plt.xlim(15000000,21000000)
-    # plt.ylim(15000000,21000000)
 
     if args.interactive:
         plt.show()
