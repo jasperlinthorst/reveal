@@ -60,7 +60,7 @@ def stats(gfafile):
         stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
 
     #for each connected component
-    for sgi,sub in enumerate(nx.connected_components(G.to_undirected())):
+    for sgi,sub in enumerate(nx.weakly_connected_component_subgraphs(G)):
         stats["Number of connected components"]+=1
         sg=G.subgraph(sub)
         
