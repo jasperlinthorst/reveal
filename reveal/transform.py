@@ -3,12 +3,6 @@ import reveallib64
 from utils import *
 from multiprocessing.pool import Pool
 import signal
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 import os
 import math
 import argparse
@@ -16,6 +10,12 @@ import logging
 import numpy as np
 import intervaltree
 import sortedcontainers
+
+try:
+    from matplotlib import pyplot as plt
+    from matplotlib import patches as patches
+except:
+    pass
 
 def sparse_mums(r,q):
     mums=dict()
@@ -42,9 +42,9 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",lines=False):
     
     if len(anchors)==0:
         return
-    elif len(anchors)>5000:
-        logging.warn("More than 5000 anchors to display, plot only show the 5000 largest.")
-        anchors=sorted(anchors,key=lambda a: a[5],reverse=True)[:5000]
+    # elif len(anchors)>5000:
+    #     logging.warn("More than 5000 anchors to display, plot only show the 5000 largest.")
+    #     anchors=sorted(anchors,key=lambda a: a[5],reverse=True)[:5000]
 
     if len(anchors[0])==2: #unaligned blocks
         for start,stop in anchors:
@@ -102,17 +102,37 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",lines=False):
                     )
                 )
     elif len(anchors[0])==8: #synteny blocks with score and ctg
-        for anchor in anchors:
-            s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
-            
-            # plt.text(s1+((e1-s1)/2),(s2-sep)+(((e2-sep)-(s2-sep))/2) ,str(anchor),fontsize=6)
+        
+        if lines:
+            rcxpoints,xpoints=[],[]
+            rcypoints,ypoints=[],[]
 
-            if lines:
+            for anchor in anchors:
+                s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
+                # plt.text(s1+((e1-s1)/2),(s2-sep)+(((e2-sep)-(s2-sep))/2) ,str(anchor),fontsize=6)
                 if revcomp:
-                    plt.plot((s1,e1), (e2-sep,s2-sep),'g-')
+                    # plt.plot((s1,e1), (e2-sep,s2-sep),'g-')
+                    rcxpoints.append(s1)
+                    rcxpoints.append(e1)
+                    rcxpoints.append(None)
+                    rcypoints.append(e2-sep)
+                    rcypoints.append(s2-sep)
+                    rcypoints.append(None)
                 else:
-                    plt.plot((s1,e1), (s2-sep,e2-sep),'r-')
-            else:
+                    # plt.plot((s1,e1), (s2-sep,e2-sep),'r-')
+                    xpoints.append(s1)
+                    xpoints.append(e1)
+                    xpoints.append(None)
+                    ypoints.append(s2-sep)
+                    ypoints.append(e2-sep)
+                    ypoints.append(None)
+            
+            plt.plot(xpoints,ypoints,'r-')
+            plt.plot(rcxpoints,rcypoints,'g-')
+
+        else:
+            for anchor in anchors:
+                s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
                 ax = plt.axes()
                 ax.add_patch(
                         patches.Rectangle(
@@ -161,9 +181,6 @@ def transform(args,qry):
         prefix=os.path.splitext(os.path.basename(qry))[0]
     else:
         prefix=args.output
-
-    offset2name=dict()
-    name2offset=dict()
     
     refnames=[]
     ctgnames=[]
@@ -185,9 +202,6 @@ def transform(args,qry):
                 refnames.append(name)
             else:
                 ctgnames.append(name)
-
-            name2offset[name]=intv[0]
-            offset2name[intv[0]]=name
     T=idx.T
 
     logging.info("Compute mums.")
@@ -210,6 +224,15 @@ def transform(args,qry):
     rcmums=addctginfo(idx.getmums(args.minlength),ctg2range)
     logging.info("Done, %d rc mums in total."%len(rcmums))
 
+
+    sep=idx.nsep[0]
+    idxn=idx.n
+
+    rlength=idx.nsep[0]
+    qlength=idxn-idx.nsep[0]
+
+    del idx
+
     logging.info("Cluster rc mums by anti-diagonals.")
     if args.cluster:
         rcblocks=clustermumsbydiagonal(rcmums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=True)
@@ -218,12 +241,6 @@ def transform(args,qry):
     logging.info("Done, %d rc clusters."%len(rcblocks))
 
     blocks+=rcblocks
-
-    sep=idx.nsep[0]
-    idxn=idx.n
-
-    rlength=idx.nsep[0]
-    qlength=idxn-idx.nsep[0]
 
     logging.info("Remove anchors that are contained in other clusters.")
     syntenyblocks=remove_contained_blocks(blocks)
@@ -237,16 +254,18 @@ def transform(args,qry):
         syntenyblocks=remove_overlap_conservative_blocks(syntenyblocks)
 
     logging.info("Done.")
-    
-    # mums=[mum for mum in mums if mum[0]>=args.minlength]
 
     logging.info("Remove anchors that after overlap removal are smaller then initial mum size.")
     syntenyblocks=[b for b in syntenyblocks if (b[1]-b[0]) >= args.minlength]
     logging.info("Done, %d blocks remain."%len(syntenyblocks))
 
+
+
+
     #encode mums as blocks
     # syntenyblocks=[(mum[1][0], mum[1][0]+mum[0], mum[1][1], mum[1][1]+mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in mums]
-    
+    # syntenyblocks=blocks
+
     logging.info("Start glocal chaining for filtering anchors.")
     syntenyblocks=glocalchain(syntenyblocks,rlength,qlength,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost, 
@@ -257,8 +276,10 @@ def transform(args,qry):
     # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
     logging.info("%d anchors remain after glocal chaining."%len(syntenyblocks))
 
+
     if args.plot:
         plot(syntenyblocks,sep,wait=False,lines=True)
+
 
     logging.info("Merge consecutive blocks.")
     syntenyblocks=merge_consecutive(syntenyblocks)
@@ -286,6 +307,7 @@ def transform(args,qry):
     logging.debug("Extend %d blocks to query borders."%len(syntenyblocks))
     extendblocks(syntenyblocks,ctg2range)
     logging.debug("Done.")
+
 
     if args.plot:
         for start,end in ctg2range:
@@ -402,9 +424,11 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
     l=0
 
     mapping=dict()
-    for nid,block in enumerate(syntenyblocks):
+    nid=0
+    for i,block in enumerate(syntenyblocks):
         s1,e1,s2,e2,o,score,refid,ctgid=block
         mapping[(s2,e2)]=nid
+
         if refid!=prefid:
             if prefid!=None:
                 G.add_edge(pnid,end,paths=set([prefid]),ofrom="+", oto="+")
@@ -416,37 +440,48 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
         else:
             G.add_node(nid,seq=rc(T[s2:e2]),offsets={refid:l})
         
-        l+=e2-s2
         G.add_edge(pnid,nid,paths=set([refid]),ofrom="+", oto="+")
         prefid=refid
         pnid=nid
+        nid+=1
+        l+=e2-s2
+        
+        if i!=len(syntenyblocks)-1: #add gap node, so we later know which bubbles are caused by gaps
+            gapsize=1
+            G.add_node(nid,seq="N",offsets={refid:l})
+            l+=gapsize
+            G.add_edge(pnid,nid,paths=set([refid]),ofrom="+", oto="+")
+            pnid=nid
+            nid+=1
+
     G.add_edge(pnid,end,paths=set([refid]),ofrom="+", oto="+")
 
-    #write the original layout of the query sequences
-    syntenyblocks.sort(key=lambda b: b[2])
-    pctgid=None
-    pnid=None
-    
-    l=0
-    for nid,block in enumerate(syntenyblocks):
-        s1,e1,s2,e2,o,score,refid,ctgid=block
-        nid=mapping[(s2,e2)]
-        if ctgid!=pctgid:
-            if pctgid!=None:
-                G.add_edge(pnid,end,paths=set([pctgid]),ofrom="+" if o==0 else "-", oto="+")
-            pnid=start
-            l=0
-            po=0
+    writeorg=True
+    if writeorg: #write the original layout of the query sequences, so we can reconstruct the input afterwards
+        syntenyblocks.sort(key=lambda b: b[2])
+        pctgid=None
+        pnid=None
         
-        G.node[nid]['offsets'][ctgid]=l
-        
-        l+=e2-s2
-        G.add_edge(pnid,nid,paths=set([ctgid]),ofrom="+" if po==0 else "-", oto="+" if o==0 else "-")
-        po=o
-        pctgid=ctgid
-        pnid=nid
+        l=0
+        for nid,block in enumerate(syntenyblocks):
+            s1,e1,s2,e2,o,score,refid,ctgid=block
+            nid=mapping[(s2,e2)]
+            if ctgid!=pctgid:
+                if pctgid!=None:
+                    G.add_edge(pnid,end,paths=set([pctgid]),ofrom="+" if o==0 else "-", oto="+")
+                pnid=start
+                l=0
+                po=0
+            
+            G.node[nid]['offsets'][ctgid]=l
+            
+            l+=e2-s2
+            G.add_edge(pnid,nid,paths=set([ctgid]),ofrom="+" if po==0 else "-", oto="+" if o==0 else "-")
+            po=o
+            pctgid=ctgid
+            pnid=nid
 
-    G.add_edge(pnid,end,paths=set([ctgid]),ofrom="+" if o==0 else "-", oto="+")
+        G.add_edge(pnid,end,paths=set([ctgid]),ofrom="+" if o==0 else "-", oto="+")
 
     write_gfa(G,None,outputfile=outputprefix+".gfa")
 
@@ -602,8 +637,10 @@ def chainscore(chain, rearrangecost=1000, inversioncost=1):
         if pctg==ctg and pref==ref2:
             
             if (pqi==qi-1) or (pqi==qi+1): #check if the two blocks are colinear
+
                 gc=gapcost(pblock,block)
                 cost+=gc
+
             else: #all other options use rearrangement penalty
                 rearrangements+=1
                 cost+=rearrangecost
@@ -750,7 +787,6 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
     while node!=start and node!=startrc:
         s1,e1,s2,e2,o,score,refid,ctgid=node
         nnode,score=G[node]
-
         chain.append(nnode)
         node=nnode
 
