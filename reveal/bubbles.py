@@ -31,10 +31,8 @@ def bubbles(G):
         previousEntrance={}
 
         ordD={}
-        structural_variants=[]
 
-        if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
-            structural_variants=MultiGraphToDiGraph(G)
+        # assert(type(G)==nx.DiGraph)
 
         logging.debug("Topologically sort the graph.")
         ordD_=list(nx.topological_sort(G))
@@ -77,7 +75,7 @@ def bubbles(G):
             else:
                 reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx)
 
-        return ordD,ordD_,sspairs,structural_variants
+        return ordD,ordD_,sspairs
     
     def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx):
         
@@ -151,37 +149,29 @@ def bubbles(G):
             return ordD_[previousEntrance[ordD_[op]]]
         return startVertex
     
-    ordD,ordD_,sspairs,structural_variants=superbubble(G)
-    
-    allpairs=[]
-    for v,u,k,d in structural_variants:
-        if d['ofrom']==d['oto'] and (G.has_edge(v,u) or G.has_edge(u,v)):
-            continue
-        allpairs.append((v,u,d))
+    ordD,ordD_,sspairs=superbubble(G)
 
+    allpairs=[]
     for pair in sspairs:
-        allpairs.append((pair[0],pair[1],None))
+        allpairs.append((pair[0],pair[1]))
 
     allpairs.sort(key=lambda a: ordD[a[0]])#,reverse=True) #sort by topological order of the source
 
-    for v,u,d in allpairs:
-        if d==None:
-            bubblenodes=ordD_[ordD[v]:ordD[u]+1]
-            sourcenode=G.node[v]
-            sourcesamples=set(sourcenode['offsets'].keys())
-            sinknode=G.node[u]
-            sinksamples=set(sinknode['offsets'].keys())
+    for v,u in allpairs:
+        bubblenodes=ordD_[ordD[v]:ordD[u]+1]
+        sourcenode=G.node[v]
+        sourcesamples=set(sourcenode['offsets'].keys())
+        sinknode=G.node[u]
+        sinksamples=set(sinknode['offsets'].keys())
 
-            if sinksamples!=sourcesamples:
-                logging.debug("Invalid bubble, between %s and %s"%(v,u))
-                continue
+        if sinksamples!=sourcesamples:
+            logging.debug("Invalid bubble, between %s and %s"%(v,u))
+            continue
 
-            if len(bubblenodes)==2: #only source sink, no variation
-                continue
+        if len(bubblenodes)==2: #only source sink, no variation
+            continue
 
-            yield Bubble(G,v,u,ordD[v],ordD[u],bubblenodes)
-        else:
-            yield v,u,d
+        yield Bubble(G,v,u,ordD[v],ordD[u],bubblenodes)
 
 def bubbles_cmd(args):
     if len(args.graph)<1:
@@ -239,24 +229,23 @@ def rearrangements_cmd(args):
 
     cds=G.graph['path2id'][args.reference] if args.reference in G.graph['path2id'] else G.graph['path2id'][gori[0]]
 
-    sys.stdout.write("#reference\tapproximate_pos\tcontigs\tsource\tsink\tinvert\n")
+    sys.stdout.write("#reference\tapproximate_pos\tcontigs\tsource\tsink\tinvert\tpaths\n")
 
     for b in rearrangements:
         v,u,k,d=b
-        
+
         if type(v)==str or type(u)==str:
             continue #just start/end
         else:
             
-            if cds not in G.node[u]['offsets']: #TODO: walk the graph until we find a node that has
-                for p in G.node[u]['offsets'].keys():
-                    if not G.graph['id2path'][p].startswith("*"):
-                        vcds=p
-                        break
-                else:
-                    vcds=G.node[u]['offsets'].keys()[0]
+            paths=[G.graph['id2path'][sid] for sid in d['paths']]
+
+            for p in G.node[u]['offsets'].keys():
+                if G.graph['id2path'][p].startswith(args.reference):
+                    vcds=p
+                    break
             else:
-                vcds=cds
+                vcds=G.node[u]['offsets'].keys()[0]
 
             vpos=G.node[u]['offsets'][vcds]
 
@@ -266,7 +255,7 @@ def rearrangements_cmd(args):
                 if path.startswith("*"):
                     contigids.append(path)
 
-            sys.stdout.write("%s\t"*6 % (G.graph['id2path'][vcds], vpos, contigids, v, u, d['oto']==d['ofrom']))
+            sys.stdout.write("%s\t"*7 % (G.graph['id2path'][vcds], vpos, contigids, v, u, d['oto']==d['ofrom'], ",".join(paths)))
             
             sys.stdout.write("\n")
             sys.stdout.flush()
@@ -327,7 +316,7 @@ def variants_cmd(args):
         if args.nogaps:
             if v.spans_gap:
                 continue
-
+        
         minflank=min([len(g.node[v.source]['seq']),len(g.node[v.sink]['seq'])])
         
         if minflank<args.minflank:
@@ -512,11 +501,6 @@ class Variant(Bubble):
         self.vpos=dict() #key is sample, value is position within sample
         self.spans_gap=False
 
-        for node in self.nodes:
-            if 'N' in self.G.node[node]['seq']:
-                self.spans_gap=True
-                break
-
         gt=list(set(self.G.successors(self.source)) & set(self.nodes))
         gt.sort(key=lambda l: self.ordD[l])
         bsamples=set(self.G.node[self.source]['offsets'].keys())&set(self.G.node[self.sink]['offsets'].keys())
@@ -566,6 +550,12 @@ class Variant(Bubble):
                     self.vtype='region'
             else:
                 self.vtype='multi-allelic'
+
+        for node in self.nodes:
+            if 'N' in self.G.node[node]['seq']:
+                self.spans_gap=True
+                self.vtype="gap"
+                break
 
         v=self.G.node[self.source]
         t=self.G.node[self.sink]
