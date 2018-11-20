@@ -194,7 +194,11 @@ def transform(args,qry):
     for sample in [args.reference[0],qry]:
         idx.addsample(os.path.basename(sample))
 
-        for name,seq in fasta_reader(sample):
+        for name,seq in fasta_reader(sample, cutN=args.cutn):
+            if len(seq)<args.minctglength:
+                logging.debug("Skip transform for contig: %s"%name)
+                continue
+
             intv=idx.addsequence(seq)
             ctg2range.append(intv)
 
@@ -280,13 +284,18 @@ def transform(args,qry):
     if args.plot:
         plot(syntenyblocks,sep,wait=False,lines=True)
 
-
     logging.info("Merge consecutive blocks.")
     syntenyblocks=merge_consecutive(syntenyblocks)
     logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
+
+    logging.info("Remove all blocks that are shorter than minchainsum (%d)."%args.minchainsum)
+    syntenyblocks=[b for b in syntenyblocks if b[5] >= args.minchainsum]
+    logging.info("%d blocks after filtering for minchainsum."%len(syntenyblocks))
     
     weight,cost=chainscore(syntenyblocks, rearrangecost=args.rearrangecost,inversioncost=args.inversioncost) #determine the actual cost of the glocal chain 
     score=weight-cost
+
+
 
     if args.optimise and len(syntenyblocks)>1:
         iteration=1
@@ -304,10 +313,11 @@ def transform(args,qry):
                 syntenyblocks=merge_consecutive(syntenyblocks)
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
 
+
+
     logging.debug("Extend %d blocks to query borders."%len(syntenyblocks))
     extendblocks(syntenyblocks,ctg2range)
     logging.debug("Done.")
-
 
     if args.plot:
         for start,end in ctg2range:

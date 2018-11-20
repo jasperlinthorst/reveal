@@ -217,8 +217,10 @@ def main():
 
     parser_transform.add_argument('reference', nargs=1, help='(Multi-)fasta reference sequence.')
     parser_transform.add_argument('contigs', nargs='+', help='(Multi-)fasta draft assembly that contains contigs that are to be oriented and ordered with respect to the reference.')
-    
+
+    parser_transform.add_argument("--cutn", dest="cutn", type=int, default=0, help="Cut contigs at N-stretches longer than this value (default is 0, off).")
     parser_transform.add_argument("-o", "--output", dest="output", help="Prefix of gfa file for the \'transformed\' genome.")
+    parser_transform.add_argument("-c", dest="minctglength", type=int, default=10000, help="Skip transform for contigs short than this length.")
     parser_transform.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of maximal exact matches for considering (if set to 0, try to extract all MUMs).")
     parser_transform.add_argument("-i", dest="interactive", action="store_true", default=False, help="Output interactive plot.")
     parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
@@ -229,6 +231,7 @@ def main():
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
     parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
+    parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000, help="Minimal sum of the length of the MUMs in a chain before its considered.")
 
     parser_transform.add_argument("--noopt", dest="optimise", action="store_false", default=True, help="Don't perform naive optimisation of the glocal chain.")
     parser_transform.add_argument("--heap", dest="useheap", action="store_true", default=False, help="Use a priority queue to compute an optimal chain.")
