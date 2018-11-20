@@ -68,7 +68,8 @@ def MultiGraphToDiGraph(G):
     for e0,e1,k,d in G.edges(keys=True,data=True):
         if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
             if type(e0)!=str and type(e1)!=str:
-                structural_variants.append((e0,e1,k,d))
+                if not G.has_edge(e1,e0): #the reverse edge does not exist
+                    structural_variants.append((e0,e1,k,d))
             toremove.append((e0,e1))
     G.remove_edges_from(toremove)
     G.graph['paths']=refpathnames
