@@ -227,6 +227,9 @@ def rearrangements_cmd(args):
 
     gori=sorted([p for p in G.graph['paths'] if not p.startswith('*')])
 
+    if args.reference==None:
+        args.reference=gori[0]
+
     cds=G.graph['path2id'][args.reference] if args.reference in G.graph['path2id'] else G.graph['path2id'][gori[0]]
 
     sys.stdout.write("#reference\tapproximate_pos\tcontigs\tsource\tsink\tinvert\tpaths\n")
@@ -238,24 +241,27 @@ def rearrangements_cmd(args):
             continue #just start/end
         else:
             
-            paths=[G.graph['id2path'][sid] for sid in d['paths']]
+            paths=[G.graph['id2path'][sid] for sid in d['paths']] #all paths that go through the rearrangement edge
 
             for p in G.node[u]['offsets'].keys():
                 if G.graph['id2path'][p].startswith(args.reference):
                     vcds=p
                     break
             else:
+                logging.warn("Edge %s could not be located on reference: %s."% (str((v,u)), args.reference))
                 vcds=G.node[u]['offsets'].keys()[0]
 
             vpos=G.node[u]['offsets'][vcds]
 
-            contigids=[]
+
+
+            contigs=[]
             for p in d['paths']:
                 path=G.graph['id2path'][p]
                 if path.startswith("*"):
-                    contigids.append(path)
+                    contigs.append(path)
 
-            sys.stdout.write("%s\t"*7 % (G.graph['id2path'][vcds], vpos, contigids, v, u, d['oto']==d['ofrom'], ",".join(paths)))
+            sys.stdout.write("%s\t"*7 % (G.graph['id2path'][vcds], vpos, contigs, v, u, d['oto']==d['ofrom'], ",".join(paths)))
             
             sys.stdout.write("\n")
             sys.stdout.flush()
@@ -293,12 +299,12 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout and not args.bedout:
-        sys.stdout.write("#reference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+        sys.stdout.write("#bubble_index\treference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
 
-    for b in bubbles(g):
+    for bi,b in enumerate(bubbles(g)):
 
         v=Variant(b)
         
@@ -316,7 +322,7 @@ def variants_cmd(args):
         if args.nogaps:
             if v.spans_gap:
                 continue
-        
+
         minflank=min([len(g.node[v.source]['seq']),len(g.node[v.sink]['seq'])])
         
         if minflank<args.minflank:
@@ -334,12 +340,12 @@ def variants_cmd(args):
                 with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
                     for i,seq in enumerate(v.genotypes):
                         if seq!='-':
-                            of.write(">%s_%d_%s_%s_%s_%d\n"%(g.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
+                            of.write(">%d_%d\n"%(bi,i))
                             of.write("%s\n"%seq)
             else:
                 for i,seq in enumerate(v.genotypes):
                     if seq!='-':
-                        sys.stdout.write(">%s_%d_%s_%s_%s_%d\n"%(g.graph['id2path'][cds],v.vpos[cds],v.source,v.sink,v.vtype,i))
+                        sys.stdout.write(">%d_%d\n"%(bi,i))
                         sys.stdout.write("%s\n"%seq)
             continue
 
@@ -364,7 +370,8 @@ def variants_cmd(args):
         maxa=max(allelesizes)
         mina=min(allelesizes)
 
-        sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
+        sys.stdout.write("%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (bi,
+                                                                g.graph['id2path'][cds],
                                                                 startpos,
                                                                 endpos,
                                                                 sourcelen,
