@@ -264,8 +264,6 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
         if s1t and s2t:
             anchors.append((data['offsets'][s1],data['offsets'][s2],l))
     
-    anchors.sort(key=lambda a: a[2],reverse=True)
-    
     #plot all lines with one call to plot
     xlist,ylist= [],[]
     
