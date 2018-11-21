@@ -14,7 +14,7 @@ def unzip(args):
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
     if args.source==None and args.sink==None:
-        unzip_graph(G,minunzip=args.minunzip)
+        unzip_graph(G,args,minunzip=args.minunzip)
     else:
         b=bubbles.Bubble(G,args.source,args.sink)
         unzip_bubble(G,b,minunzip=args.minunzip,idoffset=max([n for n in G.nodes() if type(n)==int])+1)
@@ -27,11 +27,20 @@ def unzip(args):
     utils.write_gfa(G,None,outputfile=of)
 
 #determine uncertainty about bubble positions
-def unzip_graph(G,minunzip=0):
+def unzip_graph(G,args,minunzip=0):
     nid=max([n for n in G.nodes() if type(n)==int])
     nid+=1
 
     for b in bubbles.bubbles(G):
+        
+        if b.maxsize-b.minsize<args.mindiff:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is smaller than mindiff=%d."%(str(b.nodes),b.maxsize-b.minsize,args.mindiff))
+            continue
+
+        if args.maxdiff and b.maxsize-b.minsize>args.maxdiff:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is larger than maxdiff=%d."%(str(b.nodes),b.maxsize-b.minsize,args.maxdiff))
+            continue
+
         if isinstance(b,bubbles.Bubble):
             nid=unzip_bubble(G,b,minunzip=minunzip,idoffset=nid)
 
