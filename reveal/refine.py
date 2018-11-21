@@ -24,33 +24,33 @@ def refine_bubble_cmd(args):
     logging.info("Paths through the graph: %s"%G.graph['paths'])
 
     if (args.source==None and args.sink==None) and (args.all or args.complex or args.simple):
-        G=refine_all(G,
-                            minlength=args.minlength,
-                            minn=args.minn,
-                            wscore=args.wscore,
-                            wpen=args.wpen,
-                            maxsize=args.maxsize,
-                            minmaxsize=args.minmaxsize,
-                            minsize=args.minsize,
-                            maxcumsize=args.maxcumsize,
-                            mincumsize=args.mincumsize,
-                            seedsize=args.seedsize,
-                            maxmums=args.maxmums,
-                            gcmodel=args.gcmodel,
-                            complex=args.complex,
-                            simple=args.simple,
-                            nogaps=args.nogaps,
-                            all=args.all,
-                            method=args.method,
-                            parameters=args.parameters,
-                            minconf=args.minconf,
-                            nproc=args.nproc,
-                            sa64=args.sa64,
-                            constrans=args.constrans,
-                            nrefinements=args.nrefinements,
-                            consgap=args.consgap,
-                            uniqueonly=args.uniqueonly
-                            )
+        G=refine_all(G, **vars(args))
+                            # minlength=args.minlength,
+                            # minn=args.minn,
+                            # wscore=args.wscore,
+                            # wpen=args.wpen,
+                            # maxsize=args.maxsize,
+                            # minmaxsize=args.minmaxsize,
+                            # minsize=args.minsize,
+                            # maxcumsize=args.maxcumsize,
+                            # mincumsize=args.mincumsize,
+                            # seedsize=args.seedsize,
+                            # maxmums=args.maxmums,
+                            # gcmodel=args.gcmodel,
+                            # complex=args.complex,
+                            # simple=args.simple,
+                            # nogaps=args.nogaps,
+                            # all=args.all,
+                            # method=args.method,
+                            # parameters=args.parameters,
+                            # minconf=args.minconf,
+                            # nproc=args.nproc,
+                            # sa64=args.sa64,
+                            # constrans=args.constrans,
+                            # nrefinements=args.nrefinements,
+                            # consgap=args.consgap,
+                            # uniqueonly=args.uniqueonly
+                            # )
     else:
         if args.source==None or args.sink==None:
             logging.error("Specify source sink pair")
@@ -383,6 +383,14 @@ def refine_all(G, **kwargs):
             if not b.issimple():
                 logging.debug("Skipping bubble %s, not simple."%str(b.nodes))
                 continue
+
+        if b.maxsize-b.minsize<kwargs['mindiff']:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is smaller than mindiff=%d."%(str(b.nodes),b.maxsize-b.minsize,kwargs['mindiff']))
+            continue
+
+        if kwargs['maxdiff'] and b.maxsize-b.minsize>kwargs['maxdiff']:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is larger than maxdiff=%d."%(str(b.nodes),b.maxsize-b.minsize,kwargs['maxdiff']))
+            continue
 
         if b.minsize<kwargs['minsize']:
             logging.debug("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))

@@ -311,7 +311,10 @@ def variants_cmd(args):
         if v.maxsize<args.minsize:
             continue
 
-        if v.maxsize-v.minsize<args.diffsize:
+        if v.maxsize-v.minsize<args.mindiff:
+            continue
+
+        if args.maxdiff!=None and v.maxsize-v.minsize>args.maxdiff:
             continue
 
         if v.vtype!=args.type and args.type!='all':
