@@ -299,7 +299,7 @@ def variants_cmd(args):
             sys.exit(1)
     
     if not args.fastaout and not args.bedout:
-        sys.stdout.write("#bubble_index\treference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+        sys.stdout.write("#reference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
         for sample in gori:
             sys.stdout.write("\t%s"%sample)
         sys.stdout.write("\n")
@@ -338,25 +338,25 @@ def variants_cmd(args):
                 if not g.graph['id2path'][cds].startswith('*'): #use ref layout if its there
                     break
 
-        if args.fastaout:
-            if args.split:
-                with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
-                    for i,seq in enumerate(v.genotypes):
-                        if seq!='-':
-                            of.write(">%d_%d\n"%(bi,i))
-                            of.write("%s\n"%seq)
-            else:
-                for i,seq in enumerate(v.genotypes):
-                    if seq!='-':
-                        sys.stdout.write(">%d_%d\n"%(bi,i))
-                        sys.stdout.write("%s\n"%seq)
-            continue
-
         sourcelen=len(g.node[v.source]['seq'])
         sinklen=len(g.node[v.sink]['seq'])
         
         startpos=g.node[v.source]['offsets'][cds]+sourcelen
         endpos=g.node[v.sink]['offsets'][cds]
+
+        if args.fastaout:
+            if args.split:
+                with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
+                    for i,seq in enumerate(v.genotypes):
+                        if seq!='-':
+                            of.write(">%s:%d-%d_%d\n"%(g.graph['id2path'][cds],startpos,endpos,i))
+                            of.write("%s\n"%seq)
+            else:
+                for i,seq in enumerate(v.genotypes):
+                    if seq!='-':
+                        sys.stdout.write(">%s:%d-%d_%d\n"%(g.graph['id2path'][cds],startpos,endpos,i))
+                        sys.stdout.write("%s\n"%seq)
+            continue
 
         if args.bedout:
             sys.stdout.write("%s\t%d\t%s\t%s\n"%(g.graph['id2path'][cds],startpos,endpos,v.vtype))
@@ -369,12 +369,11 @@ def variants_cmd(args):
                 allelesizes.append(0)
             else:
                 allelesizes.append(len(gt))
-
+        
         maxa=max(allelesizes)
         mina=min(allelesizes)
 
-        sys.stdout.write("%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (bi,
-                                                                g.graph['id2path'][cds],
+        sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
                                                                 startpos,
                                                                 endpos,
                                                                 sourcelen,
