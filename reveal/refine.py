@@ -92,25 +92,25 @@ def refine_bubble_cmd(args):
         G.node[b.source]['aligned']=1
         G.node[b.sink]['aligned']=1
 
-        res=refine_bubble(sg,b,offsets,paths,
-                                minlength=args.minlength,
-                                minn=args.minn,
-                                wscore=args.wscore,
-                                wpen=args.wpen,
-                                maxsize=args.maxsize,
-                                minmaxsize=args.minmaxsize,
-                                seedsize=args.seedsize,
-                                maxmums=args.maxmums,
-                                gcmodel=args.gcmodel,
-                                method=args.method,
-                                parameters=args.parameters,
-                                minconf=args.minconf,
-                                sa64=args.sa64,
-                                constrans=args.constrans,
-                                nrefinements=args.nrefinements,
-                                consgap=args.consgap,
-                                uniqueonly=args.uniqueonly
-                                )
+        res=refine_bubble(sg,b,offsets,paths, **vars(args))
+                                # minlength=args.minlength,
+                                # minn=args.minn,
+                                # wscore=args.wscore,
+                                # wpen=args.wpen,
+                                # maxsize=args.maxsize,
+                                # minmaxsize=args.minmaxsize,
+                                # seedsize=args.seedsize,
+                                # maxmums=args.maxmums,
+                                # gcmodel=args.gcmodel,
+                                # method=args.method,
+                                # parameters=args.parameters,
+                                # minconf=args.minconf,
+                                # sa64=args.sa64,
+                                # constrans=args.constrans,
+                                # nrefinements=args.nrefinements,
+                                # consgap=args.consgap,
+                                # uniqueonly=args.uniqueonly
+                                # )
 
         if res!=None:
             bubble,ng,path2start,path2end=res
@@ -396,9 +396,9 @@ def refine_all(G, **kwargs):
             logging.debug("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
             continue
 
-        if b.maxsize<kwargs['minmaxsize']:
-            logging.debug("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
-            continue
+        # if b.maxsize<kwargs['minmaxsize']:
+        #     logging.debug("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
+        #     continue
 
         if b.maxsize>kwargs['maxsize']:
             logging.warn("Skipping bubble %s, largest allele (%dbp) is larger than maxsize=%d."%(str(b.nodes),b.maxsize,kwargs['maxsize']))
