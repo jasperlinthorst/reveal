@@ -212,13 +212,14 @@ def transform(args,qry):
     idx.construct(rc=False)
     mums=addctginfo(idx.getmums(args.minlength),ctg2range)
     logging.info("Done, %d mums."%len(mums))
-    logging.info("Cluster mums by diagonals.")
+    
     if args.cluster:
+        logging.info("Cluster mums by diagonals.")
         blocks=clustermumsbydiagonal(mums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=False)
+        logging.info("Done, %d clusters."%len(blocks))
     else:
         blocks=[(mum[1][0], mum[1][0]+mum[0], mum[1][1], mum[1][1]+mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in mums]
-    logging.info("Done, %d clusters."%len(blocks))
-
+    
     # rcidx=idx.copy()
     # rcidx.construct(rc=True)
     # mums+=rcidx.getmums(args.minlength)
@@ -237,16 +238,18 @@ def transform(args,qry):
 
     del idx
 
-    logging.info("Cluster rc mums by anti-diagonals.")
+    
     if args.cluster:
+        logging.info("Cluster rc mums by anti-diagonals.")
         rcblocks=clustermumsbydiagonal(rcmums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=True)
+        logging.info("Done, %d rc clusters."%len(rcblocks))
     else:
         rcblocks=[(mum[1][0], mum[1][0]+mum[0], mum[1][1], mum[1][1]+mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in rcmums]
-    logging.info("Done, %d rc clusters."%len(rcblocks))
-
+    
     blocks+=rcblocks
 
     logging.info("Remove anchors that are contained in other clusters.")
+    
     syntenyblocks=remove_contained_blocks(blocks)
     logging.info("Done, %d anchors remain."%len(syntenyblocks))
 
@@ -294,8 +297,7 @@ def transform(args,qry):
     
     weight,cost=chainscore(syntenyblocks, rearrangecost=args.rearrangecost,inversioncost=args.inversioncost) #determine the actual cost of the glocal chain 
     score=weight-cost
-
-
+    syntenyblocks=merge_consecutive(syntenyblocks)
 
     if args.optimise and len(syntenyblocks)>1:
         iteration=1
@@ -312,8 +314,6 @@ def transform(args,qry):
                 syntenyblocks=tsyntenyblocks
                 syntenyblocks=merge_consecutive(syntenyblocks)
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
-
-
 
     logging.debug("Extend %d blocks to query borders."%len(syntenyblocks))
     extendblocks(syntenyblocks,ctg2range)
@@ -456,9 +456,9 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
         nid+=1
         l+=e2-s2
         
-        if i!=len(syntenyblocks)-1: #add gap node, so we later know which bubbles are caused by gaps
-            gapsize=1
-            G.add_node(nid,seq="N",offsets={refid:l})
+        if i!=len(syntenyblocks)-1: #add gap node, so we later know which bubbles are caused by gaps in the assembly
+            gapsize=1 #TODO: if specified use reference to add a gap
+            G.add_node(nid,seq="N"*gapsize,offsets={refid:l})
             l+=gapsize
             G.add_edge(pnid,nid,paths=set([refid]),ofrom="+", oto="+")
             pnid=nid
