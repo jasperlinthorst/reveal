@@ -38,7 +38,7 @@ def sparse_mums(r,q):
                 mums[v[0]][qry][revcomp].append((int(v[1]),int(v[2]),int(v[3])))
     return mums
 
-def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",lines=False):
+def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",edges=False,lines=False):
     
     if len(anchors)==0:
         return
@@ -103,6 +103,60 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",lines=False):
                 )
     elif len(anchors[0])==8: #synteny blocks with score and ctg
         
+        if edges:
+            for c in [0,2]:
+                anchors.sort(key=lambda a:a[c])
+
+                xedges,yedges=[],[]
+                panchor=None
+                for anchor in anchors:
+
+                    s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
+                    
+                    if panchor!=None:
+                        ps1,pe1,ps2,pe2,prevcomp,pscore,pref,pctg=panchor
+
+                        if c==0:
+                            xedges.append(pe1)
+                            xedges.append(s1)
+                            xedges.append(None)
+                            
+                            if prevcomp:
+                                yedges.append(ps2-sep)
+                            else:
+                                yedges.append(pe2-sep)
+                            
+                            if revcomp:
+                                yedges.append(e2-sep)
+                            else:
+                                yedges.append(s2-sep)
+                            yedges.append(None)
+
+                        else:
+
+                            if prevcomp:
+                                xedges.append(ps1)
+                            else:
+                                xedges.append(pe1)
+
+                            if revcomp:
+                                xedges.append(e1)
+                            else:
+                                xedges.append(s1)
+
+                            xedges.append(None)
+                            
+                            yedges.append(pe2-sep)
+                            yedges.append(s2-sep)
+                            yedges.append(None)
+
+                    panchor=anchor
+
+                if c==0:
+                    plt.plot(xedges,yedges,'b--')
+                else:
+                    plt.plot(xedges,yedges,'y--')
+
         if lines:
             rcxpoints,xpoints=[],[]
             rcypoints,ypoints=[],[]
@@ -229,7 +283,6 @@ def transform(args,qry):
     rcmums=addctginfo(idx.getmums(args.minlength),ctg2range)
     logging.info("Done, %d rc mums in total."%len(rcmums))
 
-
     sep=idx.nsep[0]
     idxn=idx.n
 
@@ -238,7 +291,6 @@ def transform(args,qry):
 
     del idx
 
-    
     if args.cluster:
         logging.info("Cluster rc mums by anti-diagonals.")
         rcblocks=clustermumsbydiagonal(rcmums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=True)
@@ -248,59 +300,61 @@ def transform(args,qry):
     
     blocks+=rcblocks
 
-    logging.info("Remove anchors that are contained in other clusters.")
-    
-    syntenyblocks=remove_contained_blocks(blocks)
-    logging.info("Done, %d anchors remain."%len(syntenyblocks))
+    if args.plot:
+        plot(blocks,sep,wait=False,lines=True)
 
-    if args.greedy:
-        logging.info("Assign overlap between MUMs in a greedy manner.")
-        syntenyblocks=remove_overlap_greedy_blocks(syntenyblocks)
-    else:
-        logging.info("Assign overlap between MUMs in a conservative manner.")
-        syntenyblocks=remove_overlap_conservative_blocks(syntenyblocks)
-
-    logging.info("Done.")
-
-    logging.info("Remove anchors that after overlap removal are smaller then initial mum size.")
-    syntenyblocks=[b for b in syntenyblocks if (b[1]-b[0]) >= args.minlength]
-    logging.info("Done, %d blocks remain."%len(syntenyblocks))
-
-
-
-
-    #encode mums as blocks
-    # syntenyblocks=[(mum[1][0], mum[1][0]+mum[0], mum[1][1], mum[1][1]+mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in mums]
-    # syntenyblocks=blocks
-
-    logging.info("Start glocal chaining for filtering anchors.")
-    syntenyblocks=glocalchain(syntenyblocks,rlength,qlength,rearrangecost=args.rearrangecost,
+    logging.info("Start glocal chaining for filtering anchors (reference).")
+    rsyntenyblocks=glocalchain(list(blocks),rlength,qlength,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost, 
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
                                                             axis=0)
     # G=localcolinearchains(syntenyblocks,rlength,qlength,rearrangecost=rearrangecost,inversioncost=inversioncost)
     # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
-    logging.info("%d anchors remain after glocal chaining."%len(syntenyblocks))
+    logging.info("%d anchors remain after glocal chaining (reference)."%len(rsyntenyblocks))
 
+    logging.info("Start glocal chaining for filtering anchors (query).")
+    syntenyblocks=glocalchain(rsyntenyblocks,rlength,qlength,rearrangecost=args.rearrangecost,
+                                                            inversioncost=args.inversioncost, 
+                                                            useheap=args.useheap, 
+                                                            lastn=args.lastn,
+                                                            axis=1)
+    # G=localcolinearchains(syntenyblocks,rlength,qlength,rearrangecost=rearrangecost,inversioncost=inversioncost)
+    # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
+    logging.info("%d anchors remain after glocal chaining (query)."%len(syntenyblocks))
 
-    if args.plot:
-        plot(syntenyblocks,sep,wait=False,lines=True)
+    #take the intersection of both the chains
+    # logging.info("Determine intersection between the chains...")
+    # syntenyblocks=list(set(rsyntenyblocks) & set(qsyntenyblocks))
+    # logging.info("Done. %d chains remain."%len(qsyntenyblocks))
 
-    logging.info("Merge consecutive blocks.")
-    syntenyblocks=merge_consecutive(syntenyblocks)
-    logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
-
+    # logging.info("Remove anchors that are contained in other clusters."
+    # syntenyblocks=remove_contained_blocks(blocks)
+    # logging.info("Done, %d anchors remain."%len(syntenyblocks))
+    # logging.info("Done.")
+    
     logging.info("Remove all blocks that are shorter than minchainsum (%d)."%args.minchainsum)
     syntenyblocks=[b for b in syntenyblocks if b[5] >= args.minchainsum]
     logging.info("%d blocks after filtering for minchainsum."%len(syntenyblocks))
     
+    logging.info("Merge consecutive blocks.")
+    syntenyblocks=merge_consecutive(syntenyblocks)
+    logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
+
+    if args.greedy:
+        logging.info("Assign overlap between MUMs in a greedy manner.")
+        syntenyblocks=remove_overlap_greedy_blocks(syntenyblocks)
+        logging.info("Done.")
+    else:
+        logging.info("Assign overlap between MUMs in a conservative manner.")
+        syntenyblocks=remove_overlap_conservative_blocks(syntenyblocks)
+        logging.info("Done.")
+
     weight,cost=chainscore(syntenyblocks, rearrangecost=args.rearrangecost,inversioncost=args.inversioncost) #determine the actual cost of the glocal chain 
     score=weight-cost
-    syntenyblocks=merge_consecutive(syntenyblocks)
-
+    
     if args.optimise and len(syntenyblocks)>1:
-        iteration=1
+        iteration=0
         
         while True:
             iteration+=1
@@ -313,7 +367,49 @@ def transform(args,qry):
                 score=nscore
                 syntenyblocks=tsyntenyblocks
                 syntenyblocks=merge_consecutive(syntenyblocks)
+        
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
+
+
+
+
+    if args.outputbed: #before extending to the edges of the contig, output the breakpoint regions
+
+        with open(prefix+".bed",'w') as bedout:
+
+            pblock=None
+            for i,block in enumerate(syntenyblocks):
+                s1,e1,s2,e2,o,score,refid,ctgid=block
+                
+                if pblock==None:
+                    pblock=block
+                    bedout.write("#reference_ctg\tbegin\tend\tquery_ctg1\ttquery_ctg2\torientation1\torientation2\n")
+                    continue
+                
+                ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
+
+                ctgoffsets=ctg2range[ctgid-len(refnames)]
+                refoffsets=ctg2range[refid]
+
+                if ctgid==pctgid:
+                    logging.info("Rearrangement breakpoint within contig %s: %s:%d-%d"%(ctgnames[ctgid-len(refnames)],
+                                                                                    refnames[refid],
+                                                                                    pe1-refoffsets[0],
+                                                                                    s1-refoffsets[0]))
+                else:
+                    logging.info("Rearrangement breakpoint between contigs %s -- : %s:%d-%d"%(ctgnames[pctgid-len(refnames)],
+                                                                                    ctgnames[ctgid-len(refnames)],
+                                                                                    refnames[refid],
+                                                                                    pe1-refoffsets[0],
+                                                                                    s1-refoffsets[0]))
+
+                bedout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s\n"%(refnames[refid], pe1-refoffsets[0], s1-refoffsets[0], ctgnames[ctgid-len(refnames)], ctgnames[pctgid-len(refnames)], 'n' if po==False else 'r', 'n' if o==False else 'r'))
+
+                pblock=block
+
+
+
+
 
     logging.debug("Extend %d blocks to query borders."%len(syntenyblocks))
     extendblocks(syntenyblocks,ctg2range)
@@ -326,7 +422,7 @@ def transform(args,qry):
             else:
                 plt.axhline(y=start-sep, xmin=0, xmax=sep, linewidth=.1, linestyle='solid')
 
-        plot(syntenyblocks,sep,wait=False)
+        plot(syntenyblocks,sep,wait=False,edges=True)
         plt.xlim(0,rlength)
         plt.ylim(0,qlength)
 
@@ -343,9 +439,11 @@ def transform(args,qry):
         mappablectgs.add(ctgid)
         mappablectgs.add(refid)
 
-    logging.info("Write breakpoint graph to: %s.gfa"%prefix)
-    write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,prefix)
-
+    if len(mappablectgs)!=0:
+        logging.info("Write breakpoint graph to: %s.gfa"%prefix)
+        write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,prefix)
+    else:
+        logging.info("No mappable contigs.")
 
 def clustermumsbydiagonal(mums,maxdist=90,minclustsize=65,rcmums=True):
     
@@ -434,9 +532,11 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
     l=0
 
     mapping=dict()
-    nid=0
+    nid=0    
+
     for i,block in enumerate(syntenyblocks):
         s1,e1,s2,e2,o,score,refid,ctgid=block
+
         mapping[(s2,e2)]=nid
 
         if refid!=prefid:
@@ -476,17 +576,19 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
         for nid,block in enumerate(syntenyblocks):
             s1,e1,s2,e2,o,score,refid,ctgid=block
             nid=mapping[(s2,e2)]
+            
             if ctgid!=pctgid:
                 if pctgid!=None:
                     G.add_edge(pnid,end,paths=set([pctgid]),ofrom="+" if o==0 else "-", oto="+")
                 pnid=start
                 l=0
                 po=0
-            
+
             G.node[nid]['offsets'][ctgid]=l
             
             l+=e2-s2
             G.add_edge(pnid,nid,paths=set([ctgid]),ofrom="+" if po==0 else "-", oto="+" if o==0 else "-")
+
             po=o
             pctgid=ctgid
             pnid=nid
@@ -618,6 +720,10 @@ def optimise(syntenyblocks,ctg2range,rearrangecost=1000,inversioncost=1):
     return maxchain,maxchain_weight,maxchain_cost
 
 def chainscore(chain, rearrangecost=1000, inversioncost=1):
+
+    if len(chain)==0:
+        return 0,0
+
     chain.sort(key=lambda s: s[0]) #order by reference position
     qryorder = sorted(xrange(len(chain)), key= lambda i: chain[i][2]) #qry order
     qryorder_inv = sorted(xrange(len(chain)), key=qryorder.__getitem__) #inverse qry order
@@ -685,7 +791,6 @@ def chainscore(chain, rearrangecost=1000, inversioncost=1):
 
     return weight*2,cost
 
-
 def update_progress(i,n):
     fullbar=100
     if (i+1) % (n/fullbar if n>fullbar else 1)==0 or i+1==n:
@@ -696,16 +801,20 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-
-def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0):
+def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0):
 
     sep=rlength
     
-    start=(0,0,rlength,rlength,0,0,0,0)
-    startrc=(0,0,rlength+qlength,rlength+qlength,1,0,0,0)
-
-    end=(rlength-2,rlength-2,rlength+qlength,rlength+qlength,0,0,0,0)
-    endrc=(rlength-2,rlength-2,rlength,rlength,1,0,0,0)
+    if axis==0:
+        start=(-1,-1,rlength,rlength,0,0,0,0)
+        startrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,0,0)
+        end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
+        endrc=(rlength,rlength,rlength,rlength,1,0,0,0)
+    else:
+        start=(-1,-1,rlength,rlength,0,0,0,0)
+        startrc=(rlength,rlength,rlength,rlength,1,0,0,0)
+        end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
+        endrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,0,0)
 
     syntenyblocks.append(end)
     syntenyblocks.append(endrc)
@@ -742,7 +851,6 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         update_progress(ri,n)
 
         s1,e2,s2,e2,o,score,refid,ctgid=block
-        score=score*2
 
         assert(score>=0)
 
@@ -751,15 +859,22 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         bestcost=0
 
         if useheap:
-            iterator=heap[::-1]#[:lastn]
+            iterator=heap[::-1]
         else:
-            s=((ri+2)-lastn) if ((ri+2)-lastn)>0 else 0
-            assert(s<(ri+2))
-            iterator=heap[s:ri+2][::-1]
+            iterator=heap[:(ri+2)][::-1]
 
+        assert(len(iterator)>=2)
+
+        l=0
         for cscore,pblock in iterator:
-            
+
+            assert(pblock[c1]<=block[c1])
             ps1,pe2,ps2,pe2,po,pscore,prefid,pctgid=pblock
+
+            if pblock[c1]==block[c1] or pblock[c1+1]>=block[c1+1]:
+                continue
+            else:
+                l+=1
 
             if useheap:
                 if bestscore!=None:
@@ -778,6 +893,10 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
                 bestblock=pblock
                 bestcost=c
 
+            if not useheap:
+                if l==lastn:
+                    break
+
         cscore=bestscore+score
 
         if useheap:
@@ -789,6 +908,11 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
             maxscore=cscore
             maxnode=block
 
+        if block[c1] <= bestblock[c1]:
+            print block,bestblock
+
+        assert(block[c1] > bestblock[c1])
+
         G[block]=(bestblock,bestscore)
 
     node=G[end][0] if G[end][1]>G[endrc][1] else G[endrc][0]
@@ -798,11 +922,15 @@ def glocalchain(syntenyblocks,rlength,qlength, rearrangecost=1000, inversioncost
         s1,e1,s2,e2,o,score,refid,ctgid=node
         nnode,score=G[node]
         chain.append(nnode)
+        if node==nnode:
+            logging.fatal("Loop in chain!")
+            sys.exit(1)
+
         node=nnode
 
     chain.pop() #remove startnode from chain
 
-    return chain
+    return chain[::-1]
 
 #unused
 def colinearchains(syntenyblocks,rlength,qlength):
@@ -1013,7 +1141,6 @@ def localcolinearchains(syntenyblocks,rlength,qlength):
 
     return G
 
-
 def gapcost(block1,block2,inversioncost=0):
     if block1[4]==block2[4]==0: #both normal orientation
         if block2[2]>block1[2]:
@@ -1036,7 +1163,6 @@ def gapcost(block1,block2,inversioncost=0):
             return abs((block2[0]-block1[1])-(block2[2]-block1[3]))+inversioncost
         else:
             return abs((block2[0]-block1[1])-(block1[2]-block2[3]))+inversioncost
-
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
@@ -1066,9 +1192,6 @@ def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
         if i>=start and i<=end:
             #f.write("%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+maxline].ljust(maxline) if l1<=maxline else t[s:s+maxline]+"..."+t[s+l1-40:s+l1].ljust(maxline) ) )
             sys.stdout.write("%s\t%s\t%s\t%s\t%s\n"%(str(s).zfill(8), str(lcpi).zfill(6), t[s:s+maxline] ,t[s+l1-maxline:s+l1], t[s+l2-maxline:s+l2] ) )
-
-
-
 
 def remove_overlap_conservative_blocks(anchors):
     
@@ -1252,8 +1375,6 @@ def remove_contained_blocks(anchors):
         anchors=_anchors
 
     return anchors
-
-
 
 #unused
 def remove_overlap_greedy_mums(anchors):
