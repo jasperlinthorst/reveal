@@ -231,6 +231,8 @@ def main():
 
     parser_transform.add_argument("--rc", dest="rearrangecost", default=10000, type=int, help="Cost for chaining translocated segments.")
     parser_transform.add_argument("--ic", dest="inversioncost", default=0, type=int, help="Cost for chaining inverted segments.")
+    parser_transform.add_argument("--gamma", dest="gamma", default=0.5, type=float, help="Weight for indel penalty.")
+    parser_transform.add_argument("--eps", dest="eps", default=0, type=float, help="Weight for substitution penalty.")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
@@ -242,6 +244,7 @@ def main():
     parser_transform.add_argument("--lastn", dest="lastn", type=int, default=50, help="Number of anchors to evaluate while chaining fragments.")
 
     parser_transform.add_argument("--greedy", dest="greedy", action="store_true", default=False, help="Assign overlap between anchors in a greedy manner. Large anchors become larger.")
+    parser_transform.add_argument("--outputbed", dest="outputbed", action="store_true", default=False, help="Produce a bed file that stores the rearrangement breakpoints on the reference assembly.")
 
     parser_transform.set_defaults(func=transform.transform_cmd)
 
