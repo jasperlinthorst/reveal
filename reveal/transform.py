@@ -413,7 +413,7 @@ def transform(args,qry):
                                                                                     pe1-refoffsets[0],
                                                                                     s1-refoffsets[0]))
                 else:
-                    logging.info("Rearrangement breakpoint between contigs %s -- : %s:%d-%d"%(ctgnames[pctgid-len(refnames)],
+                    logging.info("Rearrangement breakpoint between contigs %s -- %s: %s:%d-%d"%(ctgnames[pctgid-len(refnames)],
                                                                                     ctgnames[ctgid-len(refnames)],
                                                                                     refnames[refid],
                                                                                     pe1-refoffsets[0],
