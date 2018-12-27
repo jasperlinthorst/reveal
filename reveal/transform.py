@@ -39,7 +39,7 @@ def sparse_mums(r,q):
                 mums[v[0]][qry][revcomp].append((int(v[1]),int(v[2]),int(v[3])))
     return mums
 
-def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",edges=False,lines=False):
+def plot(anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1):
     
     if len(anchors)==0:
         return
@@ -70,9 +70,9 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",edges=False,lines=Fal
     elif len(anchors[0])==3: #mums
         for l,sps,revcomp in anchors:
             if revcomp:
-                plt.plot( (sps[0],sps[0]+l), ((sps[1]-sep)+l, (sps[1]-sep)),'%s-'%rc)
+                plt.plot( (sps[0],sps[0]+l), ((sps[1]-sep)+l, (sps[1]-sep)),'%s-'%rc,alpha=alpha)
             else:
-                plt.plot( (sps[0],sps[0]+l), ((sps[1]-sep), (sps[1]-sep)+l),'%s-'%nc)
+                plt.plot( (sps[0],sps[0]+l), ((sps[1]-sep), (sps[1]-sep)+l),'%s-'%nc,alpha=alpha)
     elif len(anchors[0])==4: #synteny blocks, without orientation
         for anchor in anchors:
             s1,e1,s2,e2=anchor
@@ -156,9 +156,9 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",edges=False,lines=Fal
                     panchor=anchor
 
                 if c==0:
-                    plt.plot(xedges,yedges,'b--')
+                    plt.plot(xedges,yedges,'b--',alpha=alpha)
                 else:
-                    plt.plot(xedges,yedges,'y--')
+                    plt.plot(xedges,yedges,'y--',alpha=alpha)
 
         if lines:
             rcxpoints,xpoints=[],[]
@@ -184,10 +184,10 @@ def plot(anchors,sep,wait=True,nc='r',rc='g',color="black",edges=False,lines=Fal
                     ypoints.append(e2-sep)
                     ypoints.append(None)
             
-            plt.plot(xpoints,ypoints,'r-')
-            plt.plot(rcxpoints,rcypoints,'g-')
+            plt.plot(xpoints,ypoints,'r-' if color==None else '%s-'%color,alpha=alpha)
+            plt.plot(rcxpoints,rcypoints,'g-' if color==None else '%s-'%color,alpha=alpha)
 
-        else:
+        else: #plot squares
             for anchor in anchors:
                 s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
                 ax = plt.axes()
@@ -303,6 +303,9 @@ def transform(args,qry):
     
     blocks+=rcblocks
 
+    if args.plot:
+        plot(blocks,sep,wait=False,lines=True,alpha=0.2)
+
     # if args.plot:
     #     plot(blocks,sep,wait=False,lines=True)
 
@@ -326,12 +329,13 @@ def transform(args,qry):
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
                                                             axis=1)
+
     # G=localcolinearchains(syntenyblocks,rlength,qlength,rearrangecost=rearrangecost,inversioncost=inversioncost)
     # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
     logging.info("%d anchors remain after glocal chaining (query)."%len(syntenyblocks))
 
-    if args.plot:
-        plot(syntenyblocks,sep,wait=False,lines=True)
+    # if args.plot:
+    #     plot(syntenyblocks,sep,wait=False,lines=True,color='b',alpha=.7)
 
     #take the intersection of both the chains
     # logging.info("Determine intersection between the chains...")
@@ -354,6 +358,9 @@ def transform(args,qry):
     logging.info("Merge consecutive blocks.")
     syntenyblocks=merge_consecutive(syntenyblocks)
     logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
+
+    # if args.plot:
+    #     plot(syntenyblocks,sep,wait=True,lines=True,color='b')
 
     # logging.info("Merge consecutive blocks.")
     # syntenyblocks=merge_consecutive(syntenyblocks)
@@ -388,41 +395,61 @@ def transform(args,qry):
         
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
 
-
     if args.outputbed: #before extending to the edges of the contig, output the breakpoint regions
 
+        logging.info("Write bedfile with contig mappings on reference to: %s.bed"%prefix)
         with open(prefix+".bed",'w') as bedout:
 
+
+            bedout.write("#reference\tbegin\tend\tquery\tscore\torientation\taln-start\taln-end\n")
+
             pblock=None
-            for i,block in enumerate(syntenyblocks):
+            for i,block in enumerate(syntenyblocks): #sorted by reference
                 s1,e1,s2,e2,o,score,refid,ctgid=block
                 
-                if pblock==None:
-                    pblock=block
-                    bedout.write("#reference_ctg\tbegin\tend\tquery_ctg1\ttquery_ctg2\torientation1\torientation2\n")
-                    continue
-                
-                ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
+                if i>0:
+                    ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
+                else:
+                    pblock=None
+
+                if i<len(syntenyblocks)-2:
+                    nblock=syntenyblocks[i+1]
+                    ns1,ne1,ns2,ne2,no,nscore,nrefid,nctgid=nblock
+                else:
+                    nblock=None
 
                 ctgoffsets=ctg2range[ctgid-len(refnames)]
                 refoffsets=ctg2range[refid]
 
-                if ctgid==pctgid:
-                    logging.info("Rearrangement breakpoint within contig %s: %s:%d-%d"%(ctgnames[ctgid-len(refnames)],
-                                                                                    refnames[refid],
-                                                                                    pe1-refoffsets[0],
-                                                                                    s1-refoffsets[0]))
+                if pblock!=None and prefid==refid:
+                    start=(s1-refoffsets[0])-((s1-pe1)/2)
                 else:
-                    logging.info("Rearrangement breakpoint between contigs %s -- %s: %s:%d-%d"%(ctgnames[pctgid-len(refnames)],
-                                                                                    ctgnames[ctgid-len(refnames)],
-                                                                                    refnames[refid],
-                                                                                    pe1-refoffsets[0],
-                                                                                    s1-refoffsets[0]))
+                    start=s1-refoffsets[0]
 
-                bedout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s\n"%(refnames[refid], pe1-refoffsets[0], s1-refoffsets[0], ctgnames[ctgid-len(refnames)], ctgnames[pctgid-len(refnames)], 'n' if po==False else 'r', 'n' if o==False else 'r'))
+                if nblock!=None and nrefid==refid:
+                    end=(e1-refoffsets[0])+((ns1-e1)/2)
+                else:
+                    end=e1-refoffsets[0]
+
+                chromname=refnames[refid].split()[0]
+
+                bedout.write("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
+                                                                start, #start
+                                                                end, #end
+                                                                ctgnames[ctgid-len(refnames)], #name
+                                                                score, #score between 0 and 1000
+                                                                '+' if o==False else '-', #strand
+                                                                s1-refoffsets[0], #thick start
+                                                                e1-refoffsets[0]) #thick end
+                                                                #itemRgb
+                                                                #blockCount
+                                                                #blockSizes
+                                                                #blockStarts
+                                                            )
+
+                #bedout.write("%s\t%d\t%d\t%s\t%s\t%s\t%s\n"%(refnames[refid], pe1-refoffsets[0], s1-refoffsets[0], ctgnames[ctgid-len(refnames)], ctgnames[pctgid-len(refnames)], 'n' if po==False else 'r', 'n' if o==False else 'r'))
 
                 pblock=block
-
 
     if args.plot:
         plot(syntenyblocks,sep,wait=False)
@@ -438,7 +465,7 @@ def transform(args,qry):
             else:
                 plt.axhline(y=start-sep, xmin=0, xmax=sep, linewidth=.1, linestyle='solid')
 
-        plot(syntenyblocks,sep,wait=False,edges=True)
+        plot(syntenyblocks,sep,wait=False,edges=False)
         plt.xlim(0,rlength)
         plt.ylim(0,qlength)
 
@@ -817,7 +844,7 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, gamma=0.5, eps=0):
+def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, gamma=0.5, eps=.01):
 
     sep=rlength
     
@@ -904,7 +931,7 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
                 if bestscore!=None:
                     if cscore<=bestscore:
                         break
-            
+
             if pctgid==ctgid and prefid==refid:
                 gc=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
                 c=gc if gc < rearrangecost else rearrangecost
@@ -933,7 +960,7 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
 
         G[block]=(bestblock,bestscore)
 
-    node=G[end][0] if G[end][1]>G[endrc][1] else G[endrc][0]
+    node,cscore=G[end] if G[end][1]>G[endrc][1] else G[endrc]
 
     chain=[]
     while node!=start and node!=startrc:
@@ -943,10 +970,12 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
         if node==nnode:
             logging.fatal("Loop in chain!")
             sys.exit(1)
-
         node=nnode
 
-    chain.pop() #remove startnode from chain
+    if len(chain)>0:
+        chain.pop() #remove startnode from chain
+
+    logging.info("Optimal glocal chain contains: %d anchors and scores %d"%(len(chain),cscore))
 
     return chain[::-1]
 
