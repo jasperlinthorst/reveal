@@ -102,7 +102,7 @@ def main():
     parser_unzip.add_argument("-u", dest="minunzip", type=int, default=0, help="Try to unzip all bubbles at least this many bases.")
     parser_unzip.add_argument("-o", "--output", dest="output", default=None, help="Prefix for the filename of the resulting graph.")
     parser_unzip.add_argument("--mindiff", dest="mindiff", default=1, type=int, help="Only unzip bubbles where the difference between the min- and max-allele size is larger than this many bp, by default 1, so don't unzip SNPs.")
-    parser_unzip.add_argument("--maxdiff", dest="maxdiff", default=None, type=int, help="Only unzip bubbles where the difference between the min- and max-allele size is smaller than this many bp.")
+    parser_unzip.add_argument("--maxdiff", dest="maxdiff", default=10000, type=int, help="Only unzip bubbles where the difference between the min- and max-allele size is smaller than this many bp.")
     parser_unzip.add_argument("--source", dest="source", type=int, default=None, help="Source for specific bubble.")
     parser_unzip.add_argument("--sink", dest="sink", type=int, default=None, help="Sink for specific bubble.")
     parser_unzip.set_defaults(func=unzip.unzip)
