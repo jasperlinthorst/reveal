@@ -4,8 +4,9 @@ from rem import align,prune_nodes
 from random import shuffle
 import bubbles
 import schemes
-from multiprocessing.pool import Pool
-from multiprocessing import Process,Queue
+import multiprocessing as mp
+# from multiprocessing import Process,Queue
+from time import sleep
 import signal
 import probconslib
 import math
@@ -19,38 +20,14 @@ def refine_bubble_cmd(args):
     # G=nx.MultiDiGraph() #TODO: make sure that refine can handle structural variant edges, so make sure we use a MultiDiGraph here!
     G=nx.DiGraph()
 
+    logging.info("Reading graph...")
     read_gfa(args.graph[0],None,"",G)
-    
+    logging.info("Done.")
+
     logging.info("Paths through the graph: %s"%G.graph['paths'])
 
     if (args.source==None and args.sink==None) and (args.all or args.complex or args.simple):
         G=refine_all(G, **vars(args))
-                            # minlength=args.minlength,
-                            # minn=args.minn,
-                            # wscore=args.wscore,
-                            # wpen=args.wpen,
-                            # maxsize=args.maxsize,
-                            # minmaxsize=args.minmaxsize,
-                            # minsize=args.minsize,
-                            # maxcumsize=args.maxcumsize,
-                            # mincumsize=args.mincumsize,
-                            # seedsize=args.seedsize,
-                            # maxmums=args.maxmums,
-                            # gcmodel=args.gcmodel,
-                            # complex=args.complex,
-                            # simple=args.simple,
-                            # nogaps=args.nogaps,
-                            # all=args.all,
-                            # method=args.method,
-                            # parameters=args.parameters,
-                            # minconf=args.minconf,
-                            # nproc=args.nproc,
-                            # sa64=args.sa64,
-                            # constrans=args.constrans,
-                            # nrefinements=args.nrefinements,
-                            # consgap=args.consgap,
-                            # uniqueonly=args.uniqueonly
-                            # )
     else:
         if args.source==None or args.sink==None:
             logging.error("Specify source sink pair")
@@ -93,24 +70,6 @@ def refine_bubble_cmd(args):
         G.node[b.sink]['aligned']=1
 
         res=refine_bubble(sg,b,offsets,paths, **vars(args))
-                                # minlength=args.minlength,
-                                # minn=args.minn,
-                                # wscore=args.wscore,
-                                # wpen=args.wpen,
-                                # maxsize=args.maxsize,
-                                # minmaxsize=args.minmaxsize,
-                                # seedsize=args.seedsize,
-                                # maxmums=args.maxmums,
-                                # gcmodel=args.gcmodel,
-                                # method=args.method,
-                                # parameters=args.parameters,
-                                # minconf=args.minconf,
-                                # sa64=args.sa64,
-                                # constrans=args.constrans,
-                                # nrefinements=args.nrefinements,
-                                # consgap=args.consgap,
-                                # uniqueonly=args.uniqueonly
-                                # )
 
         if res!=None:
             bubble,ng,path2start,path2end=res
@@ -121,10 +80,12 @@ def refine_bubble_cmd(args):
     else:
         fn=args.outfile
 
+    logging.info("Prune and contract nodes...")
     prune_nodes(G)
-
     contract(G,[n for n in nx.topological_sort(G) if type(n)!=str])
+    logging.info("Done.")
 
+    logging.info("Write refined graph to: %s"%fn)
     write_gfa(G,"",outputfile=fn)
 
 def replace_bubble(G,bubble,ng,path2start,path2end,nn):
@@ -315,7 +276,7 @@ def align_worker(G,chunk,outputq,kwargs,chunksize=500):
             G.node[bubble.source]['aligned']=1
             G.node[bubble.sink]['aligned']=1
 
-            logging.debug("Submitting realign bubble between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+            logging.debug("Realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
             bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
             sg=G.subgraph(bnodes).copy()
             
@@ -340,24 +301,132 @@ def align_worker(G,chunk,outputq,kwargs,chunksize=500):
         if len(rchunk)>0:
             outputq.put(rchunk)
 
+        logging.info("Worker with pid=%d is done."%(os.getpid()))
         outputq.put(-1)
     except:
-        logging.fatal("Worker failed!")
-        outputq.put(-1)
+        logging.fatal("Worker with pid=%d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
+        exit(1)
     
-def graph_worker(G,nn,outputq,nworkers):
+# def align_worker(G,inputq,outputq,kwargs,chunksize=500):
+#     try:
+#         rchunk=[]
+
+#         while True:
+
+#             ci,chunk=inputq.get(block=False)
+
+#             print os.getpid(),ci
+
+#             for bubble in chunk:
+#                 G.node[bubble.source]['aligned']=1
+#                 G.node[bubble.sink]['aligned']=1
+
+#                 logging.debug("Realign bubble between <%s,%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+#                 bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+#                 sg=G.subgraph(bnodes).copy()
+                
+#                 offsets=dict()
+#                 for sid in G.node[bubble.source]['offsets']:
+#                     offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+
+#                 sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+#                 sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+#                 paths=sourcesamples.intersection(sinksamples)
+
+#                 b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+                
+#                 if b==None:
+#                     continue
+#                 else:
+#                     rchunk.append(b)
+            
+#             outputq.put(rchunk)
+#             rchunk=[]
+
+#     except mp.queues.Empty:
+#         logging.info("Worker %d encountered an empty Queue."%(os.getpid()))
+#         sleep(10)
+#         outputq.put(-1) #go silent
+#     except Exception,e:
+#         # logging.fatal("Worker %d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
+#         exit(1) #don't go silent...
+
+# def align_worker(G,i,n,bubbles,outputq,kwargs,chunksize=500):
+#     try:
+#         rchunk=[]
+
+#         for bubble in [b for bi,b in enumerate(bubbles) if bi%n==i]:
+#             G.node[bubble.source]['aligned']=1
+#             G.node[bubble.sink]['aligned']=1
+
+#             logging.debug("Realign bubble between <%s,%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
+#             bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+#             sg=G.subgraph(bnodes).copy()
+            
+#             offsets=dict()
+#             for sid in G.node[bubble.source]['offsets']:
+#                 offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+
+#             sourcesamples=set(G.node[bubble.source]['offsets'].keys())
+#             sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+#             paths=sourcesamples.intersection(sinksamples)
+
+#             b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+            
+#             if b==None:
+#                 continue
+#             else:
+#                 rchunk.append(b)
+#                 if len(rchunk)==chunksize:
+#                     outputq.put(rchunk)
+#                 rchunk=[]
+        
+#         if len(rchunk)>0:
+#             outputq.put(rchunk)
+        
+#         outputq.put(-1)
+
+#     except Exception,e:
+#         logging.fatal("Worker %d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
+#         exit(1) #don't go silent...
+
+
+def graph_worker(G,nn,outputq,aworkers):
     deadworkers=0
+    nworkers=len(aworkers)
+
     while True:
-        data = outputq.get()
-        if data==-1:
+
+        if deadworkers==nworkers:
+            break
+
+        try:
+            data=outputq.get(timeout=.5)
+
+        except mp.queues.Empty: #nothing to do, check if all workers are still alive...
+
+            for wi in range(len(aworkers)):
+                # p,fn,args=aworkers[wi]
+                p=aworkers[wi]
+                if not p.is_alive() and p.exitcode!=0: #one of the workers was killed! maybe oom...
+                    # if retry: #start a new worker and continue processing whatever is left on the queue
+                    #     logging.error("Worker %d died with exitcode: %d, start a new worker!"%(p.pid,p.exitcode))
+                    #     np=mp.Process(target=fn, args=args)
+                    #     np.start()
+                    #     aworkers[wi]=((np,fn,args)) #update it
+                    # else:
+                    raise Exception("Worker %d died with exitcode: %d. Stop refining."%(p.pid,p.exitcode))
+            continue
+
+        if data==-1: #worker was done
             deadworkers+=1
-            if deadworkers==nworkers:
-                break
         else:
             for d in data:
                 bubble,ng,path2start,path2end=d
-                logging.info("Replacing bubble: %s"%bubble.nodes)
+                logging.debug("Replacing bubble: <%s,%s>"%(bubble.source,bubble.sink))
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+
+
 
 def refine_all(G, **kwargs):
     realignbubbles=[]
@@ -374,10 +443,14 @@ def refine_all(G, **kwargs):
                 continue
 
         if kwargs['nogaps']:
+            spansgap=False
             for n in b.nodes:
                 if 'N' in G.nodes[n]['seq']:
                     logging.info("Skipping bubble %s, bubble spans a gap."%str(b.nodes))
-                    continue
+                    spansgap=True
+                    break
+            if spansgap:
+                continue
 
         if kwargs['simple']:
             if not b.issimple():
@@ -395,10 +468,6 @@ def refine_all(G, **kwargs):
         if b.minsize<kwargs['minsize']:
             logging.debug("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
             continue
-
-        # if b.maxsize<kwargs['minmaxsize']:
-        #     logging.debug("Skipping bubble %s, largest allele (%dbp) is smaller than minmaxsize=%d."%(str(b.nodes),b.maxsize,kwargs['minmaxsize']))
-        #     continue
 
         if b.maxsize>kwargs['maxsize']:
             logging.warn("Skipping bubble %s, largest allele (%dbp) is larger than maxsize=%d."%(str(b.nodes),b.maxsize,kwargs['maxsize']))
@@ -439,38 +508,60 @@ def refine_all(G, **kwargs):
         nn=max([node for node in G.nodes() if type(node)==int])+1
 
         if kwargs['nproc']>1:
-            outputq = Queue()
+            outputq = mp.Queue()
+            # inputq = mp.Queue()
+
             nworkers=kwargs['nproc']
             aworkers=[]
 
-            shuffle(distinctbubbles) #make sure not all the big telomeric bubbles and up with one worker
+            shuffle(distinctbubbles) #make sure not all the big telomeric bubbles end up with one worker
 
             if nworkers>len(distinctbubbles):
                 nworkers=len(distinctbubbles)
 
+            # chunksize=50
+            # i=0
+            # while (i*chunksize)<len(distinctbubbles):
+            #     chunk=distinctbubbles[(i*chunksize):((i+1)*chunksize)]
+            #     print "Putting chunk:",i,len(chunk)
+            #     inputq.put( (i,chunk) ) #,False
+            #     i+=1
+
             chunksize=int(math.floor(len(distinctbubbles)/float(nworkers)))
-            
+
             for i in range(nworkers):
+                logging.info("Starting worker: %d"%i)
+                
                 if i==nworkers-1:
                     chunk=distinctbubbles[(i*chunksize):]
                 else:
                     chunk=distinctbubbles[(i*chunksize):(i*chunksize)+chunksize]
-                p=Process(target=align_worker, args=(G,chunk,outputq,kwargs))
+
+                p=mp.Process(target=align_worker, args=(G,chunk,outputq,kwargs))
+                # p=mp.Process(target=align_worker, args=(G,inputq,outputq,kwargs))
+                # p=mp.Process(target=align_worker, args=(G,i,nworkers,distinctbubbles,outputq,kwargs))
                 p.start()
-                aworkers.append(p)
+                aworkers.append(p)#(p,align_worker,(G,inputq,outputq,kwargs)))
+
             try:
-                graph_worker(G,nn,outputq,nworkers)
-            except:
-                logging.fatal("Failed to update graph with refined bubble! Signal workers to stop.")
+                graph_worker(G,nn,outputq,aworkers)
+            except Exception, e:
+                logging.fatal("%s"%str(e))
+                # for p,fn,args in aworkers:
                 for p in aworkers:
                     p.terminate()
                 outputq.close()
                 exit(1)
             
             outputq.close()
+            # inputq.close()
+
             logging.info("Waiting for workers to finish...")
+
+            # for p,fn,args in aworkers:
             for p in aworkers:
                 p.join()
+
             logging.info("Done.")
 
         else:
