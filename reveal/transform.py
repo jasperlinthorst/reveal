@@ -436,7 +436,7 @@ def transform(args,qry):
                 bedout.write("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
                                                                 start, #start
                                                                 end, #end
-                                                                ctgnames[ctgid-len(refnames)], #name
+                                                                ctgnames[ctgid-len(refnames)].split()[0], #name, make sure there's no whitespace to comply with bed 'format'
                                                                 score, #score between 0 and 1000
                                                                 '+' if o==False else '-', #strand
                                                                 s1-refoffsets[0], #thick start
