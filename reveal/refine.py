@@ -5,12 +5,11 @@ from random import shuffle
 import bubbles
 import schemes
 import multiprocessing as mp
-# from multiprocessing import Process,Queue
-from time import sleep
 import signal
 import probconslib
 import math
 import os
+import time
 
 def refine_bubble_cmd(args):
     if len(args.graph)<1:
@@ -30,7 +29,7 @@ def refine_bubble_cmd(args):
         G=refine_all(G, **vars(args))
     else:
         if args.source==None or args.sink==None:
-            logging.error("Specify source sink pair")
+            logging.error("Specify source sink pair, or one of the --all --simple --complex flags.")
             sys.exit(1)
 
         args.source,args.sink=int(args.source),int(args.sink)
@@ -161,6 +160,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     uniqueonly=False
 
+    t0=time.time()
     if kwargs['uniqueonly']:
         d={}
         #extract all paths
@@ -192,14 +192,17 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
         if len(aobjs)==1:
             logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
             return
+    t1=time.time()
+    logging.info("Extracting sequence for paths: %s through bubble <%s,%s> took: %.4f seconds."%(paths,bubble.source,bubble.sink,t1-t0))
+
 
     logging.info("Realigning bubble (pid=%s) between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
 
-    for name,seq in aobjs:
-        if len(seq)>200:
-            logging.debug("IN %s: %s...%s (%d bp)"%(name.rjust(4,' '),seq[:100],seq[-100:],len(seq)))
-        else:
-            logging.debug("IN %s: %s (%d bp)"%(name.rjust(4,' '),seq,len(seq)))
+    # for name,seq in aobjs:
+    #     if len(seq)>200:
+    #         logging.debug("IN %s: %s...%s (%d bp)"%(name.rjust(4,' '),seq[:100],seq[-100:],len(seq)))
+    #     else:
+    #         logging.debug("IN %s: %s (%d bp)"%(name.rjust(4,' '),seq,len(seq)))
 
     if kwargs['method']!="reveal_rem": #use custom multiple sequence aligner to refine bubble structure
         ng=msa2graph(aobjs,
@@ -269,26 +272,29 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     return bubble,ng,path2start,path2end
 
-def align_worker(G,chunk,outputq,kwargs,chunksize=500):
+def align_worker(G,chunk,outputq,kwargs,chunksize=100):
     try:
-        rchunk=[]
-        for bubble in chunk:
-            G.node[bubble.source]['aligned']=1
-            G.node[bubble.sink]['aligned']=1
+        logging.info("Worker with pid=%d started on subgraph of length: %d"%(os.getpid(),len(G)))
 
-            logging.debug("Realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
-            bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
+        rchunk=[]
+        for b in chunk:
+
+            G.node[b.source]['aligned']=1
+            G.node[b.sink]['aligned']=1
+
+            logging.debug("Realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(os.getpid(),b.source,b.sink,b.maxsize,len(b.nodes)-2))
+            bnodes=list(set(b.nodes)-set([b.source,b.sink]))
             sg=G.subgraph(bnodes).copy()
             
             offsets=dict()
-            for sid in G.node[bubble.source]['offsets']:
-                offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
+            for sid in G.node[b.source]['offsets']:
+                offsets[sid]=G.node[b.source]['offsets'][sid]+len(G.node[b.source]['seq'])
 
-            sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-            sinksamples=set(G.node[bubble.sink]['offsets'].keys())
+            sourcesamples=set(G.node[b.source]['offsets'].keys())
+            sinksamples=set(G.node[b.sink]['offsets'].keys())
             paths=sourcesamples.intersection(sinksamples)
 
-            b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
+            b=refine_bubble(sg,b,offsets,paths,**kwargs)
             
             if b==None:
                 continue
@@ -303,93 +309,9 @@ def align_worker(G,chunk,outputq,kwargs,chunksize=500):
 
         logging.info("Worker with pid=%d is done."%(os.getpid()))
         outputq.put(-1)
-    except:
-        logging.fatal("Worker with pid=%d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
+    except Exception,e:
+        logging.fatal("Worker with pid=%d failed at bubble <%s,%s>: %s"%(os.getpid(),b.source,b.sink,str(e)))
         exit(1)
-    
-# def align_worker(G,inputq,outputq,kwargs,chunksize=500):
-#     try:
-#         rchunk=[]
-
-#         while True:
-
-#             ci,chunk=inputq.get(block=False)
-
-#             print os.getpid(),ci
-
-#             for bubble in chunk:
-#                 G.node[bubble.source]['aligned']=1
-#                 G.node[bubble.sink]['aligned']=1
-
-#                 logging.debug("Realign bubble between <%s,%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
-#                 bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-#                 sg=G.subgraph(bnodes).copy()
-                
-#                 offsets=dict()
-#                 for sid in G.node[bubble.source]['offsets']:
-#                     offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
-
-#                 sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-#                 sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-#                 paths=sourcesamples.intersection(sinksamples)
-
-#                 b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-                
-#                 if b==None:
-#                     continue
-#                 else:
-#                     rchunk.append(b)
-            
-#             outputq.put(rchunk)
-#             rchunk=[]
-
-#     except mp.queues.Empty:
-#         logging.info("Worker %d encountered an empty Queue."%(os.getpid()))
-#         sleep(10)
-#         outputq.put(-1) #go silent
-#     except Exception,e:
-#         # logging.fatal("Worker %d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
-#         exit(1) #don't go silent...
-
-# def align_worker(G,i,n,bubbles,outputq,kwargs,chunksize=500):
-#     try:
-#         rchunk=[]
-
-#         for bubble in [b for bi,b in enumerate(bubbles) if bi%n==i]:
-#             G.node[bubble.source]['aligned']=1
-#             G.node[bubble.sink]['aligned']=1
-
-#             logging.debug("Realign bubble between <%s,%s>, max allele size %dbp (in nodes=%d)."%(bubble.source,bubble.sink,bubble.maxsize,len(bubble.nodes)-2))
-#             bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-#             sg=G.subgraph(bnodes).copy()
-            
-#             offsets=dict()
-#             for sid in G.node[bubble.source]['offsets']:
-#                 offsets[sid]=G.node[bubble.source]['offsets'][sid]+len(G.node[bubble.source]['seq'])
-
-#             sourcesamples=set(G.node[bubble.source]['offsets'].keys())
-#             sinksamples=set(G.node[bubble.sink]['offsets'].keys())
-#             paths=sourcesamples.intersection(sinksamples)
-
-#             b=refine_bubble(sg,bubble,offsets,paths,**kwargs)
-            
-#             if b==None:
-#                 continue
-#             else:
-#                 rchunk.append(b)
-#                 if len(rchunk)==chunksize:
-#                     outputq.put(rchunk)
-#                 rchunk=[]
-        
-#         if len(rchunk)>0:
-#             outputq.put(rchunk)
-        
-#         outputq.put(-1)
-
-#     except Exception,e:
-#         logging.fatal("Worker %d failed at bubble <%s,%s>: %s"%(os.getpid(),bubble.source,bubble.sink,str(e)))
-#         exit(1) #don't go silent...
-
 
 def graph_worker(G,nn,outputq,aworkers):
     deadworkers=0
@@ -423,10 +345,10 @@ def graph_worker(G,nn,outputq,aworkers):
         else:
             for d in data:
                 bubble,ng,path2start,path2end=d
-                logging.debug("Replacing bubble: <%s,%s>"%(bubble.source,bubble.sink))
+                t0=time.time()
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
-
-
+                t1=time.time()
+                logging.info("Replacing bubble: <%s,%s> took %.4f seconds."%(bubble.source,bubble.sink,t1-t0))
 
 def refine_all(G, **kwargs):
     realignbubbles=[]
@@ -435,18 +357,20 @@ def refine_all(G, **kwargs):
         kwargs['minsize']=kwargs['minlength']
 
     #detect all bubbles
+    logging.info("Extracting bubbles...")
+
     for b in bubbles.bubbles(G):
 
         if kwargs['complex']:
             if b.issimple():
-                logging.debug("Skipping bubble %s, not complex."%str(b.nodes))
+                logging.debug("Skipping bubble <%s,%s>, not complex."%(b.source,b.sink))
                 continue
 
         if kwargs['nogaps']:
             spansgap=False
             for n in b.nodes:
                 if 'N' in G.nodes[n]['seq']:
-                    logging.info("Skipping bubble %s, bubble spans a gap."%str(b.nodes))
+                    logging.info("Skipping bubble <%s,%s>, bubble spans a gap."%(b.source,b.sink))
                     spansgap=True
                     break
             if spansgap:
@@ -454,39 +378,41 @@ def refine_all(G, **kwargs):
 
         if kwargs['simple']:
             if not b.issimple():
-                logging.debug("Skipping bubble %s, not simple."%str(b.nodes))
+                logging.debug("Skipping bubble <%s,%s>, not simple."%(b.source,b.sink))
                 continue
 
         if b.maxsize-b.minsize<kwargs['mindiff']:
-            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is smaller than mindiff=%d."%(str(b.nodes),b.maxsize-b.minsize,kwargs['mindiff']))
+            logging.debug("Skipping bubble <%s,%s>, diff between smallest and largest allele (%dbp) is smaller than mindiff=%d."%(b.source,b.sink,b.maxsize-b.minsize,kwargs['mindiff']))
             continue
 
         if kwargs['maxdiff'] and b.maxsize-b.minsize>kwargs['maxdiff']:
-            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is larger than maxdiff=%d."%(str(b.nodes),b.maxsize-b.minsize,kwargs['maxdiff']))
+            logging.debug("Skipping bubble <%s,%s>, diff between smallest and largest allele (%dbp) is larger than maxdiff=%d."%(b.source,b.sink,b.maxsize-b.minsize,kwargs['maxdiff']))
             continue
 
         if b.minsize<kwargs['minsize']:
-            logging.debug("Skipping bubble %s, smallest allele (%dbp) is smaller than minsize=%d."%(str(b.nodes),b.minsize,kwargs['minsize']))
+            logging.debug("Skipping bubble <%s,%s>, smallest allele (%dbp) is smaller than minsize=%d."%(b.source,b.sink,b.minsize,kwargs['minsize']))
             continue
 
         if b.maxsize>kwargs['maxsize']:
-            logging.warn("Skipping bubble %s, largest allele (%dbp) is larger than maxsize=%d."%(str(b.nodes),b.maxsize,kwargs['maxsize']))
+            logging.warn("Skipping bubble <%s,%s>, largest allele (%dbp) is larger than maxsize=%d."%(b.source,b.sink,b.maxsize,kwargs['maxsize']))
             continue
 
         if kwargs['maxcumsize']!=None:
             if b.cumsize>kwargs['maxcumsize']:
-                logging.warn("Skipping bubble %s, cumulative size %d is larger than maxcumsize=%d."%(str(b.nodes),b.cumsize,kwargs['maxcumsize']))
+                logging.warn("Skipping bubble <%s,%s>, cumulative size %d is larger than maxcumsize=%d."%(b.source,b.sink,b.cumsize,kwargs['maxcumsize']))
                 continue
 
         if b.cumsize<kwargs['mincumsize']:
-            logging.debug("Skipping bubble %s, cumulative size %d is smaller than mincumsize=%d."%(str(b.nodes),b.cumsize,kwargs['mincumsize']))
+            logging.debug("Skipping bubble <%s,%s>, cumulative size %d is smaller than mincumsize=%d."%(b.source,b.sink,b.cumsize,kwargs['mincumsize']))
             continue
 
         if len(b.nodes)==3:
-            logging.debug("Skipping bubble %s, indel, no point in realigning."%(str(b.nodes)))
+            logging.debug("Skipping bubble <%s,%s>, indel, no point in realigning."%(b.source,b.sink))
             continue
 
         realignbubbles.append(b)
+    
+    logging.info("Done.")
 
     if len(realignbubbles)==0:
         logging.info("No bubbles that qualify for realignment.")
@@ -501,12 +427,10 @@ def refine_all(G, **kwargs):
                 p=i
             else:
                 logging.debug("Skipping realignment for: <%s,%s> - is contained in <%s,%s>"%(realignbubbles[i].source, realignbubbles[i].sink, realignbubbles[p].source, realignbubbles[p].sink))
-        
-        logging.info("Done.")
 
         logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
         nn=max([node for node in G.nodes() if type(node)==int])+1
-
+        
         if kwargs['nproc']>1:
             outputq = mp.Queue()
             # inputq = mp.Queue()
@@ -537,11 +461,17 @@ def refine_all(G, **kwargs):
                 else:
                     chunk=distinctbubbles[(i*chunksize):(i*chunksize)+chunksize]
 
-                p=mp.Process(target=align_worker, args=(G,chunk,outputq,kwargs))
+                #create a subgraph for this chunk such that the worker doesnt need to load the entire graph
+                t0=time.time()
+                Gs=G.subgraph([node for bubble in chunk for node in bubble.nodes]).copy()
+                t1=time.time()
+                logging.info("Created subgraph in %.2f seconds."%(t1-t0))
+
+                p=mp.Process(target=align_worker, args=(Gs,chunk,outputq,kwargs))
                 # p=mp.Process(target=align_worker, args=(G,inputq,outputq,kwargs))
                 # p=mp.Process(target=align_worker, args=(G,i,nworkers,distinctbubbles,outputq,kwargs))
                 p.start()
-                aworkers.append(p)#(p,align_worker,(G,inputq,outputq,kwargs)))
+                aworkers.append(p) #(p,align_worker,(G,inputq,outputq,kwargs)))
 
             try:
                 graph_worker(G,nn,outputq,aworkers)
@@ -570,7 +500,11 @@ def refine_all(G, **kwargs):
                 G.node[bubble.sink]['aligned']=1
 
                 bnodes=list(set(bubble.nodes)-set([bubble.source,bubble.sink]))
-                sg=G.subgraph(bnodes)
+                
+                t0=time.time()
+                sg=G.subgraph(bnodes).copy()
+                t1=time.time()
+                logging.info("Extract subgraph for: <%s,%s> took %.4f seconds."%(bubble.source,bubble.sink,t1-t0))
                 
                 offsets=dict()
                 for sid in G.node[bubble.source]['offsets']:
@@ -580,12 +514,20 @@ def refine_all(G, **kwargs):
                 sinksamples=set(G.node[bubble.sink]['offsets'].keys())
                 paths=sourcesamples.intersection(sinksamples)
 
+                # t0=time.time()
                 res=refine_bubble(sg,bubble,offsets,paths, **kwargs)
+                # t1=time.time()
+                # logging.info("Refining bubble: <%s,%s> took %.4f seconds."%(bubble.source,bubble.sink,t1-t0))
+
                 if res==None:
                     continue
                 else:
                     bubble,ng,path2start,path2end=res
+                    # G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+                    # t0=time.time()
                     G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
+                    # t1=time.time()
+                    # logging.info("Replacing bubble: <%s,%s> took %.4f seconds."%(bubble.source,bubble.sink,t1-t0))
 
     return G
 
@@ -598,19 +540,21 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
     ng.graph['id2path']=dict()
     ng.graph['id2end']=dict()
 
+    maxsize=0
     for name,seq in aobjs:
         sid=len(ng.graph['paths'])
         ng.graph['path2id'][name]=sid
         ng.graph['id2path'][sid]=name
         ng.graph['id2end'][sid]=len(seq)
         ng.graph['paths'].append(name)
+        if len(seq)>maxsize:
+            maxsize=len(seq)
 
-    #TODO: writing to a temporary file (for now), but this should ideally happen in memory
     uid=uuid.uuid4().hex
     tempfiles=[]
-    logging.debug("Trying to construct MSA with %s, minconf=%d."%(msa,minconf))
 
     if msa in {'muscle','pecan','msaprobs','probcons'}:
+        logging.debug("Trying to construct MSA with %s, minconf=%d."%(msa,minconf))
 
         if msa=='muscle':
             cmd="muscle -in %s.fasta -quiet"%uid
@@ -663,9 +607,12 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
                         confidence[i]=confidence[i]*100
 
     else:
-        logging.debug("Using probcons (in memory)")
         pl=probconslib.probcons()
+        t0=time.time()
         aln=pl.align(aobjs,consistency=constrans,refinement=nrefinements,pretraining=0,consgap=consgap)
+        t1=time.time()
+        logging.info("ProbCons MSA took %.4f seconds for %d alleles with maxsize=%d."%((t1-t0),len(aobjs),maxsize))
+
         seqs=[""]*len(aobjs)
         names=[""]*len(aobjs)
         for name,seq in aln[0]:
@@ -673,14 +620,16 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
             seqs[ng.graph['path2id'][name]]=seq
         confidence=aln[1]
 
-    for i,seq in enumerate(seqs):
-        if len(seq)>200:
-            logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
+    # for i,seq in enumerate(seqs):
+        # if len(seq)>200:
+            # logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
             # logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
-        else:
-            logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
+        # else:
+            # logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
             # logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
     
+
+
     offsets={o:-1 for o in range(len(seqs))}
     nid=nn
     for i in xrange(len(seqs[0])):
@@ -843,8 +792,8 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
             logging.fatal("Failed to remove tmp file: \"%s\""%tmpfile)
             return
 
-    logging.debug("%d nodes in refined graph:",ng.number_of_nodes())
-    for node in ng:
-        logging.debug("%s: %s"%(node,ng.node[node]['seq']))
+    # logging.debug("%d nodes in refined graph:",ng.number_of_nodes())
+    # for node in ng:
+        # logging.debug("%s: %s"%(node,ng.node[node]['seq']))
 
     return ng
