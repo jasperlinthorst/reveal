@@ -122,6 +122,7 @@ def main():
     parser_refine.add_argument("source", nargs='?', default=None, type=int, help='Source node.')
     parser_refine.add_argument("sink", nargs='?', default=None, type=int, help='Sink node.')
     parser_refine.add_argument("--nproc", dest="nproc", default=1, type=int, help="Use multiprocessing to realign bubbles.")
+    parser_refine.add_argument("--chunksize", dest="chunksize", type=int, default=10, help="Process in parallel refined bubbles in chunks of this size.")
     parser_refine.add_argument("--method", dest="method", choices=["reveal_probcons","reveal_rem","muscle","probcons","msaprobs","pecan"], default="reveal_probcons", help="Use external multiple sequence aligner for the alignment of bubbles (expects methods to be accessible through the $PATH variable, reveal_* methods use internal memory, other methods uese external memory")
     parser_refine.add_argument("--params", dest="parameters", default="", help="Add this value when calling the external methods.")
     parser_refine.add_argument("-o", dest="outfile", type=str, default=None, help="File to which realigned graph is to be written.")
