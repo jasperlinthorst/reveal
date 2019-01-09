@@ -173,7 +173,7 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
                     d[seq]=[str(sid)]
 
         if len(d)==1:
-            logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
+            logging.debug("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
             return
 
         aobjs=[(",".join(d[seq]),seq) for seq in d]
@@ -190,13 +190,13 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
                 #     d[seq]=[str(sid)]
 
         if len(aobjs)==1:
-            logging.info("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
+            logging.debug("Nothing to refine for bubble: %s - %s"%(bubble.source,bubble.sink))
             return
     t1=time.time()
-    logging.info("Extracting sequence for paths: %s through bubble <%s,%s> took: %.4f seconds."%(paths,bubble.source,bubble.sink,t1-t0))
+    logging.debug("Extracting sequence for paths: %s through bubble <%s,%s> took: %.4f seconds."%(paths,bubble.source,bubble.sink,t1-t0))
 
 
-    logging.info("Realigning bubble (pid=%s) between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
+    # logging.info("Realigning bubble (pid=%s) between <%s> and <%s>, %d alleles, with %s (max size %dbp, in nodes=%d)."%(os.getpid(),bubble.source,bubble.sink,len(aobjs),kwargs['method'],bubble.maxsize,len(bubble.nodes)-2))
 
     # for name,seq in aobjs:
     #     if len(seq)>200:
@@ -272,17 +272,18 @@ def refine_bubble(sg,bubble,offsets,paths,**kwargs):
 
     return bubble,ng,path2start,path2end
 
-def align_worker(G,chunk,outputq,kwargs,chunksize=100):
+def align_worker(G,chunk,outputq,kwargs):
     try:
         logging.info("Worker with pid=%d started on subgraph of length: %d"%(os.getpid(),len(G)))
 
         rchunk=[]
         for b in chunk:
 
+            logging.debug("Start realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(os.getpid(),b.source,b.sink,b.maxsize,len(b.nodes)-2))
+
             G.node[b.source]['aligned']=1
             G.node[b.sink]['aligned']=1
-
-            logging.debug("Realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d)."%(os.getpid(),b.source,b.sink,b.maxsize,len(b.nodes)-2))
+            
             bnodes=list(set(b.nodes)-set([b.source,b.sink]))
             sg=G.subgraph(bnodes).copy()
             
@@ -293,19 +294,28 @@ def align_worker(G,chunk,outputq,kwargs,chunksize=100):
             sourcesamples=set(G.node[b.source]['offsets'].keys())
             sinksamples=set(G.node[b.sink]['offsets'].keys())
             paths=sourcesamples.intersection(sinksamples)
-
-            b=refine_bubble(sg,b,offsets,paths,**kwargs)
             
-            if b==None:
+            t0=time.time()
+            rb=refine_bubble(sg,b,offsets,paths,**kwargs)
+            t1=time.time()
+            logging.debug("Realign bubble (pid=%d) between <%s> and <%s>, max allele size %dbp (in nodes=%d), took %.2f seconds."%(os.getpid(),b.source,b.sink,b.maxsize,len(b.nodes)-2,t1-t0))
+
+            if rb==None:
                 continue
             else:
-                rchunk.append(b)
-                if len(rchunk)==chunksize:
+                rchunk.append(rb)
+                if len(rchunk)==kwargs['chunksize']:
+                    t0=time.time()
                     outputq.put(rchunk)
+                    t1=time.time()
+                    logging.debug("Added chunk to queue in %.2f seconds."%(t1-t0))
                     rchunk=[]
 
         if len(rchunk)>0:
+            t0=time.time()
             outputq.put(rchunk)
+            t1=time.time()
+            logging.debug("Added chunk to queue in %.2f seconds."%(t1-t0))
 
         logging.info("Worker with pid=%d is done."%(os.getpid()))
         outputq.put(-1)
@@ -313,9 +323,10 @@ def align_worker(G,chunk,outputq,kwargs,chunksize=100):
         logging.fatal("Worker with pid=%d failed at bubble <%s,%s>: %s"%(os.getpid(),b.source,b.sink,str(e)))
         exit(1)
 
-def graph_worker(G,nn,outputq,aworkers):
+def graph_worker(G,nn,outputq,aworkers,totbubbles):
     deadworkers=0
     nworkers=len(aworkers)
+    refinedbubbles=0
 
     while True:
 
@@ -323,7 +334,11 @@ def graph_worker(G,nn,outputq,aworkers):
             break
 
         try:
+            t0=time.time()
             data=outputq.get(timeout=.5)
+            t1=time.time()
+            if data!=-1:
+                logging.info("Getting chunk of size %d from queue took %.4f seconds."%(len(data),t1-t0))
 
         except mp.queues.Empty: #nothing to do, check if all workers are still alive...
 
@@ -341,14 +356,16 @@ def graph_worker(G,nn,outputq,aworkers):
             continue
 
         if data==-1: #worker was done
+            logging.info("Worker signaled that its done.")
             deadworkers+=1
         else:
             for d in data:
+                refinedbubbles+=1
                 bubble,ng,path2start,path2end=d
                 t0=time.time()
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
                 t1=time.time()
-                logging.info("Replacing bubble: <%s,%s> took %.4f seconds."%(bubble.source,bubble.sink,t1-t0))
+                logging.info("Replacing bubble (%d/%d): <%s,%s> took %.4f seconds."%(refinedbubbles,totbubbles,bubble.source,bubble.sink,t1-t0))
 
 def refine_all(G, **kwargs):
     realignbubbles=[]
@@ -410,6 +427,7 @@ def refine_all(G, **kwargs):
             logging.debug("Skipping bubble <%s,%s>, indel, no point in realigning."%(b.source,b.sink))
             continue
 
+        b.G=None #remove reference to Graph
         realignbubbles.append(b)
     
     logging.info("Done.")
@@ -430,12 +448,12 @@ def refine_all(G, **kwargs):
 
         logging.info("Realigning a total of %d bubbles"%len(distinctbubbles))
         nn=max([node for node in G.nodes() if type(node)==int])+1
-        
+
         if kwargs['nproc']>1:
             outputq = mp.Queue()
             # inputq = mp.Queue()
 
-            nworkers=kwargs['nproc']
+            nworkers=kwargs['nproc']-1
             aworkers=[]
 
             shuffle(distinctbubbles) #make sure not all the big telomeric bubbles end up with one worker
@@ -474,7 +492,7 @@ def refine_all(G, **kwargs):
                 aworkers.append(p) #(p,align_worker,(G,inputq,outputq,kwargs)))
 
             try:
-                graph_worker(G,nn,outputq,aworkers)
+                graph_worker(G,nn,outputq,aworkers,len(distinctbubbles))
             except Exception, e:
                 logging.fatal("%s"%str(e))
                 # for p,fn,args in aworkers:
@@ -611,7 +629,7 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
         t0=time.time()
         aln=pl.align(aobjs,consistency=constrans,refinement=nrefinements,pretraining=0,consgap=consgap)
         t1=time.time()
-        logging.info("ProbCons MSA took %.4f seconds for %d alleles with maxsize=%d."%((t1-t0),len(aobjs),maxsize))
+        logging.debug("ProbCons MSA took %.4f seconds for %d alleles with maxsize=%d."%((t1-t0),len(aobjs),maxsize))
 
         seqs=[""]*len(aobjs)
         names=[""]*len(aobjs)
