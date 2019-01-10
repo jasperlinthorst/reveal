@@ -545,9 +545,10 @@ def align_genomes(args):
             if i==0:
                 read_gfa(sample,idx,t,G,minsamples=args.minsamples,
                                         maxsamples=args.maxsamples,
-                                        targetsample=args.targetsample)
+                                        targetsample=args.targetsample,
+                                        remap=True)
             else:
-                read_gfa(sample,idx,t,G)
+                read_gfa(sample,idx,t,G,remap=True)
 
         else: #consider it to be a fasta file
             read_fasta(sample,idx,t,G,contigs=args.contigs)

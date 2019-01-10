@@ -368,7 +368,7 @@ def read_fasta(fasta, index, tree, graph, contigs=True):
             graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
             graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
 
-def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=True):
+def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=False):
     f=open(gfafile,'r')
     sep=";"
     nmapping={} #temp mapping object for nodeids in gfa file
@@ -376,7 +376,9 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
     paths=[]
     
     i=0
-    gnodeid=graph.number_of_nodes()+1
+
+    if remap:
+        gnodeid=graph.number_of_nodes()+1
     
     if 'paths' not in graph.graph:
         graph.graph['paths']=list()

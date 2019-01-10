@@ -49,64 +49,65 @@ def extract_cmd(args):
             pass
 
 def extract(G,sample):
-    logging.debug("Extracting path: %s"%sample)
+    logging.debug("Extracting path: %s from graph (%s) of size: (%d,%d)"%(sample,type(G),G.number_of_nodes(),G.number_of_edges()))
 
     if sample not in G.graph['path2id']:
         logging.fatal("Unknown path: %s, graph contains: %s"%(sample, G.graph['path2id'].keys()))
         sys.exit(1)
 
     sid=G.graph['path2id'][sample]
+    
     sg=[]
-
     for n1,n2,d in G.edges(data=True):
         if sid in d['paths']:
             sg.append((n1,n2,d))
 
+    # if type(G)==nx.MultiDiGraph:
+    #     sg=[(n1,n2,G[n1][n2][i]) for n1,n2,i in G.edges if sid in G[n1][n2][i]['paths']]
+    # else:
+    #     sg=[(n1,n2) for n1,n2 in G.edges if sid in G[n1][n2]['paths']]
+        
     if len(sg)>0:
         #G can be a MultiDiGraph, but subgraph should be single edge!
         subgraph=nx.DiGraph(sg)
         seq=""
         path=list(nx.topological_sort(subgraph))
 
-        inito=subgraph[path[0]][subgraph[path[0]].keys()[0]]['ofrom']
+        if type(G)==nx.MultiDiGraph:
+            inito=G[path[0]][path[1]][0]['ofrom']
+        else:
+            inito=G[path[0]][path[1]]['ofrom']
 
-        subgraph.add_edge(0,path[0],ofrom='+',oto=inito,cigar="0M")
-        pnode=0
+        pnode=None
 
         for node in path:
-            logging.debug("Node: %s"%node)
-            o=subgraph[pnode][node]['oto']
-            
             offset=0
-            if 'cigar' in subgraph[pnode][node]:
-                cigar=subgraph[pnode][node]['cigar']
-                a=re.findall(r'(\d+)(\w)', cigar)
-                for l,t in a: #determine offset within the segment to allow for overlapping segments
-                    if t=='M' or t=='I' or t=='S' or t=='P': #source of the edge (pnode) is considered the reference
-                        offset+=int(l)
-                logging.debug("Edge contains cigar string, adjust offset to: %d"%offset)
+            if pnode==None:
+                o=inito
+            else:
+                o=subgraph[pnode][node]['oto']
+                if 'cigar' in subgraph[pnode][node] and subgraph[pnode][node]['cigar']!='0M':
+                    cigar=subgraph[pnode][node]['cigar']
+                    a=re.findall(r'(\d+)(\w)', cigar)
+                    for l,t in a: #determine offset within the segment to allow for overlapping segments
+                        if t=='M' or t=='I' or t=='S' or t=='P': #source of the edge (pnode) is considered the reference
+                            offset+=int(l)
                 
             if o=="+":
                 s=G.node[node]['seq']
             else:
                 s=utils.rc(G.node[node]['seq'])
-            
-            logging.debug(s)
-            logging.debug(len(s))
-
-            logging.debug(s[offset:])
 
             assert(len(s)>=offset)
 
             seq+=s[offset:]
-
             pnode=node
 
     else: #has to be a single node
         seq=""
-        for n,d in G.nodes(data=True):
-            if sid in d['offsets']:
-                seq=d['seq']
+        for n in G:
+            if sid in G.node[n]['offsets']:
+                seq=G.node[n]['seq']
                 break
 
     return seq
@@ -124,4 +125,4 @@ def extract_path(G,path):
         else:
             seq+=utils.rc(G.node[nid]['seq'])
 
-    return seq
+    # return seq
