@@ -73,6 +73,15 @@ def subgraph(args):
                     startnode=node
         sg.graph['startnodes'].append(startnode)
 
+    for sid in sg.graph['id2path']:
+        end=None
+        for node in sg:
+            if sid in sg.node[node]['offsets']:
+                if end==None or sg.node[node]['offsets'][sid]>end:
+                    end=sg.node[node]['offsets'][sid]
+                    endnode=node
+        sg.graph['endnodes'].append(endnode)
+
     if args.gml:
         write_gml(sg,"",outputfile=args.outfile)
     else:
