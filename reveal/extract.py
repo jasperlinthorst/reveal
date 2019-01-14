@@ -48,72 +48,131 @@ def extract_cmd(args):
         except IOError:
             pass
 
+#TODO: contribute patch back to networkx
+def dag_longest_path_custom(G, weight='weight', default_weight=1):
+    if not G:
+        return []
+    dist = {}  # stores {v : (length, u)}
+    for v in nx.topological_sort(G):
+
+        if type(G)==nx.MultiDiGraph:
+            us = [(dist[u][0] + max([data[k].get(weight, default_weight) for k in data]), u)
+                  for u, data in G.pred[v].items()]
+        else:
+            us = [(dist[u][0] + data.get(weight, default_weight), u)
+                  for u, data in G.pred[v].items()]
+
+        # Use the best predecessor if there is one and its distance is
+        # non-negative, otherwise terminate.
+        maxu = max(us, key=lambda x: x[0]) if us else (0, v)
+        dist[v] = maxu if maxu[0] >= 0 else (0, v)
+    u = None
+    v = max(dist, key=lambda x: dist[x][0])
+    path = []
+    while u != v:
+        path.append(v)
+        u = v
+        v = dist[v][1]
+    path.reverse()
+    return path
+
+
 def extract(G,sample):
     logging.debug("Extracting path: %s from graph (%s) of size: (%d,%d)"%(sample,type(G),G.number_of_nodes(),G.number_of_edges()))
 
-    if sample not in G.graph['path2id']:
+    if sample == "_longest_":
+        #shortcut to extract the "longest" path in terms of sequence
+
+        logging.info("Number of nodes: %d edges: %d"%(G.number_of_nodes(),G.number_of_edges()))
+
+        if type(G)==nx.MultiDiGraph:
+            sv=utils.MultiGraphToDiGraph(G)
+            for v,t,k in G.edges:
+                G[v][t][k]['weight']=len(G.node[t]['seq'])-G.node[t]['seq'].count("N") if 'seq' in G.node[t] else 0
+        else:
+            for v,t in G.edges:
+                G[v][t]['weight']=len(G.node[t]['seq'])-G.node[t]['seq'].count("N") if 'seq' in G.node[t] else 0
+
+        # p=[]
+        seq=""
+        # e=None
+        # weights=[0]
+        for n in dag_longest_path_custom(G, weight='weight'):
+            # p.append(n)
+            # if e!=None:
+            #     if 0 in G[e][n]:
+            #         weights.append(G[e][n][0]['weight'])
+            #     else:
+            #         weights.append(G[e][n]['weight'])
+            seq+=G.node[n]['seq']
+            # e=n
+
+        # with open("path.txt",'w') as f:
+        #     f.write("total length: %d\n"%sum(weights))
+        #     for n,w in zip(p,weights):
+        #         f.write("%s-%d\n"%(n,w))
+
+        return seq
+        
+    elif sample not in G.graph['path2id']:
         logging.fatal("Unknown path: %s, graph contains: %s"%(sample, G.graph['path2id'].keys()))
         sys.exit(1)
 
-    sid=G.graph['path2id'][sample]
-    
-    sg=[]
-    for n1,n2,d in G.edges(data=True):
-        if sid in d['paths']:
-            sg.append((n1,n2,d))
-
-    # if type(G)==nx.MultiDiGraph:
-    #     sg=[(n1,n2,G[n1][n2][i]) for n1,n2,i in G.edges if sid in G[n1][n2][i]['paths']]
-    # else:
-    #     sg=[(n1,n2) for n1,n2 in G.edges if sid in G[n1][n2]['paths']]
+    else:
+        sid=G.graph['path2id'][sample]
         
-    if len(sg)>0:
-        #G can be a MultiDiGraph, but subgraph should be single edge!
-        subgraph=nx.DiGraph(sg)
-        seq=""
-        path=list(nx.topological_sort(subgraph))
+        sg=[]
+        for n1,n2,d in G.edges(data=True):
+            if sid in d['paths']:
+                sg.append((n1,n2,d))
+        
+        if len(sg)>0:
+            #G can be a MultiDiGraph, but subgraph should be single edge!
+            subgraph=nx.DiGraph(sg)
+            seq=""
+            path=list(nx.topological_sort(subgraph))
 
-        if type(G)==nx.MultiDiGraph:
-            inito=G[path[0]][path[1]][0]['ofrom']
-        else:
-            inito=G[path[0]][path[1]]['ofrom']
-
-        pnode=None
-
-        for node in path:
-            offset=0
-            if pnode==None:
-                o=inito
+            if type(G)==nx.MultiDiGraph:
+                inito=G[path[0]][path[1]][0]['ofrom']
             else:
-                o=subgraph[pnode][node]['oto']
-                if 'cigar' in subgraph[pnode][node] and subgraph[pnode][node]['cigar']!='0M':
-                    cigar=subgraph[pnode][node]['cigar']
-                    a=re.findall(r'(\d+)(\w)', cigar)
-                    for l,t in a: #determine offset within the segment to allow for overlapping segments
-                        if t=='M' or t=='I' or t=='S' or t=='P': #source of the edge (pnode) is considered the reference
-                            offset+=int(l)
-                
-            if o=="+":
-                s=G.node[node]['seq']
-            else:
-                s=utils.rc(G.node[node]['seq'])
+                inito=G[path[0]][path[1]]['ofrom']
 
-            assert(len(s)>=offset)
+            pnode=None
 
-            seq+=s[offset:]
-            pnode=node
+            for node in path:
+                offset=0
+                if pnode==None:
+                    o=inito
+                else:
+                    o=subgraph[pnode][node]['oto']
+                    if 'cigar' in subgraph[pnode][node] and subgraph[pnode][node]['cigar']!='0M':
+                        cigar=subgraph[pnode][node]['cigar']
+                        a=re.findall(r'(\d+)(\w)', cigar)
+                        for l,t in a: #determine offset within the segment to allow for overlapping segments
+                            if t=='M' or t=='I' or t=='S' or t=='P': #source of the edge (pnode) is considered the reference
+                                offset+=int(l)
+                    
+                if o=="+":
+                    s=G.node[node]['seq']
+                else:
+                    s=utils.rc(G.node[node]['seq'])
 
-    else: #has to be a single node
-        seq=""
-        for n in G:
-            if sid in G.node[n]['offsets']:
-                seq=G.node[n]['seq']
-                break
+                assert(len(s)>=offset)
 
-    return seq
+                seq+=s[offset:]
+                pnode=node
 
-def extract_path(G,path):
-    logging.debug("Extracting path: %s"%path)
+        else: #has to be a single node
+            seq=""
+            for n in G:
+                if sid in G.node[n]['offsets']:
+                    seq=G.node[n]['seq']
+                    break
+
+        return seq
+
+def extract_path(G,path,type="str"):
+    logging.debug("Extracting path of length: %d"%len(path))
 
     seq=""
     for n in path:
