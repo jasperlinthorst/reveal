@@ -232,6 +232,10 @@ def chop(G,k=100,extend=True):
         es=checkedges(G,k=k)
 
         logging.info("Done. %d unextendable edges remain."%len(es))
+
+        for u,v in es:
+            logging.debug("Edge %s,%s can't be extended yet: %s"%(u,v,G[u][v]))
+        
         iteration+=1
 
     if len(es)>0:
