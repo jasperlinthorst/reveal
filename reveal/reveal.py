@@ -91,7 +91,7 @@ def main():
     parser_rem.add_argument("-s", dest="targetsample", type=str, default=None, help="Only align nodes in which this sample occurs.")    
     parser_rem.add_argument("--gml", dest="gml", action="store_true", default=False, help="Produce a gml graph instead gfa.")
     parser_rem.add_argument("--gml-max", dest="hwm", default=4000, help="Max number of nodes per graph in gml output.")
-    parser_rem.add_argument("--nometa", dest="nometa", action="store_true", default=False, help="Produce a gfa graph without node annotations, to ensure it's parseable by other programs.")
+    parser_rem.add_argument("--noupper", dest="toupper", action="store_false", default=True, help="Do not force uppercase for sequence, in case we want to prevent matches in repeatmasked sequence.")
     parser_rem.add_argument("--maxbubblesize", dest="maxsize", type=int, default=None, help="Apply recursion until largest allele within a bubble is smaller than this size.")
     parser_rem.add_argument("--nocontigs", dest="contigs", default=True, action="store_false", help="Don't treat multi-fasta files as contigs, use every sequence as a target.")
     parser_rem.add_argument("--notrim", dest="trim", default=True, action="store_false", help="Don't trim overlap between MUMs, thus more greedy positioning of indels.")

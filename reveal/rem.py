@@ -498,7 +498,7 @@ def align_cmd(args):
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=False)
     else:
-        write_gfa(G,T,nometa=args.nometa, outputfile=args.output)
+        write_gfa(G,T, outputfile=args.output)
         graph=args.output
 
     logging.info("Done.")
@@ -551,7 +551,7 @@ def align_genomes(args):
                 read_gfa(sample,idx,t,G,remap=True)
 
         else: #consider it to be a fasta file
-            read_fasta(sample,idx,t,G,contigs=args.contigs)
+            read_fasta(sample,idx,t,G,contigs=args.contigs,toupper=args.toupper)
     
     logging.debug("Graph contains the following paths: %s"%G.graph['paths'])
 

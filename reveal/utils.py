@@ -295,7 +295,7 @@ def plotgraph(G, s1, s2, interactive=False, region=None, minlength=1):
     else:
         plt.savefig("%s_%s.png"%(s1,s2))
 
-def read_fasta(fasta, index, tree, graph, contigs=True):
+def read_fasta(fasta, index, tree, graph, contigs=True, toupper=True):
     logging.info("Reading fasta: %s ..." % fasta)
     
     if 'paths' not in graph.graph:
@@ -318,7 +318,7 @@ def read_fasta(fasta, index, tree, graph, contigs=True):
 
     if contigs:
         index.addsample(os.path.basename(fasta))
-        for name,seq in fasta_reader(fasta):
+        for name,seq in fasta_reader(fasta,toupper=toupper):
             sid=len(graph.graph['paths'])
             name=name.replace(":","").replace(";","")
             if name in graph.graph['paths']:
@@ -329,7 +329,7 @@ def read_fasta(fasta, index, tree, graph, contigs=True):
             graph.graph['id2path'][sid]=name
             graph.graph['id2end'][sid]=len(seq)
 
-            intv=index.addsequence(seq.upper())
+            intv=index.addsequence(seq)
             logging.debug("Adding interval: %s"%str(intv))
             Intv=Interval(intv[0],intv[1])
             tree.add(Intv)
@@ -343,7 +343,7 @@ def read_fasta(fasta, index, tree, graph, contigs=True):
             graph.add_edge(startnode,Intv,paths=set([sid]),ofrom='+',oto='+')
             graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
     else: #treat every sequence in the multifasta as a target
-        for name,seq in fasta_reader(fasta):
+        for name,seq in fasta_reader(fasta,toupper=toupper):
             index.addsample(name)
             sid=len(graph.graph['paths'])
             name=name.replace(":","").replace(";","")
@@ -354,7 +354,7 @@ def read_fasta(fasta, index, tree, graph, contigs=True):
             graph.graph['path2id'][name]=sid
             graph.graph['id2path'][sid]=name
             graph.graph['id2end'][sid]=len(seq)
-            intv=index.addsequence(seq.upper())
+            intv=index.addsequence(seq)
             logging.debug("Adding interval: %s"%str(intv))
             Intv=Interval(intv[0],intv[1])
             tree.add(Intv)
@@ -689,7 +689,7 @@ def write_fasta(G,T,outputfile="reference.fasta"):
                 logging.warn("No sequence for node: %s"%nodename)
     f.close()
 
-def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=True):
+def write_gfa(G,T,outputfile="reference.gfa", paths=True, remap=True, toupper=False):
     
     if not outputfile.endswith(".gfa"):
         outputfile+=".gfa"
@@ -729,14 +729,23 @@ def write_gfa(G,T,outputfile="reference.gfa",nometa=False, paths=True, remap=Tru
         seq=""
 
         if 'seq' in data:
-            f.write('S\t'+str(mapping[node])+'\t'+data['seq'].upper())
+            if toupper:
+                f.write('S\t'+str(mapping[node])+'\t'+data['seq'].upper())
+            else:
+                f.write('S\t'+str(mapping[node])+'\t'+data['seq'])
             seq=data['seq']
         else:
             if isinstance(node,Interval):
-                seq=T[node.begin:node.end].upper()
+                if toupper:
+                    seq=T[node.begin:node.end].upper()
+                else:
+                    seq=T[node.begin:node.end]
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             elif isinstance(node,tuple):
-                seq=T[node[0]:node[0]+G.node[node]['l']].upper()
+                if toupper:
+                    seq=T[node[0]:node[0]+G.node[node]['l']].upper()
+                else:
+                    seq=T[node[0]:node[0]+G.node[node]['l']]
                 f.write('S\t'+str(mapping[node])+'\t'+seq)
             else:
                 logging.error("Node type unknown: %s"%node)
@@ -1006,7 +1015,7 @@ def seq2node(G,T,toupper=True,remap=False):
     mapping=dict()
     for node in G:
         if isinstance(node,Interval):
-            if toupper:
+            if toupper and G.node[node]['aligned']>0:
                 G.node[node]['seq']=T[node.begin:node.end].upper()
             else:
                 G.node[node]['seq']=T[node.begin:node.end]
