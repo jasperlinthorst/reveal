@@ -18,27 +18,6 @@ try:
 except:
     pass
 
-def sparse_mums(r,q):
-    mums=dict()
-    # os.system("essamummer -qthreads 3 -F -r -c -l 20 -n %s %s -mum > mums"%(args.reference,args.contigs))
-    os.system("essamummer -qthreads 3 -F -c -b -l 20 -n %s %s -mum > mums"%(r,q))
-    # os.system("essamummer -qthreads 3 -F -c -l 20 -b -n %s %s -maxmatch > mums"%(args.reference,args.contigs))
-
-    with open("mums") as mumfile:
-        for line in mumfile:
-            if line.startswith(">"):
-                line=line.rstrip()
-                if line.endswith("Reverse"):
-                    qry=line.split()[1]
-                    revcomp=1
-                else:
-                    qry=line.split()[1]
-                    revcomp=0
-            else:
-                v=line.strip().split()
-                mums[v[0]][qry][revcomp].append((int(v[1]),int(v[2]),int(v[3])))
-    return mums
-
 def plot(anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1):
     
     if len(anchors)==0:
@@ -400,10 +379,23 @@ def transform(args,qry):
         logging.info("Write bedfile with contig mappings on reference to: %s.bed"%prefix)
         with open(prefix+".bed",'w') as bedout:
 
+            block2ctgidx=dict()
+            pctgid=None
 
-            bedout.write("#reference\tbegin\tend\tquery\tscore\torientation\taln-start\taln-end\n")
+            syntenyblocks.sort(key=lambda b: b[2]) #sort by query
+            for i,block in enumerate(syntenyblocks): #sorted by query
+                s1,e1,s2,e2,o,score,refid,ctgid=block
+                if ctgid!=pctgid:
+                    ci=0
+                block2ctgidx[block]=ci
+                ci+=1
+                pctgid=ctgid
+
+            syntenyblocks.sort(key=lambda b: b[0]) #sort by reference
+            bedout.write("#reference\trefbegin\trefend\tquery\tquerybegin\tqueryend\tquery_idx\tscore\torientation\taln-start\taln-end\n")
 
             pblock=None
+
             for i,block in enumerate(syntenyblocks): #sorted by reference
                 s1,e1,s2,e2,o,score,refid,ctgid=block
                 
@@ -418,7 +410,7 @@ def transform(args,qry):
                 else:
                     nblock=None
 
-                ctgoffsets=ctg2range[ctgid-len(refnames)]
+                ctgoffsets=ctg2range[ctgid]
                 refoffsets=ctg2range[refid]
 
                 if pblock!=None and prefid==refid:
@@ -431,12 +423,19 @@ def transform(args,qry):
                 else:
                     end=e1-refoffsets[0]
 
+                qstart=s2-ctgoffsets[0]
+                qend=e2-ctgoffsets[0]
+
                 chromname=refnames[refid].split()[0]
 
-                bedout.write("%s\t%d\t%d\t%s\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
+                qi=block2ctgidx[block]
+                bedout.write("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
                                                                 start, #start
                                                                 end, #end
                                                                 ctgnames[ctgid-len(refnames)].split()[0], #name, make sure there's no whitespace to comply with bed 'format'
+                                                                qstart,
+                                                                qend,
+                                                                qi,
                                                                 score, #score between 0 and 1000
                                                                 '+' if o==False else '-', #strand
                                                                 s1-refoffsets[0], #thick start
