@@ -392,7 +392,7 @@ def transform(args,qry):
                 pctgid=ctgid
 
             syntenyblocks.sort(key=lambda b: b[0]) #sort by reference
-            bedout.write("#reference\trefbegin\trefend\tquery\tquerybegin\tqueryend\tquery_idx\tscore\torientation\taln-start\taln-end\n")
+            bedout.write("#reference\trefbegin\trefend\tquery:query_idx:querybegin:queryend\tscore\torientation\taln-start\taln-end\n")
 
             pblock=None
 
@@ -429,13 +429,13 @@ def transform(args,qry):
                 chromname=refnames[refid].split()[0]
 
                 qi=block2ctgidx[block]
-                bedout.write("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
+                bedout.write("%s\t%d\t%d\t%s:%d:%d:%d\t%d\t%s\t%d\t%d\n"%(chromname, #chrom
                                                                 start, #start
                                                                 end, #end
                                                                 ctgnames[ctgid-len(refnames)].split()[0], #name, make sure there's no whitespace to comply with bed 'format'
+                                                                qi,
                                                                 qstart,
                                                                 qend,
-                                                                qi,
                                                                 score, #score between 0 and 1000
                                                                 '+' if o==False else '-', #strand
                                                                 s1-refoffsets[0], #thick start
