@@ -169,8 +169,9 @@ def main():
     parser_plot.add_argument("--maxmums", dest="maxmums", type=int, default=10000, help="Cap the number of MUMs to draw.")
     parser_plot.add_argument("--nogaps", dest="showgaps", action="store_false", default=True, help="Don't mark gapped sequence.")
     parser_plot.add_argument("--extension", dest="extension", choices=["png","pdf","ps","eps","svg"], default="png", help="How to save the plot.")
-    parser_plot.add_argument("-r","--xr", dest="xregion", default=None, help="Highlight intervals (encoded as \"<start1>:<end1>,<start2>:<end2>\" etc.) with respect to x-axis (first sequence).")
-    parser_plot.add_argument("--yr", dest="yregion", default=None, help="Highlight intervals (encoded as \"<start1>:<end1>,<start2>:<end2>\" etc.) with respect to y-axis (second sequence).")
+    parser_plot.add_argument("-r","--xr", dest="xregion", default=None, help="Highlight and zoom on intervals (encoded as \"<start1>-<end1>,<start2>-<end2>\" etc.) with respect to x-axis (first sequence).")
+    parser_plot.add_argument("--yr", dest="yregion", default=None, help="Highlight and zoom on intervals (encoded as \"<start1>-<end1>,<start2>-<end2>\" etc.) with respect to y-axis (second sequence).")
+    parser_plot.add_argument("--flanksize", dest="flanksize", default=None, help="In case of (a) specified region include this many bases of flanking sequence (encode as \"<flanksize_region1>,<flanksize_region2>\" etc.).")
     parser_plot.set_defaults(func=plot.plot)
     
     parser_gplot = subparsers.add_parser('gplot', prog="reveal gplot", description="Generate a plot that represents the alignment of two samples in a graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
@@ -245,7 +246,7 @@ def main():
     parser_transform.add_argument("--lastn", dest="lastn", type=int, default=50, help="Number of anchors to evaluate while chaining fragments.")
 
     parser_transform.add_argument("--greedy", dest="greedy", action="store_true", default=False, help="Assign overlap between anchors in a greedy manner. Large anchors become larger.")
-    parser_transform.add_argument("--outputbed", dest="outputbed", action="store_true", default=False, help="Produce a bed file that stores the rearrangement breakpoints on the reference assembly.")
+    parser_transform.add_argument("--outputbed", dest="outputbed", action="store_true", default=True, help="Produce a bed file that stores the rearrangement breakpoints on the reference assembly.")
 
     parser_transform.set_defaults(func=transform.transform_cmd)
 

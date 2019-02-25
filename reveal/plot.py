@@ -194,14 +194,36 @@ def plot(args):
     plt.autoscale(enable=False)
     
     if args.xregion!=None:
+        xregions=[]
+
         for region in args.xregion.split(","):
-            rstart,rend=region.split(":") #should be rectangle with alfa here
+
+            if region.count("-")==1:
+                rstart,rend=region.split("-") #should be rectangle with alfa here
+            elif region.count(":")==1:
+                rstart,rend=region.split(":") #should be rectangle with alfa here
+            else:
+                logging.fatal("Invalid region specification, use - : <start>-<end>")
+                sys.exit(1)
+
+            xregions.append((int(rstart),int(rend)))
             plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
             plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
 
     if args.yregion!=None:
+        yregions=[]
+
         for region in args.yregion.split(","):
-            rstart,rend=region.split(":") #should be rectangle with alfa here
+            
+            if region.count("-")==1:
+                rstart,rend=region.split("-") #should be rectangle with alfa here
+            elif region.count(":")==1:
+                rstart,rend=region.split(":") #should be rectangle with alfa here
+            else:
+                logging.fatal("Invalid region specification, use - : <start>-<end>")
+                sys.exit(1)
+
+            yregions.append((int(rstart),int(rend)))
             plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
             plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
 
@@ -210,6 +232,21 @@ def plot(args):
     else:
         b1=os.path.basename(args.fastas[0])
         b2=os.path.basename(args.fastas[1])
-        fn1=b1[0:args.fastas[0].rfind('.')] if b1.find('.')!=-1 else b1
-        fn2=b2[0:args.fastas[1].rfind('.')] if b2.find('.')!=-1 else b2
-        plt.savefig(fn1+"_"+fn2+"."+args.extension)
+        
+        fn1=b1[:b1.rfind('.')] if b1.find('.')!=-1 else b1
+        fn2=b2[:b2.rfind('.')] if b2.find('.')!=-1 else b2
+
+        if args.xregion!=None and args.yregion!=None:
+            assert(len(xregions)==len(yregions))
+            
+            if args.flanksize!=None:
+                flanksizes=[int(v) for v in args.flanksize.split(",")]
+            else:
+                flanksizes=[0]*len(xregions)
+
+            for xregion,yregion,flanksize in zip(xregions,yregions,flanksizes):
+                plt.xlim(xregion[0]-flanksize,xregion[1]+flanksize)
+                plt.ylim(yregion[0]-flanksize,yregion[1]+flanksize)
+                plt.savefig(fn1+"_"+str(xregion[0])+"-"+str(xregion[1])+"_"+fn2+"_"+str(yregion[0])+"-"+str(yregion[1])+"."+args.extension)
+        else:
+            plt.savefig(fn1+"_"+fn2+"."+args.extension)
