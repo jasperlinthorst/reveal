@@ -232,14 +232,14 @@ def main():
     parser_transform.add_argument("--plot", dest="plot", action="store_true", default=False, help="Output mumplots for the \'finished\' chromosomes (depends on matplotlib).")
 
     parser_transform.add_argument("--rc", dest="rearrangecost", default=10000, type=int, help="Cost for chaining translocated segments.")
-    parser_transform.add_argument("--ic", dest="inversioncost", default=0, type=int, help="Cost for chaining inverted segments.")
+    parser_transform.add_argument("--ic", dest="inversioncost", default=5, type=int, help="Cost for chaining inverted segments.")
     parser_transform.add_argument("--gamma", dest="gamma", default=0.5, type=float, help="Weight for indel penalty.")
-    parser_transform.add_argument("--eps", dest="eps", default=0, type=float, help="Weight for substitution penalty.")
+    parser_transform.add_argument("--eps", dest="eps", default=0.5, type=float, help="Weight for substitution penalty.")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
-    parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs in a cluster.")
-    parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Max space between adjacent MUMs in a cluster.")
-    parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=10000, help="Minimal sum of the length of the MUMs in a chain before its considered.")
+    parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs (on the same diagonal) in a cluster.")
+    parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Minimal size (sum of mums) of a cluster.")
+    parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=50, help="Minimal sum of the length of the MUMs in a chain before its considered.")
 
     parser_transform.add_argument("--noopt", dest="optimise", action="store_false", default=True, help="Don't perform naive optimisation of the glocal chain.")
     parser_transform.add_argument("--heap", dest="useheap", action="store_true", default=False, help="Use a priority queue to compute an optimal chain.")
