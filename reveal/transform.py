@@ -291,7 +291,7 @@ def transform(args,qry):
     #     plot(blocks,sep,wait=False,lines=True)
 
     logging.info("Start glocal chaining for filtering anchors (reference).")
-    rsyntenyblocks=glocalchain(list(blocks),rlength,qlength,rearrangecost=args.rearrangecost,
+    rsyntenyblocks=glocalchain(list(blocks),rlength,qlength,ctg2range,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost,
                                                             gamma=args.gamma,
                                                             eps=args.eps,
@@ -303,7 +303,7 @@ def transform(args,qry):
     logging.info("%d anchors remain after glocal chaining (reference)."%len(rsyntenyblocks))
 
     logging.info("Start glocal chaining for filtering anchors (query).")
-    syntenyblocks=glocalchain(rsyntenyblocks,rlength,qlength,rearrangecost=args.rearrangecost,
+    syntenyblocks=glocalchain(rsyntenyblocks,rlength,qlength,ctg2range,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost,
                                                             gamma=args.gamma,
                                                             eps=args.eps,
@@ -356,25 +356,37 @@ def transform(args,qry):
         syntenyblocks=remove_overlap_conservative_blocks(syntenyblocks)
         logging.info("Done.")
 
-    weight,cost,edgecosts=chainscore(syntenyblocks, rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
-    score=weight-cost
-    
     if args.optimise and len(syntenyblocks)>1:
+
+        weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
+        score=weight-cost
+        assert(len(edgecosts) == len(syntenyblocks)+1)
+
         iteration=0
         
         while True:
             iteration+=1
             logging.info("Optimise chain, iteration %d."%iteration)
-            tsyntenyblocks,weight,cost,edgecosts=optimise(syntenyblocks,ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps)
-            nscore=weight-cost
+            tsyntenyblocks,tweight,tcost,tedgecosts=optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps)
+            nscore=tweight-tcost
+            
             if nscore<=score:
                 break
             else:
                 score=nscore
                 syntenyblocks=tsyntenyblocks
+                weight=tweight
+                cost=tcost
+                edgecosts=tedgecosts
                 syntenyblocks=merge_consecutive(syntenyblocks)
-        
+
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
+
+    syntenyblocks=merge_consecutive(syntenyblocks)
+    weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
+    score=weight-cost
+
+    assert(len(edgecosts) == len(syntenyblocks)+1)
 
     if args.outputbed: #before extending to the edges of the contig, output the breakpoint regions
 
@@ -384,17 +396,25 @@ def transform(args,qry):
             block2ctgidx=dict()
             pctgid=None
 
+            ctgid2lastblock=dict()
+            ci=0
+
             syntenyblocks.sort(key=lambda b: b[2]) #sort by query
             for i,block in enumerate(syntenyblocks): #sorted by query
                 s1,e1,s2,e2,o,score,refid,ctgid=block
                 if ctgid!=pctgid:
+                    if pctgid!=None:
+                        ctgid2lastblock[pctgid]=ci
                     ci=0
+                else:
+                    ci+=1
                 block2ctgidx[block]=ci
-                ci+=1
                 pctgid=ctgid
 
+            ctgid2lastblock[pctgid]=ci
+
             syntenyblocks.sort(key=lambda b: b[0]) #sort by reference
-            bedout.write("#reference\trefbegin\trefend\tquery:query_idx:querybegin:queryend\tscore:cost\torientation\taln-start\taln-end\n")
+            bedout.write("#reference\trefbegin\trefend\tcontig:segmentidx:lastsegmentidx:begin:end\tscore:cost\torientation\taln-start\taln-end\n")
 
             pblock=None
 
@@ -403,10 +423,10 @@ def transform(args,qry):
                 
                 if i>0:
                     ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
-                    cost=edgecosts[i-1] #cost to connect to pblock to block 
                 else:
                     pblock=None
-                    cost=0
+
+                cost=edgecosts[i] #cost to connect to pblock to block
 
                 if i<len(syntenyblocks)-2:
                     nblock=syntenyblocks[i+1]
@@ -433,11 +453,12 @@ def transform(args,qry):
                 chromname=refnames[refid].split()[0]
 
                 qi=block2ctgidx[block]
-                bedout.write("%s\t%d\t%d\t%s:%d:%d:%d\t%d:%d\t%s\t%d\t%d\n"%(chromname, #chrom
+                bedout.write("%s\t%d\t%d\t%s:%d:%d:%d:%d\t%d:%d\t%s\t%d\t%d\n"%(chromname, #chrom
                                                                 start, #start
                                                                 end, #end
                                                                 ctgnames[ctgid-len(refnames)].split()[0], #name, make sure there's no whitespace to comply with bed 'format'
                                                                 qi,
+                                                                ctgid2lastblock[ctgid],
                                                                 qstart,
                                                                 qend,
                                                                 score,
@@ -734,11 +755,11 @@ def extendblocks(syntenyblocks,ctg2range):
         assert(s2<e2)
         syntenyblocks[i]=(s1,e1,s2,e2,o,score,ref,ctg)
 
-def optimise(syntenyblocks,ctg2range,rearrangecost=1000,inversioncost=1,gamma=0.5,eps=0):
+def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,inversioncost=1,gamma=0.5,eps=0):
 
     orgchain=sorted(syntenyblocks,key=lambda c: c[5])
     maxchain=syntenyblocks
-    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
     maxchainscore=maxchain_weight-maxchain_cost
 
     stack=[]
@@ -752,11 +773,11 @@ def optimise(syntenyblocks,ctg2range,rearrangecost=1000,inversioncost=1,gamma=0.
             update_progress(i,len(orgchain))
 
         tmp=list(stack+orgchain[i+1:])
-        weight,cost,edgecosts=chainscore(tmp, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+        weight,cost,edgecosts=chainscore(tmp, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
         tmpchainscore=weight-cost
 
         if tmpchainscore<maxchainscore:
-            stack.append(orgchain[i])
+            stack.append(orgchain[i]) #keep it
         else:
             logging.debug("Dropped block %s, gain: %d"%(orgchain[i],tmpchainscore-maxchainscore))
             maxchainscore=tmpchainscore
@@ -765,27 +786,45 @@ def optimise(syntenyblocks,ctg2range,rearrangecost=1000,inversioncost=1,gamma=0.
             maxchain_weight=weight
             maxchain_edgecosts=edgecosts
 
+    logging.debug("Optimal chain has %d blocks and scores: %d"%(len(maxchain),maxchainscore))
+
     return maxchain,maxchain_weight,maxchain_cost,maxchain_edgecosts
 
-def chainscore(chain, rearrangecost=1000, inversioncost=1, gamma=0.5, eps=0):
-
+def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, gamma=0.5, eps=0):
+    
     if len(chain)==0:
-        return 0,0
+        start=(0,0,rlength,rlength,0,0,0,0)
+        end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
+        cost=gapcost(start,end,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+        return 0,cost,[cost]
 
     chain.sort(key=lambda s: s[0]) #order by reference position
     qryorder = sorted(xrange(len(chain)), key= lambda i: chain[i][2]) #qry order
     qryorder_inv = sorted(xrange(len(chain)), key=qryorder.__getitem__) #inverse qry order
-    
-    edgecosts=[]
 
+    lastqstart,lastqend=ctg2range[chain[-1][7]]
+    if chain[0][4]==0:
+        end=(rlength,rlength,lastqend,lastqend,chain[0][4])
+    else:
+        end=(rlength,rlength,lastqstart,lastqstart,chain[0][4])
+
+    firstqstart,firstqend=ctg2range[chain[0][7]]
+    if chain[0][4]==0:
+        start=(0,0,firstqstart,firstqstart,chain[0][4])
+    else:
+        start=(0,0,firstqend,firstqend,chain[0][4])
+    
     #count out of order traversals
     rearrangements=0
     inversions=0
-    
-    cost=0
+
+    startcost=gapcost(start,chain[0],rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+
+    cost=startcost
+    edgecosts=[startcost]
+
     weight=chain[0][5]
     
-    # costs=[0]
     for ri in xrange(1,len(chain)):
 
         pblock=chain[ri-1]
@@ -803,7 +842,7 @@ def chainscore(chain, rearrangecost=1000, inversioncost=1, gamma=0.5, eps=0):
         if pctg==ctg and pref==ref2:
 
             if (pqi==qi-1) or (pqi==qi+1): #check if the two blocks are colinear
-                gc=gapcost(pblock,block,inversioncost=inversioncost,gamma=gamma,eps=eps)
+                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
                 cost+=gc
                 edgecosts.append(gc)
             else: #all other options use rearrangement penalty
@@ -839,6 +878,14 @@ def chainscore(chain, rearrangecost=1000, inversioncost=1, gamma=0.5, eps=0):
                 rearrangements+=1
                 cost+=rearrangecost
                 edgecosts.append(rearrangecost)
+            else:
+                edgecosts.append(0) #simple traversal between two contigs
+
+    endcost=gapcost(chain[-1],end,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+
+    cost+=endcost
+
+    edgecosts.append(endcost)
 
     return weight*2,cost,edgecosts
 
@@ -852,19 +899,21 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, gamma=0.5, eps=.01):
+def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, gamma=0.5, eps=.01):
 
     sep=rlength
     
-    if axis==0:
+    #TODO: determine coordinates of the first and last query contig and last query contig
+
+    if axis==0: #reference
         start=(-1,-1,rlength,rlength,0,0,0,0)
         startrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,0,0)
-        end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
-        endrc=(rlength,rlength,rlength,rlength,1,0,0,0)
-    else:
+        end=(rlength+1,rlength+1,rlength+qlength,rlength+qlength,0,0,0,0)
+        endrc=(rlength+1,rlength+1,rlength,rlength,1,0,0,0)
+    else: #query
         start=(-1,-1,rlength,rlength,0,0,0,0)
-        startrc=(rlength,rlength,rlength,rlength,1,0,0,0)
-        end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
+        startrc=(rlength+1,rlength+1,rlength,rlength,1,0,0,0)
+        end=(rlength+1,rlength+1,rlength+qlength,rlength+qlength,0,0,0,0)
         endrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,0,0)
 
     syntenyblocks.append(end)
@@ -928,7 +977,7 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
                     break
                 cscore,pblock=heap[i]
             
-            ps1,pe2,ps2,pe2,po,pscore,prefid,pctgid=pblock            
+            ps1,pe2,ps2,pe2,po,pscore,prefid,pctgid=pblock
 
             if pblock[c1]==block[c1] or pblock[c1+1]>=block[c1+1]:
                 continue
@@ -940,14 +989,52 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
                     if cscore<=bestscore:
                         break
 
-            if pctgid==ctgid and prefid==refid:
-                gc=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
+            #handle special cases for connect to start and from end
+            if block==end or block==endrc or pblock==start or pblock==startrc:
 
-                assert(gc>=0)
+                if block==end or block==endrc: #update current block to be relative to pblock
+                    if axis==0: #ordered by reference
+                        lastqstart,lastqend=ctg2range[pblock[7]]
+                        if pblock[4]==0:
+                            _block=(rlength, rlength, lastqend, lastqend, 0)
+                        else:
+                            _block=(rlength, rlength, lastqstart, lastqstart, 1)
+                    else: #ordered by query
+                        lastrstart,lastrend=ctg2range[pblock[6]]
+                        if pblock[4]==0:
+                            _block=(lastrend, lastrend, rlength+qlength, rlength+qlength, 0)
+                        else:
+                            _block=(lastrstart, lastrstart, rlength+qlength, rlength+qlength, 1)
+                else:
+                    _block=block
+
+                if pblock==start or pblock==startrc:
+                    if axis==0:
+                        firstqstart,firstqend=ctg2range[block[7]]
+                        if block[4]==0:
+                            _pblock=(0,0,firstqstart,firstqstart,0)
+                        else:
+                            _pblock=(0,0,firstqend,firstqend,1)
+                    else:
+                        firstrstart,firstrend=ctg2range[block[6]]
+                        if block[4]==0:
+                            _pblock=(firstrstart, firstrstart, rlength, rlength, 0)
+                        else:
+                            _pblock=(firstrend, firstrend, rlength, rlength, 1)
+                else:
+                    _pblock=pblock
+
+                gc=gapcost(_pblock,_block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,gamma=gamma)
+
+                c=gc if gc < rearrangecost else rearrangecost
+
+            elif pctgid==ctgid and prefid==refid:
+                
+                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,gamma=gamma)
 
                 c=gc if gc < rearrangecost else rearrangecost
             else:
-                c=rearrangecost
+                c=rearrangecost+(abs(block[c1]-(pblock[c1+1]))*eps)
 
             if bestscore==None or cscore-c > bestscore:
                 bestscore=cscore-c
@@ -975,16 +1062,13 @@ def glocalchain(syntenyblocks,rlength, qlength, rearrangecost=1000, inversioncos
 
     chain=[]
     while node!=start and node!=startrc:
+        chain.append(node)
         s1,e1,s2,e2,o,score,refid,ctgid=node
         nnode,score=G[node]
-        chain.append(nnode)
         if node==nnode:
             logging.fatal("Loop in chain!")
             sys.exit(1)
         node=nnode
-
-    if len(chain)>0:
-        chain.pop() #remove startnode from chain
 
     logging.info("Optimal glocal chain contains: %d anchors and scores %d"%(len(chain),cscore))
 
@@ -1199,7 +1283,11 @@ def localcolinearchains(syntenyblocks,rlength,qlength,inversioncost=1,eps=0,gamm
 
     return G
 
-def gapcost(block1,block2,inversioncost=0,eps=0,gamma=0.5):
+def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,gamma=0.5):
+
+    #sort by reference first
+    if block2[0]<block1[0]:
+        block1,block2=block2,block1
 
     d1=abs(block2[0]-block1[1])
 
@@ -1207,14 +1295,14 @@ def gapcost(block1,block2,inversioncost=0,eps=0,gamma=0.5):
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
             return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
-        else:
+        else: #always has to be rearranged!
             d2=abs(block1[2]-block2[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
 
     elif block1[4]==block2[4]==1: #both reverse comp orientation
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
             return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))

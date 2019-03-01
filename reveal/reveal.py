@@ -237,8 +237,8 @@ def main():
     parser_transform.add_argument("--eps", dest="eps", default=0.5, type=float, help="Weight for substitution penalty.")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
-    parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=90, help="Max space between adjacent MUMs (on the same diagonal) in a cluster.")
-    parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=65, help="Minimal size (sum of mums) of a cluster.")
+    parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=30, help="Max space between adjacent MUMs (on the same diagonal) in a cluster.")
+    parser_transform.add_argument("--mincluster", dest="mincluster", type=int, default=50, help="Minimal size (sum of mums) of a cluster.")
     parser_transform.add_argument("--minchainsum", dest="minchainsum", type=int, default=50, help="Minimal sum of the length of the MUMs in a chain before its considered.")
 
     parser_transform.add_argument("--noopt", dest="optimise", action="store_false", default=True, help="Don't perform naive optimisation of the glocal chain.")
