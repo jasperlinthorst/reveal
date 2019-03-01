@@ -360,6 +360,7 @@ def transform(args,qry):
 
         weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
         score=weight-cost
+
         assert(len(edgecosts) == len(syntenyblocks)+1)
 
         iteration=0
@@ -850,7 +851,7 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
                 cost+=rearrangecost
                 edgecosts.append(rearrangecost)
         
-        elif pctg!=ctg: #cross contigs
+        else: #cross contigs
             
             if o==0:
                 if qi>0:
