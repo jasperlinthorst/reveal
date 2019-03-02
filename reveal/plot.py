@@ -2,12 +2,6 @@ import reveallib
 import reveallib64
 from utils import *
 
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 def gplot(args):
     G=nx.DiGraph()
     read_gfa(args.graph,None,None,G)
@@ -29,6 +23,16 @@ def gplot(args):
     plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
 
 def plot(args):
+
+    import matplotlib
+
+    if not args.interactive:
+        matplotlib.use('Agg')
+    
+    from matplotlib import pyplot as plt
+    from matplotlib import patches as patches
+
+
     vertgaps=[]
     horzgaps=[]
     vertgapsizes=[]

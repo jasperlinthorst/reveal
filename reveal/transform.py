@@ -12,14 +12,14 @@ import intervaltree
 import sortedcontainers
 import time
 
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 def plot(anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
     
+    try:
+        from matplotlib import pyplot as plt
+        from matplotlib import patches as patches
+    except:
+        pass
+
     if len(anchors)==0:
         return
 

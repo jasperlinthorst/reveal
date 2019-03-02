@@ -3,11 +3,6 @@ import reveallib64
 from utils import *
 from multiprocessing.pool import Pool
 import signal
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
 
 def plotchains(ctg2mums,ctg2ref,contig2length,ref2length):
 
@@ -103,6 +98,13 @@ def plotclusters(ctg2mums,contig2length,ref2length):
                 plt.show()
 
 def transform(args):
+
+    try:
+        from matplotlib import pyplot as plt
+        from matplotlib import patches as patches
+    except:
+        pass
+
     logging.debug("Extracting mums.")
 
     if args.output==None:

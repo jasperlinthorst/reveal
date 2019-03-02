@@ -11,12 +11,6 @@ import reveallib64
 import schemes
 import bubbles
 
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 def breaknode(node,pos,l):
     att=G.node[node]
 
