@@ -14,12 +14,6 @@ import time
 
 def plot(anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
     
-    try:
-        from matplotlib import pyplot as plt
-        from matplotlib import patches as patches
-    except:
-        pass
-
     if len(anchors)==0:
         return
 
@@ -214,6 +208,13 @@ def transform_cmd(args):
         logging.info("Done")
 
 def transform(args,qry):
+
+    if args.plot:
+        try:
+            from matplotlib import pyplot as plt
+            from matplotlib import patches as patches
+        except:
+            pass
 
     if args.output==None:
         prefix=os.path.splitext(os.path.basename(qry))[0]

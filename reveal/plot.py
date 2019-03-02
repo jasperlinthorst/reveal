@@ -28,7 +28,7 @@ def plot(args):
 
     if not args.interactive:
         matplotlib.use('Agg')
-    
+
     from matplotlib import pyplot as plt
     from matplotlib import patches as patches
 
@@ -211,8 +211,8 @@ def plot(args):
                 sys.exit(1)
 
             xregions.append((int(rstart),int(rend)))
-            plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
-            plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+            plt.axvline(x=int(rstart),linewidth=1,color='b',linestyle='dashed')
+            plt.axvline(x=int(rend),linewidth=1,color='b',linestyle='dashed')
 
     if args.yregion!=None:
         yregions=[]
@@ -228,8 +228,8 @@ def plot(args):
                 sys.exit(1)
 
             yregions.append((int(rstart),int(rend)))
-            plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
-            plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
+            plt.axhline(y=int(rstart),linewidth=1,color='b',linestyle='dashed')
+            plt.axhline(y=int(rend),linewidth=1,color='b',linestyle='dashed')
 
     if args.interactive:
         plt.show()
