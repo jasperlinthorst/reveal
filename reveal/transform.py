@@ -12,7 +12,7 @@ import intervaltree
 import sortedcontainers
 import time
 
-def plot(anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
+def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
     
     if len(anchors)==0:
         return
@@ -286,7 +286,7 @@ def transform(args,qry):
     blocks+=rcblocks
 
     if args.plot:
-        plot(blocks,sep,wait=False,lines=True,alpha=0.2,args=args)
+        plot(plt,blocks,sep,wait=False,lines=True,alpha=0.2,args=args)
 
     # if args.plot:
     #     plot(blocks,sep,wait=False,lines=True)
@@ -479,7 +479,7 @@ def transform(args,qry):
                 pblock=block
 
     if args.plot:
-        plot(syntenyblocks,sep,wait=False,args=args)
+        plot(plt,syntenyblocks,sep,wait=False,args=args)
 
     logging.debug("Extend %d blocks to query borders."%len(syntenyblocks))
     extendblocks(syntenyblocks,ctg2range)
@@ -492,7 +492,7 @@ def transform(args,qry):
             else:
                 plt.axhline(y=start-sep, xmin=0, xmax=sep, linewidth=.1, linestyle='solid')
 
-        plot(syntenyblocks,sep,wait=False,edges=True,args=args)
+        plot(plt,syntenyblocks,sep,wait=False,edges=True,args=args)
         plt.xlim(0,rlength)
         plt.ylim(0,qlength)
 
