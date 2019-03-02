@@ -11,6 +11,7 @@ import numpy as np
 import intervaltree
 import sortedcontainers
 import time
+import matplotlib
 
 def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
     
@@ -22,7 +23,7 @@ def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=Fa
             ax = plt.axes()
             if start<sep: #ref
                 ax.add_patch(
-                        patches.Rectangle(
+                        matplotlib.patches.Rectangle(
                             (start, 0), #bottom left
                             stop-start, #width
                             sep, #height #should be qry length!
@@ -32,7 +33,7 @@ def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=Fa
                     )
             else:
                 ax.add_patch(
-                        patches.Rectangle(
+                        matplotlib.patches.Rectangle(
                             (0, start-sep), #bottom left
                             sep, #width
                             stop-start, #height
@@ -51,7 +52,7 @@ def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=Fa
             s1,e1,s2,e2=anchor
             ax = plt.axes()
             ax.add_patch(
-                    patches.Rectangle(
+                    matplotlib.patches.Rectangle(
                         (s1, s2-sep), #bottom left
                         e1-s1, #width
                         e2-s2, #height
@@ -64,7 +65,7 @@ def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=Fa
             s1,e1,s2,e2,revcomp=anchor
             ax = plt.axes()
             ax.add_patch(
-                    patches.Rectangle(
+                    matplotlib.patches.Rectangle(
                         (s1, s2-sep), #bottom left
                         e1-s1, #width
                         e2-s2, #height
@@ -167,7 +168,7 @@ def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=Fa
                 s1,e1,s2,e2,revcomp,score,ref,ctg=anchor
                 ax = plt.axes()
                 ax.add_patch(
-                        patches.Rectangle(
+                        matplotlib.patches.Rectangle(
                             (s1, s2-sep), #bottom left
                             e1-s1, #width
                             e2-s2, #height
@@ -209,12 +210,11 @@ def transform_cmd(args):
 
 def transform(args,qry):
 
+    if not args.interactive:
+        matplotlib.use("agg")
+
     if args.plot:
-        try:
-            from matplotlib import pyplot as plt
-            from matplotlib import patches as patches
-        except:
-            pass
+        from matplotlib import pyplot as plt
 
     if args.output==None:
         prefix=os.path.splitext(os.path.basename(qry))[0]
