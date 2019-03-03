@@ -158,6 +158,10 @@ def plot(args):
 
     plt.plot(xlist,ylist,'r-')
     plt.plot(rcxlist,rcylist,'g-')
+    
+    if args.endpoints:
+        plt.plot(xlist,ylist,'b*')
+        plt.plot(rcxlist,rcylist,'y*')
 
     for p in ctgoffsets:
         plt.axhline(y=p,linewidth=.5,color='black',linestyle='solid')

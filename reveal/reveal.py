@@ -165,6 +165,7 @@ def main():
     parser_plot.add_argument('fastas', nargs='*', help='Two fasta files for which a mumplot should be generated.')
     parser_plot.add_argument("-m", dest="minlength", type=int, default=20, help="Minimum length of exact matches to vizualize.")
     parser_plot.add_argument("-i", dest="interactive", action="store_true", default=False, help="Wheter to produce interactive plots which allow zooming on the dotplot.")
+    parser_plot.add_argument("--endpoints", dest="endpoints", action="store_true", default=False, help="Mark mum start/end points.")
     parser_plot.add_argument("--norc", dest="rc", action="store_false", default=True, help="Don't draw reverse complement matches.")
     parser_plot.add_argument("--maxmums", dest="maxmums", type=int, default=10000, help="Cap the number of MUMs to draw.")
     parser_plot.add_argument("--nogaps", dest="showgaps", action="store_false", default=True, help="Don't mark gapped sequence.")
