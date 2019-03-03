@@ -303,6 +303,10 @@ def transform(args,qry):
     # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
     logging.info("%d anchors remain after glocal chaining (reference)."%len(rsyntenyblocks))
 
+
+    # if args.plot:
+    #     plot(plt,rsyntenyblocks,sep,wait=False,lines=True,color='k',alpha=.5)
+
     logging.info("Start glocal chaining for filtering anchors (query).")
     syntenyblocks=glocalchain(rsyntenyblocks,rlength,qlength,ctg2range,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost,
@@ -316,8 +320,8 @@ def transform(args,qry):
     # chain,rcchain=colinearchains(syntenyblocks,rlength,qlength)
     logging.info("%d anchors remain after glocal chaining (query)."%len(syntenyblocks))
 
-    # if args.plot:
-    #     plot(syntenyblocks,sep,wait=False,lines=True,color='b',alpha=.7)
+    if args.plot:
+        plot(plt,syntenyblocks,sep,wait=False,lines=True,color='b',alpha=.7)
 
     #take the intersection of both the chains
     # logging.info("Determine intersection between the chains...")
@@ -492,7 +496,7 @@ def transform(args,qry):
             else:
                 plt.axhline(y=start-sep, xmin=0, xmax=sep, linewidth=.1, linestyle='solid')
 
-        plot(plt,syntenyblocks,sep,wait=False,edges=True,args=args)
+        plot(plt,syntenyblocks,sep,wait=False,edges=False,args=args)
         plt.xlim(0,rlength)
         plt.ylim(0,qlength)
 
@@ -947,8 +951,13 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     pri=0
     t0=time.time()
 
+    furthest=syntenyblocks[0]
+
     for ri in xrange(n):
         block=syntenyblocks[ri]
+
+        if block[c1+1]>furthest[c1+1]:
+            furthest=block
 
         # if ri%1000==0:
         #     t1=time.time()
@@ -1044,7 +1053,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                 bestcost=c
 
             if not useheap:
-                if l==lastn:
+                if l>=lastn and pblock[c1]<furthest[c1]: #make sure we backtrack far enough
                     break
 
         cscore=bestscore+score
