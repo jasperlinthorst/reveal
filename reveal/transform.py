@@ -313,11 +313,13 @@ def transform(args,qry):
         logging.info("Anchor before chaining: %s"%nbefore)
         logging.info("Anchor after chaining: %s"%nafter)
         refiteration+=1
+        
+        if args.plot:
+            plot(plt,syntenyblocks,sep,wait=False,lines=True,color='k',alpha=.7)
     
     logging.info("%d anchors remain after glocal chaining (reference)."%len(syntenyblocks))
 
-    if args.plot:
-        plot(plt,syntenyblocks,sep,wait=False,lines=True,color='k',alpha=.7)
+
 
     logging.info("Start glocal chaining for filtering anchors (query).")
 
@@ -968,6 +970,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     maxscore=None
 
     n=len(syntenyblocks)
+    
     # bt=range(n+2)
     bt=range(n+1)
 
@@ -998,8 +1001,8 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
         trace=False
         # if block!=end and block!=endrc:
-        #     starttrace=266800
-        #     endtrace=266800+1
+        #     starttrace=704246
+        #     endtrace=704247+1
         #     ctgtrace=0
         #     # if s1-ctg2range[refid][0]>=starttrace and s1-ctg2range[refid][0]<endtrace and refid==ctgtrace:
         #     if s1>=starttrace and s1<endtrace: # and refid==ctgtrace:
@@ -1362,12 +1365,13 @@ def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,gamma=0.5):
     d1=abs(block2[0]-block1[1])
 
     if block1[4]==block2[4]==0: #both normal orientation
-        if block2[2]>block1[2]:
-            d2=abs(block2[2]-block1[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
-        else: #always has to be rearranged!
+        if block2[2]<block1[2]:#always has to be rearranged!
             d2=abs(block1[2]-block2[3])
             return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
+        else:
+            d2=abs(block2[2]-block1[3])
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     elif block1[4]==block2[4]==1: #both reverse comp orientation
         if block2[2]>block1[2]: #always has to be rearranged!
@@ -1375,24 +1379,29 @@ def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,gamma=0.5):
             return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     elif block1[4]==1 and block2[4]==0:
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     else:
         # assert(block1[4]==0 and block2[4]==1)
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            return colinearcost if colinearcost<rearrangecost else rearrangecost
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
