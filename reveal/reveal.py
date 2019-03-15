@@ -234,8 +234,10 @@ def main():
 
     parser_transform.add_argument("--rc", dest="rearrangecost", default=10000, type=int, help="Cost for chaining translocated segments.")
     parser_transform.add_argument("--ic", dest="inversioncost", default=5, type=int, help="Cost for chaining inverted segments.")
-    parser_transform.add_argument("--gamma", dest="gamma", default=0.5, type=float, help="Weight for indel penalty.")
-    parser_transform.add_argument("--eps", dest="eps", default=0.5, type=float, help="Weight for substitution penalty.")
+    
+    parser_transform.add_argument("--alfa", dest="alfa", default=1, type=float, help="Weight for match (+).")
+    parser_transform.add_argument("--lambda", dest="_lambda", default=5, type=float, help="Weight for indel penalty (-).")
+    parser_transform.add_argument("--eps", dest="eps", default=1, type=float, help="Weight for substitution penalty (-).")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=30, help="Max space between adjacent MUMs (on the same diagonal) in a cluster.")

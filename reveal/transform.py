@@ -266,7 +266,7 @@ def transform(args,qry):
     logging.info("Compute RC mums.")
     idx.construct(rc=True)
     rcmums=addctginfo(idx.getmums(args.minlength),ctg2range)
-    logging.info("Done, %d rc mums in total."%len(rcmums))
+    logging.info("Done, %d rc mums."%len(rcmums))
 
     sep=idx.nsep[0]
     idxn=idx.n
@@ -291,7 +291,6 @@ def transform(args,qry):
     # if args.plot:
     #     plot(blocks,sep,wait=False,lines=True)
 
-
     logging.info("Start glocal chaining for filtering anchors (reference).")
     
     nbefore=len(blocks)
@@ -304,10 +303,11 @@ def transform(args,qry):
         nbefore=len(syntenyblocks)
         syntenyblocks=glocalchain(syntenyblocks,rlength,qlength,ctg2range,rearrangecost=args.rearrangecost,
                                                             inversioncost=args.inversioncost,
-                                                            gamma=args.gamma,
+                                                            _lambda=args._lambda,
                                                             eps=args.eps,
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
+                                                            alfa=args.alfa,
                                                             axis=0)
         nafter=len(syntenyblocks)
         logging.info("Anchor before chaining: %s"%nbefore)
@@ -319,8 +319,6 @@ def transform(args,qry):
     
     logging.info("%d anchors remain after glocal chaining (reference)."%len(syntenyblocks))
 
-
-
     logging.info("Start glocal chaining for filtering anchors (query).")
 
     nbefore=len(syntenyblocks)
@@ -331,10 +329,11 @@ def transform(args,qry):
         nbefore=len(syntenyblocks)
         syntenyblocks=glocalchain(syntenyblocks,rlength,qlength,ctg2range,rearrangecost=args.rearrangecost,
                                                                 inversioncost=args.inversioncost,
-                                                                gamma=args.gamma,
+                                                                _lambda=args._lambda,
                                                                 eps=args.eps,
                                                                 useheap=args.useheap, 
                                                                 lastn=args.lastn,
+                                                                alfa=args.alfa,
                                                                 axis=1)
         nafter=len(syntenyblocks)
         logging.info("Anchor before chaining: %s"%nbefore)
@@ -388,7 +387,7 @@ def transform(args,qry):
 
     if args.optimise and len(syntenyblocks)>1:
 
-        weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
+        weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa) #determine the actual cost of the glocal chain 
         score=weight-cost
 
         assert(len(edgecosts) == len(syntenyblocks)+1)
@@ -398,7 +397,7 @@ def transform(args,qry):
         while True:
             iteration+=1
             logging.info("Optimise chain, iteration %d."%iteration)
-            tsyntenyblocks,tweight,tcost,tedgecosts=optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps)
+            tsyntenyblocks,tweight,tcost,tedgecosts=optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa)
             nscore=tweight-tcost
             
             if nscore<=score:
@@ -414,7 +413,7 @@ def transform(args,qry):
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
 
     syntenyblocks=merge_consecutive(syntenyblocks)
-    weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,gamma=args.gamma,eps=args.eps) #determine the actual cost of the glocal chain 
+    weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa) #determine the actual cost of the glocal chain 
     score=weight-cost
 
     assert(len(edgecosts) == len(syntenyblocks)+1)
@@ -786,11 +785,11 @@ def extendblocks(syntenyblocks,ctg2range):
         assert(s2<e2)
         syntenyblocks[i]=(s1,e1,s2,e2,o,score,ref,ctg)
 
-def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,inversioncost=1,gamma=0.5,eps=0):
+def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,inversioncost=1,_lambda=5,eps=1,alfa=1):
 
     orgchain=sorted(syntenyblocks,key=lambda c: c[5])
     maxchain=syntenyblocks
-    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa)
     maxchainscore=maxchain_weight-maxchain_cost
 
     stack=[]
@@ -804,7 +803,7 @@ def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,invers
             update_progress(i,len(orgchain))
 
         tmp=list(stack+orgchain[i+1:])
-        weight,cost,edgecosts=chainscore(tmp, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+        weight,cost,edgecosts=chainscore(tmp, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa)
         tmpchainscore=weight-cost
 
         if tmpchainscore<maxchainscore:
@@ -821,12 +820,12 @@ def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,invers
 
     return maxchain,maxchain_weight,maxchain_cost,maxchain_edgecosts
 
-def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, gamma=0.5, eps=0):
+def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, _lambda=5, eps=1, alfa=1):
     
     if len(chain)==0:
         start=(0,0,rlength,rlength,0,0,0,0)
         end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
-        cost=gapcost(start,end,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+        cost=gapcost(start,end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
         return 0,cost,[cost]
 
     chain.sort(key=lambda s: s[0]) #order by reference position
@@ -849,12 +848,12 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
     rearrangements=0
     inversions=0
 
-    startcost=gapcost(start,chain[0],rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+    startcost=gapcost(start,chain[0],rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
 
     cost=startcost
     edgecosts=[startcost]
 
-    weight=chain[0][5]
+    weight=alfa*chain[0][5]
     
     for ri in xrange(1,len(chain)):
 
@@ -863,7 +862,7 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
 
         ps1,pe1,ps2,pe2,po,pscore,pref,pctg=pblock
         s1,e1,s2,e2,o,score,ref2,ctg=block
-        weight+=score
+        weight+=(alfa*score)
 
         # xgap=0#s1-pe1
         
@@ -873,7 +872,7 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
         if pctg==ctg and pref==ref2:
 
             if (pqi==qi-1) or (pqi==qi+1): #check if the two blocks are colinear
-                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
                 cost+=gc
                 edgecosts.append(gc)
             else: #all other options use rearrangement penalty
@@ -912,13 +911,13 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
             else:
                 edgecosts.append(0) #simple traversal between two contigs
 
-    endcost=gapcost(chain[-1],end,rearrangecost=rearrangecost,inversioncost=inversioncost,gamma=gamma,eps=eps)
+    endcost=gapcost(chain[-1],end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
 
     cost+=endcost
 
     edgecosts.append(endcost)
 
-    return weight*2,cost,edgecosts
+    return weight,cost,edgecosts
 
 def update_progress(i,n):
     fullbar=100
@@ -930,25 +929,30 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, gamma=0.5, eps=.01):
+def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, _lambda=5, eps=1, alfa=1):
 
     sep=rlength
     
-    #TODO: determine coordinates of the first and last query contig and last query contig
+    #add some dummy blocks for the contig start/ends
+    if axis==0:
+        for refid,(refstart,refend) in enumerate(ctg2range):
+            if refstart>=sep:
+                break
+            if refid==0:
+                start=(refstart,refstart,None,None,0,0,None,None)
+            syntenyblocks.append((refend,refend,None,None,0,0,None,None))
+        end=syntenyblocks[-1]
 
-    if axis==0: #reference
-        start=(-1,-1,rlength,rlength,0,0,-1,-1)
-        startrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,-1,-1)
-        end=(rlength+1,rlength+1,rlength+qlength,rlength+qlength,0,0,-2,-2)
-        endrc=(rlength+1,rlength+1,rlength,rlength,1,0,-2,-2)
-    else: #query
-        start=(-1,-1,rlength,rlength,0,0,-1,-1)
-        startrc=(rlength+1,rlength+1,rlength,rlength,1,0,-1,-1)
-        end=(rlength+1,rlength+1,rlength+qlength,rlength+qlength,0,0,-2,-2)
-        endrc=(-1,-1,rlength+qlength,rlength+qlength,1,0,-2,-2)
-
-    syntenyblocks.append(end)
-    # syntenyblocks.append(endrc)
+    if axis==1:
+        first=True
+        for ctgid,(ctgstart,ctgend) in enumerate(ctg2range):
+            if ctgstart<sep:
+                continue
+            if first:
+                start=(None,None,ctgstart,ctgstart,0,0,None,None)
+                first=False
+            syntenyblocks.append((None,None,ctgend,ctgend,0,0,None,None))
+        end=syntenyblocks[-1]
 
     if axis==0: #sort by ref
         c1,c2=0,2
@@ -960,9 +964,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     if useheap:
         heap=sortedcontainers.SortedList()
         heap.add((0,start))
-        # heap.add((0,startrc))
     else:
-        # heap=[(0,start),(0,startrc)]+[None]*(len(syntenyblocks))
         heap=[(0,start)]+[None]*(len(syntenyblocks))
 
     G={b:None for b in syntenyblocks}
@@ -971,7 +973,6 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
     n=len(syntenyblocks)
     
-    # bt=range(n+2)
     bt=range(n+1)
 
     update_progress(0,n)
@@ -979,7 +980,8 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     pri=0
     t0=time.time()
 
-    deepest=0#syntenyblocks[0]
+    deepest=0
+    best=0
 
     for ri in xrange(n):
         block=syntenyblocks[ri]
@@ -987,33 +989,32 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         while syntenyblocks[deepest][c1+1]<block[c1]:
             deepest+=1
 
-        # if ri%1000==0:
-        #     t1=time.time()
-        #     sec=t1-t0
-        #     bd=ri-pri
-        #     logging.debug("Blocks per sec: %d"%(bd/sec))
-        #     t0=t1
-        #     pri=ri
+        if ri%1000==0:
+            t1=time.time()
+            sec=t1-t0
+            bd=ri-pri
+            logging.debug("Blocks per sec: %d"%(bd/sec))
+            t0=t1
+            pri=ri
 
         update_progress(ri,n)
 
         s1,e1,s2,e2,o,score,refid,ctgid=block
 
         trace=False
-        # if block!=end and block!=endrc:
-        #     starttrace=704246
-        #     endtrace=704247+1
-        #     ctgtrace=0
-        #     # if s1-ctg2range[refid][0]>=starttrace and s1-ctg2range[refid][0]<endtrace and refid==ctgtrace:
-        #     if s1>=starttrace and s1<endtrace: # and refid==ctgtrace:
-        #         logging.info("BLOCK: %s"%str(block))
-        #         trace=True
+        # starttrace=10013040
+        # endtrace=10013047+10
+        # if e1>=starttrace and e1<endtrace: # and refid==ctgtrace:
+        #     logging.info("BLOCK: %s"%str(block))
+        #     trace=True
 
         bestscore=None
         bestblock=None
         bestcost=0
+        checkedbest=False
 
         l=0
+        
         for j in bt: #back track on the heap
 
             if useheap:
@@ -1021,105 +1022,83 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     break
                 cscore,pblock=heap[-j]
             else:
-                # i=(ri+2)-j-1
                 i=(ri+1)-j-1
                 if i<0:
                     break
                 cscore,pblock=heap[i]
             
+            if cscore==best:
+                checkedbest=True
+
             ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
 
-            if pblock[c1]==block[c1] or pblock[c1+1]>=block[c1+1]:
+            # if pblock[c1]==block[c1] or pblock[c1+1]>=block[c1+1]:
+                # continue
+
+            if pblock[c1+1]>block[c1+1]:
                 continue
 
             l+=1
-            
-            if useheap:
-                if bestscore!=None:
-                    if cscore<=bestscore:
+
+            if bestscore!=None:
+                if cscore<=bestscore:
+                    if useheap:
                         break
-
-            #handle special cases for connect to start and from end
-            if block==end or block==endrc or pblock==start or pblock==startrc:
-
-                if block==end or block==endrc: #update current block to be relative to pblock
-                    if axis==0: #ordered by reference
-                        lastqstart,lastqend=ctg2range[pblock[7]]
-                        if pblock[4]==0:
-                            _block=(rlength, rlength, lastqend, lastqend, 0)
-                        else:
-                            _block=(rlength, rlength, lastqstart, lastqstart, 1)
-                    else: #ordered by query
-                        lastrstart,lastrend=ctg2range[pblock[6]]
-                        if pblock[4]==0:
-                            _block=(lastrend, lastrend, rlength+qlength, rlength+qlength, 0)
-                        else:
-                            _block=(lastrstart, lastrstart, rlength+qlength, rlength+qlength, 1)
-                else:
-                    _block=block
-
-                if pblock==start or pblock==startrc:
-                    if axis==0:
-                        firstqstart,firstqend=ctg2range[block[7]]
-                        if block[4]==0:
-                            _pblock=(0,0,firstqstart,firstqstart,0)
-                        else:
-                            _pblock=(0,0,firstqend,firstqend,1)
                     else:
-                        firstrstart,firstrend=ctg2range[block[6]]
-                        if block[4]==0:
-                            _pblock=(firstrstart, firstrstart, rlength, rlength, 0)
+                        if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest:
+                            break
                         else:
-                            _pblock=(firstrend, firstrend, rlength, rlength, 1)
+                            continue
+
+            #if block is a dummy block, make it relative to pblock, if possible
+            if block[6]==None and pblock[6]!=None: #update current block to be relative to pblock
+                if axis==0:
+                    _block=(s1, e1, pe2 if po==0 else ps2, pe2 if po==0 else ps2, po, 0, prefid, pctgid)
                 else:
-                    _pblock=pblock
-
-                gc=gapcost(_pblock,_block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,gamma=gamma)
-
-                # if pblock==start:
-                #     print "block",block
-                #     print "pblock",pblock
-                #     print "pblock score",cscore
-                #     print "relative block",_block
-                #     print "relative pblock",_pblock
-                #     print "cost",gc
-
-                #d1cost=(abs(block[c1]-(pblock[c1+1]))*eps)
-
-                c=gc# if gc < rearrangecost+d1cost else rearrangecost+d1cost
-
-            elif pctgid==ctgid and prefid==refid:
-                
-                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,gamma=gamma)
-
-                #d1cost=(abs(block[c1]-(pblock[c1+1]))*eps)
-
-                c=gc# if gc < rearrangecost+d1cost else rearrangecost+d1cost
+                    _block=(pe1 if po==0 else ps1, pe1 if po==0 else ps1, s2, e2, po, 0, prefid, pctgid)
             else:
+                _block=block
+
+            #if pblock is a dummy block, make it relative to block, if possible
+            if pblock[6]==None and block[6]!=None:
+                if axis==0:
+                    _pblock=(ps1, pe1, s2 if o==0 else e2, s2 if o==0 else e2, o, 0, refid, ctgid)
+                else:
+                    _pblock=(s1 if o==0 else e1, s1 if o==0 else e1, ps2, pe2, o, 0, refid, ctgid)
+            else:
+                _pblock=pblock
+
+            #if blocks come from same query contig and reference contig, compute gapcost, else introduce rearrangement cost
+            if _pblock[6]==_block[6]!=None and _pblock[7]==_block[7]!=None:
+                c=gapcost(_pblock,_block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,_lambda=_lambda,axis=axis)
+            elif _pblock[6]==_block[6]==None and _pblock[7]==_block[7]==None:
+                c=(abs(block[c1]-(pblock[c1+1]))*eps)
+            else: #blocks cross contigs or ref without passing a dummy block, introduce rearrangement cost
                 c=rearrangecost+(abs(block[c1]-(pblock[c1+1]))*eps)
 
             if trace:
                 logging.info("Connect to PBLOCK: %s costs %s, depth=%s, cscore,%s, cscore-c=%d, bestscore=%s"%(pblock,c,l,cscore,cscore-c,bestscore))
 
-            assert(c>=0)
             if bestscore==None or cscore-c > bestscore:
                 bestscore=cscore-c
                 bestblock=pblock
                 bestcost=c
 
             if not useheap:
-                if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1]: #make sure we backtrack far enough
+                if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest: #make sure we backtrack far enough
                     break
 
         # if l>lastn:
-        #     logging.info("Forced deeper %d backtrack for block: %s"%(l,block))
+            # logging.info("Forced deeper %d backtrack for block: %s"%(l,block))
 
-        cscore=bestscore+score
+        cscore=bestscore+(alfa*score)
+
+        if cscore>best:
+            best=cscore
 
         if useheap:
             heap.add((cscore,block))
         else:
-            # heap[ri+2]=(cscore,block)
             heap[ri+1]=(cscore,block)
         
         if maxscore==None or maxscore<cscore:
@@ -1131,11 +1110,12 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
         G[block]=(bestblock,bestscore)
 
-    node,cscore=G[end]# if G[end][1]>G[endrc][1] else G[endrc]
+    node,cscore=G[end]
 
     chain=[]
-    while node!=start and node!=startrc:
-        chain.append(node)
+    while node!=start:# and node!=startrc:
+        if node[6]!=None: #only add to the chain if it is an actual anchor, exclude contig endpoints
+            chain.append(node)
         s1,e1,s2,e2,o,score,refid,ctgid=node
         nnode,score=G[node]
         if node==nnode:
@@ -1147,216 +1127,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
     return chain[::-1]
 
-#unused
-def colinearchains(syntenyblocks,rlength,qlength,inversioncost=1,eps=0,gamma=0.5):
-
-    sep=rlength
-    heap=sortedcontainers.SortedList()
-
-    start=(0,0,rlength,rlength,0,0,0,0)
-    startrc=(0,0,rlength+qlength,rlength+qlength,1,0,0,0)
-
-    end=(rlength-2,rlength-2,rlength+qlength,rlength+qlength,0,0,0,0)
-    endrc=(rlength-2,rlength-2,rlength,rlength,1,0,0,0)
-
-    syntenyblocks.append(start)
-    syntenyblocks.append(startrc)
-    syntenyblocks.append(end)
-    syntenyblocks.append(endrc)
-
-    syntenyblocks.sort(key=lambda s: (s[0],s[5])) #order by reference position
-    qryorder = sorted(xrange(len(syntenyblocks)), key= lambda i: syntenyblocks[i][2]) #qry order
-    qryorder_inv = sorted(xrange(len(syntenyblocks)), key=qryorder.__getitem__) #inverse qry order
-
-    G=dict()
-
-    maxscore=None
-
-    for ri,block in enumerate(syntenyblocks):
-        s1,e2,s2,e2,o,score,refid,ctgid=block
-        qi=qryorder_inv[ri] #index within the qryorder of blocks
-        assert(score>=0)
-
-        if block==start or block==startrc:
-            heap.add((score,block,ri,qi))
-            continue
-
-        bestscore=None
-        bestblock=None
-        bestcost=0
-
-        for cscore,pblock,pri,pqi in heap[::-1]:
-            ps1,pe2,ps2,pe2,po,pscore,prefid,pctgid=pblock
-
-            if bestscore!=None:
-                if cscore<=bestscore:
-                    break
-            
-            if block[4]==pblock[4]==1: #both rc
-                if pqi>qi:
-                    c=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
-            elif block[4]==pblock[4]==0: #both normal
-                if pqi<qi:
-                    c=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
-            else: #different orientation
-                c=-1
-
-            if c>=0:
-                if cscore-c > bestscore:
-                    bestscore=cscore-c
-                    bestblock=pblock
-                    bestcost=c
-
-        cscore=bestscore+score
-        heap.add((cscore,block,ri,qi))
-        
-        if maxscore==None or maxscore<cscore:
-            maxscore=cscore
-            maxnode=block
-
-        G[block]=(bestblock,bestscore,bestcost)
-
-        # if bestblock[4]==0 and block[4]==0:
-        #     plt.plot((bestblock[1],block[0]),(bestblock[3]-sep,block[2]-sep),'y--')
-        # elif bestblock[4]==0 and block[4]==1:
-        #     plt.plot((bestblock[1],block[0]),(bestblock[3]-sep,block[3]-sep),'y--')
-        # elif bestblock[4]==1 and block[4]==0:
-        #     plt.plot((bestblock[1],block[0]),(bestblock[2]-sep,block[2]-sep),'y--')
-        # else:
-        #     plt.plot((bestblock[1],block[0]),(bestblock[2]-sep,block[3]-sep),'y--')
-
-    node=G[end][0]
-
-    chain=[]
-    while node!=start:
-        s1,e1,s2,e2,o,score,refid,ctgid=node
-        
-        assert(o==0)
-
-        if o==0:
-            plt.plot((s1,e1),(s2-sep,e2-sep),'r-')
-        else:
-            plt.plot((s1,e1),(e2-sep,s2-sep),'r-')
-
-        nnode,score,cost=G[node]
-
-        # if nnode[4]==0 and node[4]==0:
-        #     plt.plot((nnode[1],node[0]),(nnode[3]-sep,node[2]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[3]-sep,str(cost),fontsize=8)
-        # elif nnode[4]==0 and node[4]==1:
-        #     plt.plot((nnode[1],node[0]),(nnode[3]-sep,node[3]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[3]-sep,str(cost),fontsize=8)
-        # elif nnode[4]==1 and node[4]==0:
-        #     plt.plot((nnode[1],node[0]),(nnode[2]-sep,node[2]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[2]-sep,str(cost),fontsize=8)
-        # else:
-        #     plt.plot((nnode[1],node[0]),(nnode[2]-sep,node[3]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[2]-sep,str(cost),fontsize=8)
-
-        chain.append(nnode)
-        node=nnode
-
-    chain.pop() #remove startnode from chain
-
-
-    node=G[endrc][0]
-
-
-    rcchain=[]
-    while node!=startrc:
-        s1,e1,s2,e2,o,score,refid,ctgid=node
-        
-        assert(o==1)
-
-        if o==0:
-            plt.plot((s1,e1),(s2-sep,e2-sep),'g-')
-        else:
-            plt.plot((s1,e1),(e2-sep,s2-sep),'g-')
-
-        nnode,score,cost=G[node]
-
-        # if nnode[4]==0 and node[4]==0:
-        #     plt.plot((nnode[1],node[0]),(nnode[3]-sep,node[2]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[3]-sep,str(cost),fontsize=8)
-        # elif nnode[4]==0 and node[4]==1:
-        #     plt.plot((nnode[1],node[0]),(nnode[3]-sep,node[3]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[3]-sep,str(cost),fontsize=8)
-        # elif nnode[4]==1 and node[4]==0:
-        #     plt.plot((nnode[1],node[0]),(nnode[2]-sep,node[2]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[2]-sep,str(cost),fontsize=8)
-        # else:
-        #     plt.plot((nnode[1],node[0]),(nnode[2]-sep,node[3]-sep),'r--')
-        #     # plt.text(nnode[1],nnode[2]-sep,str(cost),fontsize=8)
-
-        rcchain.append(nnode)
-        node=nnode
-
-    rcchain.pop() #remove startnode from chain
-
-    return chain,rcchain
-
-#unused
-def localcolinearchains(syntenyblocks,rlength,qlength,inversioncost=1,eps=0,gamma=0.5):
-    heap=sortedcontainers.SortedList()
-    sep=rlength
-    syntenyblocks.sort(key=lambda s: (s[0],s[5])) #order by reference position
-    qryorder = sorted(xrange(len(syntenyblocks)), key= lambda i: syntenyblocks[i][2]) #qry order
-    qryorder_inv = sorted(xrange(len(syntenyblocks)), key=qryorder.__getitem__) #inverse qry order
-
-    G=dict()
-
-    maxscore=None
-
-    for ri,block in enumerate(syntenyblocks):
-        s1,e2,s2,e2,o,score,refid,ctgid=block
-        qi=qryorder_inv[ri] #index within the qryorder of blocks
-        assert(score>=0)
-
-        bestscore=None
-        bestblock=None
-        bestcost=0
-
-        for cscore,pblock,pri,pqi in heap[::-1]:
-            
-            if bestscore!=None:
-                if cscore<=bestscore:
-                    break
-            c=-1
-            if block[4]==pblock[4]==1: #both rc
-                if pqi>qi:
-                    c=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
-            elif block[4]==pblock[4]==0: #both normal
-                if pqi<qi:
-                    c=gapcost(pblock,block,inversioncost=inversioncost,eps=eps,gamma=gamma)
-            else: #different orientation
-                c=-1
-            
-            if c>=0: #can be chained in a valid way
-                if (cscore-c)>score and (bestscore==None or (cscore-c)>bestscore):
-                    bestscore=cscore-c
-                    bestblock=pblock
-                    bestcost=c
-
-            pcscore=cscore
-
-        if bestblock==None: #can't be chained to another block
-            heap.add((score,block,ri,qi))
-        else:
-            cscore=bestscore+score
-            heap.add((cscore,block,ri,qi))
-            G[block]=(bestblock,bestscore,bestcost)
-            # if bestblock[4]==0 and block[4]==0:
-            #     plt.plot((bestblock[1],block[0]),(bestblock[3]-sep,block[2]-sep),'y--')
-            # elif bestblock[4]==0 and block[4]==1:
-            #     plt.plot((bestblock[1],block[0]),(bestblock[3]-sep,block[3]-sep),'y--')
-            # elif bestblock[4]==1 and block[4]==0:
-            #     plt.plot((bestblock[1],block[0]),(bestblock[2]-sep,block[2]-sep),'y--')
-            # else:
-            #     plt.plot((bestblock[1],block[0]),(bestblock[2]-sep,block[3]-sep),'y--')
-
-    return G
-
-def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,gamma=0.5):
+def _gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5):
 
     #sort by reference first
     if block2[0]<block1[0]:
@@ -1367,41 +1138,104 @@ def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,gamma=0.5):
     if block1[4]==block2[4]==0: #both normal orientation
         if block2[2]<block1[2]:#always has to be rearranged!
             d2=abs(block1[2]-block2[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
+            return (_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
         else:
             d2=abs(block2[2]-block1[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            # indelcost=min((rearrangecost,lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            # colinearcost=indelcost+substitutioncost
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
             return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     elif block1[4]==block2[4]==1: #both reverse comp orientation
         if block2[2]>block1[2]: #always has to be rearranged!
             d2=abs(block2[2]-block1[3])
-            return (gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
+            return (_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
             return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     elif block1[4]==1 and block2[4]==0:
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
             return colinearcost if colinearcost<rearrangecost else rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
             return colinearcost if colinearcost<rearrangecost else rearrangecost
 
     else:
         # assert(block1[4]==0 and block2[4]==1)
         if block2[2]>block1[2]:
             d2=abs(block2[2]-block1[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
             return colinearcost if colinearcost<rearrangecost else rearrangecost
         else:
             d2=abs(block1[2]-block2[3])
-            colinearcost=(gamma*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
+            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
             return colinearcost if colinearcost<rearrangecost else rearrangecost
+
+def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,axis=0):
+
+    if axis==0: #sorted by ref
+        c1,c2=0,2
+    else: #sorted by qry
+        c1,c2=2,0
+
+    assert(block1[c1]<=block2[c1])
+
+    d1=abs(block2[c1]-block1[c1+1])
+
+    if block1[4]==block2[4]==0: #both normal orientation
+        if block2[c2]<block1[c2]:#always has to be rearranged!
+            indelcost=rearrangecost
+            substitutioncost=eps*d1
+            return indelcost+substitutioncost
+        else:
+            d2=abs(block2[c2]-block1[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost
+
+    elif block1[4]==block2[4]==1: #both reverse comp orientation
+        if block2[c2]>block1[c2]: #always has to be rearranged!
+            indelcost=rearrangecost
+            substitutioncost=eps*d1
+            return indelcost+substitutioncost
+        else:
+            d2=abs(block1[c2]-block2[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost
+
+    elif block1[4]==1 and block2[4]==0:
+        if block2[c2]>block1[c2]:
+            d2=abs(block2[c2]-block1[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost+inversioncost
+        else:
+            d2=abs(block1[c2]-block2[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost+inversioncost
+
+    else:
+        # assert(block1[4]==0 and block2[4]==1)
+        if block2[c2]>block1[c2]:
+            d2=abs(block2[c2]-block1[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost+inversioncost
+        else:
+            d2=abs(block1[c2]-block2[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return indelcost+substitutioncost+inversioncost
+
+
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA
