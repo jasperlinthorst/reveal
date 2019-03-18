@@ -238,6 +238,7 @@ def main():
     parser_transform.add_argument("--alfa", dest="alfa", default=1, type=float, help="Weight for match (+).")
     parser_transform.add_argument("--lambda", dest="_lambda", default=5, type=float, help="Weight for indel penalty (-).")
     parser_transform.add_argument("--eps", dest="eps", default=1, type=float, help="Weight for substitution penalty (-).")
+    parser_transform.add_argument("--gapopen", dest="gapopen", default=1, type=float, help="Fixed penalty for adding an achor to the chain (-).")
     
     parser_transform.add_argument("--nocluster", dest="cluster", action="store_false", default=True, help="Don't cluster MUMs by diagonals.")
     parser_transform.add_argument("--maxdist", dest="maxdist", type=int, default=30, help="Max space between adjacent MUMs (on the same diagonal) in a cluster.")

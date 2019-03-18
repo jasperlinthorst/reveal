@@ -308,6 +308,7 @@ def transform(args,qry):
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
                                                             alfa=args.alfa,
+                                                            gapopen=args.gapopen,
                                                             axis=0)
         nafter=len(syntenyblocks)
         logging.info("Anchor before chaining: %s"%nbefore)
@@ -334,6 +335,7 @@ def transform(args,qry):
                                                                 useheap=args.useheap, 
                                                                 lastn=args.lastn,
                                                                 alfa=args.alfa,
+                                                                gapopen=args.gapopen,
                                                                 axis=1)
         nafter=len(syntenyblocks)
         logging.info("Anchor before chaining: %s"%nbefore)
@@ -387,7 +389,7 @@ def transform(args,qry):
 
     if args.optimise and len(syntenyblocks)>1:
 
-        weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa) #determine the actual cost of the glocal chain 
+        weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa,gapopen=args.gapopen) #determine the actual cost of the glocal chain 
         score=weight-cost
 
         assert(len(edgecosts) == len(syntenyblocks)+1)
@@ -397,7 +399,7 @@ def transform(args,qry):
         while True:
             iteration+=1
             logging.info("Optimise chain, iteration %d."%iteration)
-            tsyntenyblocks,tweight,tcost,tedgecosts=optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa)
+            tsyntenyblocks,tweight,tcost,tedgecosts=optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa,gapopen=args.gapopen)
             nscore=tweight-tcost
             
             if nscore<=score:
@@ -413,7 +415,7 @@ def transform(args,qry):
         logging.info("Done. %d blocks after optimisation."%len(syntenyblocks))
 
     syntenyblocks=merge_consecutive(syntenyblocks)
-    weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa) #determine the actual cost of the glocal chain 
+    weight,cost,edgecosts=chainscore(syntenyblocks, rlength, qlength, ctg2range,rearrangecost=args.rearrangecost,inversioncost=args.inversioncost,_lambda=args._lambda,eps=args.eps,alfa=args.alfa,gapopen=args.gapopen) #determine the actual cost of the glocal chain 
     score=weight-cost
 
     assert(len(edgecosts) == len(syntenyblocks)+1)
@@ -785,11 +787,11 @@ def extendblocks(syntenyblocks,ctg2range):
         assert(s2<e2)
         syntenyblocks[i]=(s1,e1,s2,e2,o,score,ref,ctg)
 
-def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,inversioncost=1,_lambda=5,eps=1,alfa=1):
+def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,inversioncost=1,_lambda=5,eps=1,alfa=1,gapopen=10):
 
     orgchain=sorted(syntenyblocks,key=lambda c: c[5])
     maxchain=syntenyblocks
-    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa)
+    maxchain_weight,maxchain_cost,maxchain_edgecosts=chainscore(maxchain, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa,gapopen=gapopen)
     maxchainscore=maxchain_weight-maxchain_cost
 
     stack=[]
@@ -803,7 +805,7 @@ def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,invers
             update_progress(i,len(orgchain))
 
         tmp=list(stack+orgchain[i+1:])
-        weight,cost,edgecosts=chainscore(tmp, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa)
+        weight,cost,edgecosts=chainscore(tmp, rlength, qlength, ctg2range, rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,alfa=alfa,gapopen=gapopen)
         tmpchainscore=weight-cost
 
         if tmpchainscore<maxchainscore:
@@ -820,12 +822,12 @@ def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,invers
 
     return maxchain,maxchain_weight,maxchain_cost,maxchain_edgecosts
 
-def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, _lambda=5, eps=1, alfa=1):
+def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, _lambda=5, eps=1, alfa=1, gapopen=10):
     
     if len(chain)==0:
         start=(0,0,rlength,rlength,0,0,0,0)
         end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
-        cost=gapcost(start,end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
+        cost=gapcost(start,end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,gapopen=gapopen,axis=0)
         return 0,cost,[cost]
 
     chain.sort(key=lambda s: s[0]) #order by reference position
@@ -848,7 +850,7 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
     rearrangements=0
     inversions=0
 
-    startcost=gapcost(start,chain[0],rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
+    startcost=gapcost(start,chain[0],rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,gapopen=gapopen,axis=0)
 
     cost=startcost
     edgecosts=[startcost]
@@ -872,13 +874,13 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
         if pctg==ctg and pref==ref2:
 
             if (pqi==qi-1) or (pqi==qi+1): #check if the two blocks are colinear
-                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
+                gc=gapcost(pblock,block,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,gapopen=gapopen,axis=0)
                 cost+=gc
                 edgecosts.append(gc)
             else: #all other options use rearrangement penalty
                 rearrangements+=1
-                cost+=rearrangecost
-                edgecosts.append(rearrangecost)
+                cost+=(gapopen+rearrangecost)
+                edgecosts.append(gapopen+rearrangecost)
         
         else: #cross contigs
             
@@ -906,12 +908,12 @@ def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversion
 
             if pq_ctg==ctg or nq_ctg==pctg: #there exists another block on this query contig before changing contigs, so has to be rearranged
                 rearrangements+=1
-                cost+=rearrangecost
-                edgecosts.append(rearrangecost)
+                cost+=(gapopen+rearrangecost)
+                edgecosts.append((gapopen+rearrangecost))
             else:
-                edgecosts.append(0) #simple traversal between two contigs
+                edgecosts.append(gapopen) #simple traversal between two contigs
 
-    endcost=gapcost(chain[-1],end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,axis=0)
+    endcost=gapcost(chain[-1],end,rearrangecost=rearrangecost,inversioncost=inversioncost,_lambda=_lambda,eps=eps,gapopen=gapopen,axis=0)
 
     cost+=endcost
 
@@ -929,7 +931,7 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, _lambda=5, eps=1, alfa=1):
+def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, _lambda=5, eps=1, alfa=1, gapopen=10):
 
     sep=rlength
     
@@ -981,7 +983,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     t0=time.time()
 
     deepest=0
-    best=0
+    best=None
 
     for ri in xrange(n):
         block=syntenyblocks[ri]
@@ -1002,11 +1004,11 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         s1,e1,s2,e2,o,score,refid,ctgid=block
 
         trace=False
-        # starttrace=10013040
-        # endtrace=10013047+10
-        # if e1>=starttrace and e1<endtrace: # and refid==ctgtrace:
-        #     logging.info("BLOCK: %s"%str(block))
-        #     trace=True
+        starttrace=10013040
+        endtrace=10013047+10
+        if e1>=starttrace and e1<endtrace: # and refid==ctgtrace:
+            logging.info("BLOCK: %s"%str(block))
+            trace=True
 
         bestscore=None
         bestblock=None
@@ -1027,7 +1029,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     break
                 cscore,pblock=heap[i]
             
-            if cscore==best:
+            if best!=None or cscore==best:
                 checkedbest=True
 
             ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
@@ -1070,11 +1072,46 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
             #if blocks come from same query contig and reference contig, compute gapcost, else introduce rearrangement cost
             if _pblock[6]==_block[6]!=None and _pblock[7]==_block[7]!=None:
-                c=gapcost(_pblock,_block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,_lambda=_lambda,axis=axis)
-            elif _pblock[6]==_block[6]==None and _pblock[7]==_block[7]==None:
-                c=(abs(block[c1]-(pblock[c1+1]))*eps)
+                c=gapcost(_pblock,_block,rearrangecost=rearrangecost,inversioncost=inversioncost,eps=eps,_lambda=_lambda,gapopen=gapopen,axis=axis)
+            elif _pblock[6]==_block[6]==None and _pblock[7]==_block[7]==None: #connect two dummy blocks
+                c=gapopen+(abs(block[c1]-(pblock[c1+1]))*eps)
             else: #blocks cross contigs or ref without passing a dummy block, introduce rearrangement cost
-                c=rearrangecost+(abs(block[c1]-(pblock[c1+1]))*eps)
+
+                pblockctgstart,pblockctgend=ctg2range[_pblock[7]]
+                blockctgstart,blockctgend=ctg2range[_block[7]]
+                pblockrefstart,pblockrefend=ctg2range[_pblock[6]]
+                blockrefstart,blockrefend=ctg2range[_block[6]]
+
+                if _pblock[6]==_block[6] and axis==0:
+                    if _pblock[4]==0:
+                        cp=abs( pblockctgend-_pblock[3])
+                    else:
+                        cp=abs( _pblock[2]-pblockctgstart)
+
+                    if _block[4]==0:
+                        cb=abs( blockctgend-_block[3] )
+                    else:
+                        cb=abs( _block[2]-blockctgstart )
+
+                    c=gapopen+min((rearrangecost,((cp+cb)*eps)))
+
+                elif _pblock[7]==_block[7] and axis==1:
+
+                    if _pblock[4]==0:
+                        cp=abs( pblockrefend-_pblock[1])
+                    else:
+                        cp=abs( _pblock[0]-pblockrefstart)
+
+                    if _block[4]==0:
+                        cb=abs( _block[0]-blockrefstart )
+                    else:
+                        cb=abs( blockrefend-_block[1])
+
+                    c=gapopen+min((rearrangecost,((cp+cb)*eps)))
+                else:
+                    c=rearrangecost+gapopen+(abs(block[c1]-(pblock[c1+1]))*eps)
+
+            assert(c>=0)
 
             if trace:
                 logging.info("Connect to PBLOCK: %s costs %s, depth=%s, cscore,%s, cscore-c=%d, bestscore=%s"%(pblock,c,l,cscore,cscore-c,bestscore))
@@ -1087,13 +1124,13 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
             if not useheap:
                 if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest: #make sure we backtrack far enough
                     break
-
+        
         # if l>lastn:
             # logging.info("Forced deeper %d backtrack for block: %s"%(l,block))
 
         cscore=bestscore+(alfa*score)
 
-        if cscore>best:
+        if best==None or cscore>best:
             best=cscore
 
         if useheap:
@@ -1127,57 +1164,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
     return chain[::-1]
 
-def _gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5):
-
-    #sort by reference first
-    if block2[0]<block1[0]:
-        block1,block2=block2,block1
-
-    d1=abs(block2[0]-block1[1])
-
-    if block1[4]==block2[4]==0: #both normal orientation
-        if block2[2]<block1[2]:#always has to be rearranged!
-            d2=abs(block1[2]-block2[3])
-            return (_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
-        else:
-            d2=abs(block2[2]-block1[3])
-            # indelcost=min((rearrangecost,lambda*abs(d1-d2)))
-            # substitutioncost=eps*(d1 if d1<d2 else d2)
-            # colinearcost=indelcost+substitutioncost
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-
-    elif block1[4]==block2[4]==1: #both reverse comp orientation
-        if block2[2]>block1[2]: #always has to be rearranged!
-            d2=abs(block2[2]-block1[3])
-            return (_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+rearrangecost
-        else:
-            d2=abs(block1[2]-block2[3])
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-
-    elif block1[4]==1 and block2[4]==0:
-        if block2[2]>block1[2]:
-            d2=abs(block2[2]-block1[3])
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-        else:
-            d2=abs(block1[2]-block2[3])
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-
-    else:
-        # assert(block1[4]==0 and block2[4]==1)
-        if block2[2]>block1[2]:
-            d2=abs(block2[2]-block1[3])
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-        else:
-            d2=abs(block1[2]-block2[3])
-            colinearcost=(_lambda*abs(d1-d2))+(eps*(d1 if d1<d2 else d2))+inversioncost
-            return colinearcost if colinearcost<rearrangecost else rearrangecost
-
-def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,axis=0):
+def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,gapopen=10,axis=0):
 
     if axis==0: #sorted by ref
         c1,c2=0,2
@@ -1186,41 +1173,119 @@ def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,
 
     assert(block1[c1]<=block2[c1])
 
-    d1=abs(block2[c1]-block1[c1+1])
+    # d1=abs(block2[c1]-block1[c1+1])
+    d1=block2[c1]-block1[c1+1]
+    # d1=d1 if d1>0 else 0
 
     if block1[4]==block2[4]==0: #both normal orientation
         if block2[c2]<block1[c2]:#always has to be rearranged!
             indelcost=rearrangecost
-            substitutioncost=eps*d1
-            return indelcost+substitutioncost
+            substitutioncost=eps*(d1 if d1>0 else 0) #do not penalize if overlap
+            return gapopen+indelcost+substitutioncost
         else:
-            d2=abs(block2[c2]-block1[c2+1])
+            # d2=abs(block2[c2]-block1[c2+1])
+            d2=block2[c2]-block1[c2+1]
+            # d2=d2 if d2>0 else 0
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
-            substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost
 
     elif block1[4]==block2[4]==1: #both reverse comp orientation
         if block2[c2]>block1[c2]: #always has to be rearranged!
             indelcost=rearrangecost
             substitutioncost=eps*d1
-            return indelcost+substitutioncost
+            return gapopen+indelcost+substitutioncost
+        else:
+            # d2=abs(block1[c2]-block2[c2+1])
+            d2=block1[c2]-block2[c2+1]
+            # d2=d2 if d2>0 else 0
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost
+
+    elif block1[4]==1 and block2[4]==0:
+        if block2[c2]>block1[c2]:
+            # d2=abs(block2[c2]-block1[c2+1])
+            d2=block2[c2]-block1[c2+1]
+            # d2=d2 if d2>0 else 0
+
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost+inversioncost
+        else:
+            # d2=abs(block1[c2]-block2[c2+1])
+            d2=block1[c2]-block2[c2+1]
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost+inversioncost
+
+    else:
+        # assert(block1[4]==0 and block2[4]==1)
+        if block2[c2]>block1[c2]:
+            # d2=abs(block2[c2]-block1[c2+1])
+            d2=block2[c2]-block1[c2+1]
+            # d2=d2 if d2>0 else 0
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost+inversioncost
+        else:
+            # d2=abs(block1[c2]-block2[c2+1])
+            d2=block1[c2]-block2[c2+1]
+            # d2=d2 if d2>0 else 0
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            # substitutioncost=eps*(d1 if d1<d2 else d2)
+            substitutioncost=eps*max(((d1 if d1<d2 else d2),0))
+            return gapopen+indelcost+substitutioncost+inversioncost
+
+def _gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,gapopen=10,axis=0):
+
+    if axis==0: #sorted by ref
+        c1,c2=0,2
+    else: #sorted by qry
+        c1,c2=2,0
+
+    assert(block1[c1]<=block2[c1])
+    
+    d1=abs(block2[c1]-block1[c1+1])
+    
+    if block1[4]==block2[4]==0: #both normal orientation
+        if block2[c2]<block1[c2]:#always has to be rearranged!
+            indelcost=rearrangecost
+            substitutioncost=eps*d1
+            return gapopen+indelcost+substitutioncost
+        else:
+            d2=abs(block2[c2]-block1[c2+1])
+            indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
+            substitutioncost=eps*(d1 if d1<d2 else d2)
+            return gapopen+indelcost+substitutioncost
+
+    elif block1[4]==block2[4]==1: #both reverse comp orientation
+        if block2[c2]>block1[c2]: #always has to be rearranged!
+            indelcost=rearrangecost
+            substitutioncost=eps*d1
+            return gapopen+indelcost+substitutioncost
         else:
             d2=abs(block1[c2]-block2[c2+1])
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
             substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost
+            return gapopen+indelcost+substitutioncost
 
     elif block1[4]==1 and block2[4]==0:
         if block2[c2]>block1[c2]:
             d2=abs(block2[c2]-block1[c2+1])
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
             substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost+inversioncost
+            return gapopen+indelcost+substitutioncost+inversioncost
         else:
             d2=abs(block1[c2]-block2[c2+1])
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
             substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost+inversioncost
+            return gapopen+indelcost+substitutioncost+inversioncost
 
     else:
         # assert(block1[4]==0 and block2[4]==1)
@@ -1228,13 +1293,12 @@ def gapcost(block1,block2,rearrangecost=10000,inversioncost=0,eps=0,_lambda=0.5,
             d2=abs(block2[c2]-block1[c2+1])
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
             substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost+inversioncost
+            return gapopen+indelcost+substitutioncost+inversioncost
         else:
             d2=abs(block1[c2]-block2[c2+1])
             indelcost=min((rearrangecost,_lambda*abs(d1-d2)))
             substitutioncost=eps*(d1 if d1<d2 else d2)
-            return indelcost+substitutioncost+inversioncost
-
+            return gapopen+indelcost+substitutioncost+inversioncost
 
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
