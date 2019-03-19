@@ -1038,9 +1038,9 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
             ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
 
-            if (pblock[c1]==block[c1] and prefid!=None and refid!=None) or pblock[c1+1]>block[c1+1]:
+            if (pblock[c1]==block[c1] and prefid!=None and refid!=None) or (pblock[c1+1]>=block[c1+1] and prefid!=None and refid!=None):
                 continue
-
+            
             l+=1
 
             if bestscore!=None:
