@@ -293,6 +293,14 @@ def transform(args,qry):
 
     logging.info("Start glocal chaining for filtering anchors (reference).")
     
+    # blocks.sort(key=lambda b: b[1]-b[0])
+    # logging.info("Largest ref block: %s"%str(blocks[-1]))
+    # minrefbacktrack=blocks[-1][1]-blocks[-1][0]
+
+    # blocks.sort(key=lambda b: b[3]-b[2])
+    # logging.info("Largest ctg block: %s"%str(blocks[-1]))
+    # minctgbacktrack=blocks[-1][1]-blocks[-1][0]
+
     nbefore=len(blocks)
     syntenyblocks=blocks
     nafter=None
@@ -307,6 +315,7 @@ def transform(args,qry):
                                                             eps=args.eps,
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
+                                                            # lastbp=minrefbacktrack,
                                                             alfa=args.alfa,
                                                             gapopen=args.gapopen,
                                                             axis=0)
@@ -334,6 +343,7 @@ def transform(args,qry):
                                                                 eps=args.eps,
                                                                 useheap=args.useheap, 
                                                                 lastn=args.lastn,
+                                                                # lastbp=minctgbacktrack,
                                                                 alfa=args.alfa,
                                                                 gapopen=args.gapopen,
                                                                 axis=1)
@@ -1007,11 +1017,13 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         s1,e1,s2,e2,o,score,refid,ctgid=block
 
         trace=False
-        # starttrace=9783119
-        # endtrace=9783119+10
+        # starttrace=32331001
+        # endtrace=starttrace+10
         # if s1>=starttrace and s1<endtrace: # and refid==ctgtrace:
-        #     # if block==(4499237, 4502780, 9008394, 9011937, 0, 3543, 0, 1) or block==end:
+        # #     # if block==(4499237, 4502780, 9008394, 9011937, 0, 3543, 0, 1) or block==end:
         #     logging.info("BLOCK: %s"%str(block))
+        #     print "deepest",syntenyblocks[deepest], syntenyblocks[deepest][c1+1]
+        #     print "best",best
         #     trace=True
 
         bestscore=None
@@ -1033,14 +1045,17 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     break
                 cscore,pblock=heap[i]
             
-            if best!=None or cscore==best:
+            if best==None or cscore==best:
                 checkedbest=True
 
             ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
 
             if (pblock[c1]==block[c1] and prefid!=None and refid!=None) or (pblock[c1+1]>=block[c1+1] and prefid!=None and refid!=None):
                 continue
-            
+
+            if (pblock[c2]>=block[c2] and prefid!=None and refid!=None) and (pblock[c2+1]<=block[c2+1] and prefid!=None and refid!=None):
+                continue            
+
             l+=1
 
             if bestscore!=None:
@@ -1048,6 +1063,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     if useheap:
                         break
                     else:
+
                         if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest:
                             break
                         else:
