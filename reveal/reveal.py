@@ -248,7 +248,7 @@ def main():
     parser_transform.add_argument("--noopt", dest="optimise", action="store_false", default=True, help="Don't perform naive optimisation of the glocal chain.")
     parser_transform.add_argument("--heap", dest="useheap", action="store_true", default=False, help="Use a priority queue to compute an optimal chain.")
     parser_transform.add_argument("--lastn", dest="lastn", type=int, default=50, help="Backtrack at least this many anchors while chaining fragments.")
-    parser_transform.add_argument("--lastbp", dest="lastbp", type=int, default=10000, help="Backtrack at least this many bp while chaining fragments.")
+    parser_transform.add_argument("--lastbp", dest="lastbp", type=int, default=20000, help="Backtrack at least this many bp while chaining fragments.")
 
     parser_transform.add_argument("--greedy", dest="greedy", action="store_true", default=False, help="Assign overlap between anchors in a greedy manner. Large anchors become larger.")
     parser_transform.add_argument("--outputbed", dest="outputbed", action="store_true", default=True, help="Produce a bed file that stores the rearrangement breakpoints on the reference assembly.")
