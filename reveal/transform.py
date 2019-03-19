@@ -359,13 +359,6 @@ def transform(args,qry):
     # logging.info("Done, %d anchors remain."%len(syntenyblocks))
     # logging.info("Done.")
 
-    logging.info("Merge consecutive blocks.")
-    syntenyblocks=merge_consecutive(syntenyblocks)
-    logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
-    
-    logging.info("Remove all blocks that are shorter than minchainsum (%d)."%args.minchainsum)
-    syntenyblocks=[b for b in syntenyblocks if b[5] >= args.minchainsum]
-    logging.info("%d blocks after filtering for minchainsum."%len(syntenyblocks))
     
     logging.info("Merge consecutive blocks.")
     syntenyblocks=merge_consecutive(syntenyblocks)
@@ -386,6 +379,14 @@ def transform(args,qry):
         logging.info("Assign overlap between MUMs in a conservative manner.")
         syntenyblocks=remove_overlap_conservative_blocks(syntenyblocks)
         logging.info("Done.")
+    
+    logging.info("Remove all blocks that are shorter than minchainsum (%d)."%args.minchainsum)
+    syntenyblocks=[b for b in syntenyblocks if b[5] >= args.minchainsum]
+    logging.info("%d blocks after filtering for minchainsum."%len(syntenyblocks))
+
+    logging.info("Merge consecutive blocks.")
+    syntenyblocks=merge_consecutive(syntenyblocks)
+    logging.info("%d blocks after merging consecutive blocks."%len(syntenyblocks))
 
     if args.optimise and len(syntenyblocks)>1:
 
@@ -824,6 +825,8 @@ def optimise(syntenyblocks,rlength, qlength, ctg2range,rearrangecost=1000,invers
 
 def chainscore(chain, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, _lambda=5, eps=1, alfa=1, gapopen=10):
     
+    # logging.debug("rearrangecost=%d, inversioncost=%d, _lambda=%d, eps=%d, alfa=%d, gapopen=%d"%(rearrangecost, inversioncost, _lambda, eps, alfa, gapopen))
+
     if len(chain)==0:
         start=(0,0,rlength,rlength,0,0,0,0)
         end=(rlength,rlength,rlength+qlength,rlength+qlength,0,0,0,0)
@@ -963,8 +966,6 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
 
     syntenyblocks.sort(key=lambda s: (s[c1],-s[5]) ) #order by reference position, then score
 
-    print "LAST BLOCKS:",syntenyblocks[-3:]
-
     if useheap:
         heap=sortedcontainers.SortedList()
         heap.add((0,start))
@@ -1006,12 +1007,12 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         s1,e1,s2,e2,o,score,refid,ctgid=block
 
         trace=False
-        # starttrace=4499237
-        # endtrace=4499237+10
+        # starttrace=9783119
+        # endtrace=9783119+10
         # if s1>=starttrace and s1<endtrace: # and refid==ctgtrace:
-        # if block==(4499237, 4502780, 9008394, 9011937, 0, 3543, 0, 1) or block==end:
-            # logging.info("BLOCK: %s"%str(block))
-            # trace=True
+        #     # if block==(4499237, 4502780, 9008394, 9011937, 0, 3543, 0, 1) or block==end:
+        #     logging.info("BLOCK: %s"%str(block))
+        #     trace=True
 
         bestscore=None
         bestblock=None
