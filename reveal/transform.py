@@ -295,11 +295,7 @@ def transform(args,qry):
     
     # blocks.sort(key=lambda b: b[1]-b[0])
     # logging.info("Largest ref block: %s"%str(blocks[-1]))
-    # minrefbacktrack=blocks[-1][1]-blocks[-1][0]
-
-    # blocks.sort(key=lambda b: b[3]-b[2])
-    # logging.info("Largest ctg block: %s"%str(blocks[-1]))
-    # minctgbacktrack=blocks[-1][1]-blocks[-1][0]
+    # minbacktrack=blocks[-1][1]-blocks[-1][0]
 
     nbefore=len(blocks)
     syntenyblocks=blocks
@@ -315,7 +311,7 @@ def transform(args,qry):
                                                             eps=args.eps,
                                                             useheap=args.useheap, 
                                                             lastn=args.lastn,
-                                                            # lastbp=minrefbacktrack,
+                                                            lastbp=args.lastbp,
                                                             alfa=args.alfa,
                                                             gapopen=args.gapopen,
                                                             axis=0)
@@ -343,7 +339,7 @@ def transform(args,qry):
                                                                 eps=args.eps,
                                                                 useheap=args.useheap, 
                                                                 lastn=args.lastn,
-                                                                # lastbp=minctgbacktrack,
+                                                                lastbp=args.lastbp,
                                                                 alfa=args.alfa,
                                                                 gapopen=args.gapopen,
                                                                 axis=1)
@@ -944,7 +940,7 @@ def update_progress(i,n):
             sys.stdout.write('\n')
         sys.stdout.flush()
 
-def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, useheap=False, axis=0, _lambda=5, eps=1, alfa=1, gapopen=10):
+def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, inversioncost=1, lastn=50, lastbp=10000, useheap=False, axis=0, _lambda=5, eps=1, alfa=1, gapopen=10):
 
     sep=rlength
     
@@ -1029,7 +1025,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         bestscore=None
         bestblock=None
         bestcost=0
-        checkedbest=False
+        # checkedbest=False
 
         l=0
         
@@ -1045,8 +1041,8 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     break
                 cscore,pblock=heap[i]
             
-            if best==None or cscore==best:
-                checkedbest=True
+            # if best==None or cscore==best:
+                # checkedbest=True
 
             ps1,pe1,ps2,pe2,po,pscore,prefid,pctgid=pblock
 
@@ -1063,8 +1059,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                     if useheap:
                         break
                     else:
-
-                        if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest:
+                        if block[c1]-pblock[c1]>lastbp and l>=lastn and pblock[c1]<syntenyblocks[deepest][c1]:
                             break
                         else:
                             continue
@@ -1139,17 +1134,17 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
                 bestcost=c
 
             if not useheap:
-                if l>=lastn and pblock[c1]<syntenyblocks[deepest][c1] and checkedbest: #make sure we backtrack far enough
+                if block[c1]-pblock[c1]>lastbp and l>=lastn and pblock[c1]<syntenyblocks[deepest][c1]:
                     break
 
         # if l>lastn:
             # logging.info("Forced deeper %d backtrack for block: %s"%(l,block))
 
         cscore=bestscore+(alfa*score)
-
-        if best==None or cscore>best:
-            best=cscore
-
+        
+        # if best==None or cscore>best:
+            # best=cscore
+        
         if useheap:
             heap.add((cscore,block))
         else:
