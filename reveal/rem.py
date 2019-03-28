@@ -389,57 +389,57 @@ def prune_nodes(G,T=""):
                 continue
 
             for run in [0,1]:
-                if type(node)==str or data['aligned']!=0:
-                    if run==0:
-                        if type(G)==nx.MultiDiGraph:
-                            neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                        else:
-                            neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                # if type(node)==str or data['aligned']!=0:
+                if run==0:
+                    if type(G)==nx.MultiDiGraph:
+                        neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
                     else:
-                        if type(G)==nx.MultiDiGraph:
-                            neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                        else:
-                            neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                    
-                    seqs={}
-                    for nei in neis:
-                        if 'seq' not in G.node[nei]:
-                            if not isinstance(nei,Interval):
-                                continue
-                            seq=T[nei.begin:nei.end]
-                        else:
-                            seq=G.node[nei]['seq']
-                        if seq in seqs:
-                            seqs[seq].append(nei)
-                        else:
-                            seqs[seq]=[nei]
+                        neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                else:
+                    if type(G)==nx.MultiDiGraph:
+                        neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                    else:
+                        neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                
+                seqs={}
+                for nei in neis:
+                    if 'seq' not in G.node[nei]:
+                        if not isinstance(nei,Interval):
+                            continue
+                        seq=T[nei.begin:nei.end]
+                    else:
+                        seq=G.node[nei]['seq']
+                    if seq in seqs:
+                        seqs[seq].append(nei)
+                    else:
+                        seqs[seq]=[nei]
 
-                    for key in seqs:
-                        group=seqs[key]
-                        if len(group)>1:
-                            merge=True
-                            for v in group:
-                                if run==0:
-                                    if type(G)==nx.MultiDiGraph:
-                                        if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                            merge=False
-                                            break
-                                    else:
-                                        if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                            merge=False
-                                            break
+                for key in seqs:
+                    group=seqs[key]
+                    if len(group)>1:
+                        merge=True
+                        for v in group:
+                            if run==0:
+                                if type(G)==nx.MultiDiGraph:
+                                    if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                        merge=False
+                                        break
                                 else:
-                                    if type(G)==nx.MultiDiGraph:
-                                        if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                            merge=False
-                                            break
-                                    else:
-                                        if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                            merge=False
-                                            break
-                            if merge:
-                                mergenodes(G,group)
-                                converged=False
+                                    if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                        merge=False
+                                        break
+                            else:
+                                if type(G)==nx.MultiDiGraph:
+                                    if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                        merge=False
+                                        break
+                                else:
+                                    if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                        merge=False
+                                        break
+                        if merge:
+                            mergenodes(G,group)
+                            converged=False
 
 def align_cmd(args):
     G,idx=align_genomes(args)
