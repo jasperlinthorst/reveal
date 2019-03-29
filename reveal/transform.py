@@ -612,7 +612,7 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
     for name in refnames:
         if pid in mappablectgs:
             # name=os.path.splitext(os.path.basename(reference))[0]+"_"+name
-            name=outputprefix+"_"+name
+            name=os.path.basename(outputprefix+"_"+name)
             G.graph['paths'].append(name)
             G.graph['path2id'][name]=pid
             G.graph['id2path'][pid]=name
@@ -702,8 +702,7 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
 
         G.add_edge(pnid,end,paths=set([ctgid]),ofrom="+" if o==0 else "-", oto="+")
 
-    write_gfa(G,None,outputfile=outputprefix+".gfa")
-
+    write_gfa(G,None,outputfile=outputprefix if outputprefix.endswith(".gfa") else outputprefix+".gfa")
 
 def merge_consecutive(syntenyblocks):
     if len(syntenyblocks)<2:
@@ -739,7 +738,6 @@ def merge_consecutive(syntenyblocks):
         head+=1
 
     return syntenyblocks
-
 
 def extendblocks(syntenyblocks,ctg2range):
 
@@ -992,7 +990,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
     t0=time.time()
 
     deepest=0
-    best=None
+    # best=None
 
     for ri in xrange(n):
         block=syntenyblocks[ri]
@@ -1013,13 +1011,12 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
         s1,e1,s2,e2,o,score,refid,ctgid=block
 
         trace=False
-        # starttrace=32331001
+        # starttrace=105637436
         # endtrace=starttrace+10
         # if s1>=starttrace and s1<endtrace: # and refid==ctgtrace:
         # #     # if block==(4499237, 4502780, 9008394, 9011937, 0, 3543, 0, 1) or block==end:
         #     logging.info("BLOCK: %s"%str(block))
         #     print "deepest",syntenyblocks[deepest], syntenyblocks[deepest][c1+1]
-        #     print "best",best
         #     trace=True
 
         bestscore=None
@@ -1126,7 +1123,7 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
             assert(c>=0)
 
             if trace:
-                logging.info("Connect to PBLOCK: %s costs %s, depth=%s, cscore,%s, cscore-c=%d, bestscore=%s"%(pblock,c,l,cscore,cscore-c,bestscore))
+                logging.info("Connect to PBLOCK: %s costs %s, depth=%s, lastbp=%d, cscore,%s, cscore-c=%d, bestscore=%s"%(pblock,c,l,block[c1]-pblock[c1],cscore,cscore-c,bestscore))
 
             if bestscore==None or cscore-c > bestscore:
                 bestscore=cscore-c
@@ -1141,10 +1138,10 @@ def glocalchain(syntenyblocks, rlength, qlength, ctg2range, rearrangecost=1000, 
             # logging.info("Forced deeper %d backtrack for block: %s"%(l,block))
 
         cscore=bestscore+(alfa*score)
-        
+
         # if best==None or cscore>best:
             # best=cscore
-        
+
         if useheap:
             heap.add((cscore,block))
         else:
