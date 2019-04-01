@@ -2,12 +2,16 @@
 import sys
 import os
 import logging
-
+import uuid
 def annotate(args):
     import vcf
     from vcf.parser import _Info as VcfInfo
 
     vcf_reader = vcf.Reader(filename=args.vcffile)
+
+    aid=0
+    # variant2aid={}
+    aid2variant={}
 
     vfile=args.vcffile+".fasta"
     with open(vfile,'w') as v:
@@ -16,9 +20,12 @@ def annotate(args):
                 if record.INFO['diffsize']>=args.mindiff:
                     for i,allele in enumerate(record.alleles):
                         allele=str(allele)
-                        v.write(">%s\n"%str(record.CHROM+"_"+str(record.POS)+"_"+str(i)))
-                        #write in blocks of 50
-                        for i in range((len(allele)/50)+1):
+                        aid+=1
+                        aid2variant[aid]=(record.CHROM,record.POS,i)
+                        # variant2aid[(record.CHROM,record.POS,i)]=aid
+                        # v.write(">%s\n"%str(record.CHROM+"_"+str(record.POS)+"_"+str(i)))
+                        v.write(">%d\n"%aid)
+                        for i in range((len(allele)/50)+1): #write in blocks of 50
                             v.write("%s\n"% allele[i*50:(i+1)*50] )
 
     vcf_reader = vcf.Reader(filename=args.vcffile)
@@ -32,7 +39,7 @@ def annotate(args):
             sys.exit(1)
         logging.info("Done.")
 
-        repmd=load_repm_annotations(vfile+".out")
+        repmd=load_repm_annotations(vfile+".out",aid2variant)
 
         #clean up
         os.remove(vfile+".out")
@@ -55,7 +62,7 @@ def annotate(args):
             sys.exit(1)
         logging.info("Done.")
 
-        trfd=load_trf_annotations(vfile+".trf")
+        trfd=load_trf_annotations(vfile+".trf",aid2variant)
 
         #clean up
         os.remove(vfile+".trf")
@@ -88,7 +95,8 @@ def annotate(args):
         for record in vcf_reader:
 
             if record.INFO['diffsize']>=args.mindiff:
-                key=str(record.CHROM+"_"+str(record.POS))
+                # key=str(record.CHROM+"_"+str(record.POS))
+                key=(record.CHROM,record.POS)
 
                 if key in repmd: #we have a repeat masker annotation for this allele
                     record.INFO['repm_rfamily']=repmd[key]['rfamily']
@@ -131,7 +139,7 @@ def annotate(args):
         pass
 
 
-def load_trf_annotations(trffile):
+def load_trf_annotations(trffile,aid2variant):
     trfd={}
     pvariant=None
     trfcolnames=['start','end','period_size','copynumber','cons_size','percent_match','percent_indel','score','A','C','G','T','entropy','pattern','masked']
@@ -142,11 +150,9 @@ def load_trf_annotations(trffile):
         for line in trfout:
             line=line.strip()
             if line[0]=='@':
-                vcols=line[1:].split("_")
-                variant="_".join(vcols[:2])
-                allele=vcols[2]
-                # vlen=int(vcols[3])
-    #             variant=line[1:line.rfind("_")]
+                aid=int(line[1:])
+                allele=aid2variant[aid][2]
+                variant=aid2variant[aid][:2]
                 continue
             else:
                 cols=line.rstrip().split()
@@ -160,10 +166,11 @@ def load_trf_annotations(trffile):
                 trfd[variant]=repeat
             
             pvariant=variant
+
     return trfd
 
 
-def load_repm_annotations(repmfile):
+def load_repm_annotations(repmfile,aid2variant):
     repmd={}
     pvariant=None
 
@@ -179,9 +186,10 @@ def load_repm_annotations(repmfile):
             
             repeat['score']=float(repeat['score'])
             
-            variant="_".join(cols[4].split('_')[:2])
-            allele=cols[4].split('_')[2]
-
+            aid=int(cols[4])
+            allele=aid2variant[aid][2]
+            variant=aid2variant[aid][:2]
+            
             qcov=(int(repeat['qend'])-int(repeat['qbegin']))/float(int(repeat['qleft'][1:-1])+int(repeat['qend']))
             
             if repeat['rbegin'][0]=='(':
