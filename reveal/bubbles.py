@@ -373,6 +373,10 @@ def variants_cmd(args):
             sys.stdout.write("##fileformat=VCFv4.0\n")#?
             sys.stdout.write("##source=REVEAL\n")
             sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+            sys.stdout.write("##INFO=<ID=diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
+            sys.stdout.write("##INFO=<ID=source,Number=1,Type=Integer,Description=\"Source of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=sink,Number=1,Type=Integer,Description=\"Sink of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=type,Number=1,Type=String,Description=\"Simplistic interpretation of the variant.\">\n")
             sys.stdout.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT")
             for sample in gori:
                 sys.stdout.write("\t%s"%sample)
@@ -408,6 +412,8 @@ def variants_cmd(args):
             if args.reference in v.vpos:
                 cds=args.reference
             else: #source does not occur on specified reference, pick any other path that does have a location for this variant
+                if args.refonly: #skip the variant if its not positionable on the reference
+                    continue
                 for cds in v.vpos.keys():
                     if not g.graph['id2path'][cds].startswith('*'): #use ref layout if its there
                         break
@@ -488,7 +494,7 @@ def variants_cmd(args):
                     if sample in v.calls:
                         sys.stdout.write("\t%s"%v.calls[sample])
                     else:
-                        sys.stdout.write("\t")
+                        sys.stdout.write("\t.")
 
             else:
                 sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
@@ -629,45 +635,47 @@ class Variant(Bubble):
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
         self.spans_gap=False
-        
+
         gt=list(set(self.G.successors(self.source)) & set(self.nodes))
         gt.sort(key=lambda l: self.ordD[l])
         bsamples=set(self.G.node[self.source]['offsets'].keys())&set(self.G.node[self.sink]['offsets'].keys())
+
+        # bsamplestmp=bsamples.copy()
+        # if self.issimple():
+        #     for i,v in enumerate(gt):
+        #         if v==self.sink:
+        #             self.genotypes.append('-')
+        #         else:
+        #             s=self.G.node[v]['seq']
+        #             self.genotypes.append(s)
+
+        #         for sampleid in self.G.node[v]['offsets'].keys():
+        #             if sampleid in bsamplestmp:
+        #                 self.calls[bubble.G.graph['id2path'][sampleid]]=i
+        #                 bsamplestmp.discard(sampleid)
+        # else:
         
-        bsamplestmp=bsamples.copy()
-        if self.issimple():
-            for i,v in enumerate(gt):
-                if v==self.sink:
-                    self.genotypes.append('-')
-                else:
-                    s=self.G.node[v]['seq']
-                    self.genotypes.append(s)
+        self.vtype="complex"
 
-                for sampleid in self.G.node[v]['offsets'].keys():
-                    if sampleid in bsamplestmp:
-                        self.calls[bubble.G.graph['id2path'][sampleid]]=i
-                        bsamplestmp.discard(sampleid)
-        else:
-            self.vtype="complex"
-            seqd=dict()
-            for sid in bsamples:
-                seq=""
-                for v in self.nodes[1:-1]: #determine sequence through the complex bubble; use the entire path as genotype
-                    if sid in self.G.node[v]['offsets']:
-                        seq+=self.G.node[v]['seq']
+        seqd=dict()
+        for sid in bsamples:
+            seq=""
+            for v in self.nodes[1:-1]: #determine sequence through the complex bubble; use the entire path as genotype
+                if sid in self.G.node[v]['offsets']:
+                    seq+=self.G.node[v]['seq']
 
-                if seq=="":
-                    seq="-"
+            if seq=="":
+                seq="-"
 
-                if seq in seqd:
-                    seqd[seq].append(sid)
-                else:
-                    seqd[seq]=[sid]
+            if seq in seqd:
+                seqd[seq].append(sid)
+            else:
+                seqd[seq]=[sid]
 
-            self.genotypes=list(seqd.keys())
-            for i,k in enumerate(self.genotypes):
-                for sid in seqd[k]:
-                    self.calls[bubble.G.graph['id2path'][sid]]=i
+        self.genotypes=list(seqd.keys())
+        for i,k in enumerate(self.genotypes):
+            for sid in seqd[k]:
+                self.calls[bubble.G.graph['id2path'][sid]]=i
         
         if self.issimple():
             if self.G.has_edge(self.source,self.sink):
