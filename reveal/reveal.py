@@ -27,6 +27,8 @@ import split
 import align
 import unzip
 import chop
+import annotate
+
 
 import logging
 #add custom loglevel TRACE
@@ -336,12 +338,20 @@ def main():
     parser_variants.add_argument("--minflank", dest="minflank", default=0, type=int, help="Only output variants with an exact matching flanking sequence of at least this length.")
     parser_variants.add_argument("--type", dest="type", default="all", choices=["all","snv","indel","multi-allelic","region","complex","undefined"], help="Only output variants of this type.")
     parser_variants.add_argument("--nogaps", dest="nogaps", default=False, action="store_true", help="Don't output variants that are caused by gaps (contain the N character).")
+    parser_variants.add_argument("--refonly", dest="refonly", default=False, action="store_true", help="Don't output variants that are not positionable on the specified reference.")
     parser_variants.set_defaults(func=bubbles.variants_cmd)
     
     parser_rearrangements = subparsers.add_parser('rearrangements', prog="reveal rearrangements", description="Report on edges in the graph that describe rearrangements.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_rearrangements.add_argument("-r", dest="reference", type=str, default=None, help="Name of the sequence that, should be used as a coordinate system or reference.")
     parser_rearrangements.add_argument("graph", nargs=1, help='Graph in gfa format for rearrangement edges are reported.')
     parser_rearrangements.set_defaults(func=bubbles.rearrangements_cmd)
+
+    parser_annotate = subparsers.add_parser('annotate', prog="reveal annotate", description="Add annotations to variants in a vcf file using trf and repeatmasker.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
+    parser_annotate.add_argument("--species", dest="species", type=str, default="human", help="Which \'species\' flag to pass on to repeatmasker.")
+    parser_annotate.add_argument("--nproc", dest="repmproc", type=int, default=1, help="How many processes repeatmasker should use for annotation (-pa flag).")
+    parser_annotate.add_argument("--mindiff", dest="mindiff", default=50, type=int, help="Only annotate variants where the difference between the min- and max-allele size is larger or equal to this many bp.")
+    parser_annotate.add_argument("vcffile", help='Variants from a graph in the vcf file format')
+    parser_annotate.set_defaults(func=annotate.annotate)
 
     parser_merge = subparsers.add_parser('merge', prog="reveal merge", description="Combine multiple gfa graphs into a single gfa graph.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_merge.add_argument("graphs", nargs='*', help='Graphs in gfa format that should be merged.')
