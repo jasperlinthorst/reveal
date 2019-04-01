@@ -3,6 +3,9 @@ import sys
 import os
 import logging
 import uuid
+import gzip
+
+
 def annotate(args):
     import vcf
     from vcf.parser import _Info as VcfInfo
@@ -12,12 +15,13 @@ def annotate(args):
     aid=0
     # variant2aid={}
     aid2variant={}
+    vi=0
 
     vfile=args.vcffile+".fasta"
     with open(vfile,'w') as v:
         for record in vcf_reader:
             if 'diffsize' in record.INFO:
-                if record.INFO['diffsize']>=args.mindiff:
+                if record.INFO['diffsize']>=args.mindiff and record.INFO['diffsize']<args.maxdiff:
                     for i,allele in enumerate(record.alleles):
                         allele=str(allele)
                         aid+=1
@@ -27,6 +31,11 @@ def annotate(args):
                         v.write(">%d\n"%aid)
                         for i in range((len(allele)/50)+1): #write in blocks of 50
                             v.write("%s\n"% allele[i*50:(i+1)*50] )
+                    vi+=1
+
+    if vi==0:
+        logging.info("No variants in this size range.")
+        sys.exit(1)
 
     vcf_reader = vcf.Reader(filename=args.vcffile)
 
@@ -84,17 +93,16 @@ def annotate(args):
     vcf_reader.infos['reveal_type']=VcfInfo('reveal_type', 1, 'String', 'REVEAL\'s best guess at the type of variant.',None,None)
 
     if args.vcffile.endswith('.vcf.gz'):
-        basename,ext=os.path.splitext(basename)
-        outputfilename=args.vcffile[:-7]+".annotated.vcf.gz"
+        outputfile=gzip.open(args.vcffile[:-7]+".annotated.vcf.gz",'w')
     else:
-        outputfilename=args.vcffile[:-4]+".annotated.vcf"
+        outputfile=open(args.vcffile[:-4]+".annotated.vcf",'w')
 
-    vcf_writer = vcf.Writer(open(outputfilename,'w'), vcf_reader)
+    vcf_writer = vcf.Writer(outputfile, vcf_reader)
 
     try:
         for record in vcf_reader:
 
-            if record.INFO['diffsize']>=args.mindiff:
+            if record.INFO['diffsize']>=args.mindiff and record.INFO['diffsize']<args.maxdiff:
                 # key=str(record.CHROM+"_"+str(record.POS))
                 key=(record.CHROM,record.POS)
 
