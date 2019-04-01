@@ -107,12 +107,12 @@ class TestReveal(TestCase):
         self.assertTrue(len(lines)>0)
         self.assertTrue(lines[0].find(":")!=-1)
     
-    @with_setup(setup, teardown)
-    def test11_comp_cmd(self):
-        sys.argv=['reveal','comp','1a_1b_1c.gfa']
-        reveal.main()
-        self.assertTrue(os.path.exists('1a_1b_1c.rc.gfa'))
-        os.remove("1a_1b_1c.rc.gfa")
+    # @with_setup(setup, teardown)
+    # def test11_comp_cmd(self):
+    #     sys.argv=['reveal','comp','1a_1b_1c.gfa']
+    #     reveal.main()
+    #     self.assertTrue(os.path.exists('1a_1b_1c.rc.gfa'))
+    #     os.remove("1a_1b_1c.rc.gfa")
     
     @with_setup(setup, teardown)
     def test12_split_cmd(self):
@@ -166,17 +166,17 @@ class TestReveal(TestCase):
         os.remove("1a_1b.fasta")
         os.remove("1a_1b.unplaced.fasta")
     
-    def test17_pairchain_cmd(self):
-        sys.argv=['reveal','chain','tests/1a.fa','tests/1b.fa','-o','1a_1b.chain']
-        reveal.main()
-        self.assertTrue(os.path.exists("1a_1b.chain.gfa"))
-        os.remove("1a_1b.chain.gfa")
+    # def test17_pairchain_cmd(self):
+    #     sys.argv=['reveal','chain','tests/1a.fa','tests/1b.fa','-o','1a_1b.chain']
+    #     reveal.main()
+    #     self.assertTrue(os.path.exists("1a_1b.chain.gfa"))
+    #     os.remove("1a_1b.chain.gfa")
     
-    def test18_multichain_cmd(self):
-        sys.argv=['reveal','chain','tests/1a.fa','tests/1b.fa','tests/1c.fa','-o','1a_1b_1c.chain']
-        reveal.main()
-        self.assertTrue(os.path.exists("1a_1b_1c.chain.gfa"))
-        os.remove("1a_1b_1c.chain.gfa")
+    # def test18_multichain_cmd(self):
+    #     sys.argv=['reveal','chain','tests/1a.fa','tests/1b.fa','tests/1c.fa','-o','1a_1b_1c.chain']
+    #     reveal.main()
+    #     self.assertTrue(os.path.exists("1a_1b_1c.chain.gfa"))
+    #     os.remove("1a_1b_1c.chain.gfa")
     
     def test19_convert_cmd(self):
         sys.argv=['reveal','convert','1a_1b.gfa','123a_123b.gfa']
