@@ -372,11 +372,14 @@ def variants_cmd(args):
         elif args.vcfout:
             sys.stdout.write("##fileformat=VCFv4.0\n")#?
             sys.stdout.write("##source=REVEAL\n")
+            for sid in g.graph['id2path']:
+                size=g.graph['id2end'][sid]
+                sys.stdout.write("##contig=<ID=%s,LENGTH=%d>\n"%(g.graph['id2path'][sid],size))
             sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
             sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=String,Description=\"Allele size\">\n")
             sys.stdout.write("##INFO=<ID=diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
-            sys.stdout.write("##INFO=<ID=source,Number=1,Type=Integer,Description=\"Source of the node pair.\">\n")
-            sys.stdout.write("##INFO=<ID=sink,Number=1,Type=Integer,Description=\"Sink of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=source,Number=1,Type=String,Description=\"Source of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=sink,Number=1,Type=String,Description=\"Sink of the node pair.\">\n")
             sys.stdout.write("##INFO=<ID=type,Number=1,Type=String,Description=\"Simplistic interpretation of the variant.\">\n")
             sys.stdout.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT")
             for sample in gori:
