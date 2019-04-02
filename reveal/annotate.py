@@ -132,7 +132,7 @@ def annotate(args):
                     record.INFO['trf_allele']=trfd[key]['allele'] #numeric representation of the allele that this annotation was based on
 
                 #add custom reveal annotation derived from repeatmasker and trf annotations
-                if key in repmd and repmd[key]['rcov']>0.8 and repmd[key]['qcov']>0.8 and repmd[key]['rfamily']!='Satellite': #repeat annotation and allele have reciprocal overlap >0.8
+                if key in repmd and repmd[key]['rcov']>0.8 and repmd[key]['qcov']>0.8 and repmd[key]['rfamily'].startswith('Satellite'): #repeat annotation and allele have reciprocal overlap >0.8
                     record.INFO['reveal_type']='mei'
                 elif key in trfd and (len(trfd[key]['masked'])/record.INFO['diffsize'])>0.5: #no mei, but more than 50% of the indel size can be attributed to tandemly repeated sequence
                     if trfd[key]['cons_size']==1:
