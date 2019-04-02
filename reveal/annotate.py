@@ -51,10 +51,13 @@ def annotate(args):
         repmd=load_repm_annotations(vfile+".out",aid2variant)
 
         #clean up
-        os.remove(vfile+".out")
-        os.remove(vfile+".tbl")
-        os.remove(vfile+".masked")
-        os.remove(vfile+".cat")
+        try:
+            os.remove(vfile+".out")
+            os.remove(vfile+".tbl")
+            os.remove(vfile+".masked")
+            os.remove(vfile+".cat")
+        except OSError:
+            pass
 
         vcf_reader.infos['repm_rfamily']=VcfInfo('repm_rfamily', 1, 'String', 'Best match for RepeatMasker - Repeat family.',None,None)
         vcf_reader.infos['repm_rtype']=VcfInfo('repm_rtype', 1, 'String', 'Best match for RepeatMasker - Repeat type.',None,None)
@@ -74,7 +77,10 @@ def annotate(args):
         trfd=load_trf_annotations(vfile+".trf",aid2variant)
 
         #clean up
-        os.remove(vfile+".trf")
+        try:
+            os.remove(vfile+".trf")
+        except OSError:
+            pass
 
         vcf_reader.infos['trf_copynumber']=VcfInfo('trf_copynumber', 1, 'Float', 'Best match for TRF - copynumber.',None,None)
         vcf_reader.infos['trf_conssize']=VcfInfo('trf_conssize', 1, 'Integer', 'Best match for TRF - concensus size.',None,None)
@@ -132,11 +138,13 @@ def annotate(args):
                     if trfd[key]['cons_size']==1:
                         record.INFO['reveal_type']='homopolymer'
                     elif trfd[key]['cons_size']<=6:
-                        record.INFO['reveal_type']='STR'
+                        record.INFO['reveal_type']='micro-satellite'
+                    elif trfd[key]['cons_size']<100:
+                        record.INFO['reveal_type']='mini-satellite'
                     elif trfd[key]['cons_size']<1000:
-                        record.INFO['reveal_type']='VNTR'
+                        record.INFO['reveal_type']='macro-satellite'
                     elif trfd[key]['cons_size']>1000:
-                        record.INFO['reveal_type']='CNV'
+                        record.INFO['reveal_type']='mega-satellite'
                 else:
                     record.INFO['reveal_type']='other'
 
