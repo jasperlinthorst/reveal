@@ -350,7 +350,7 @@ def main():
     parser_annotate.add_argument("--species", dest="species", type=str, default="human", help="Which \'species\' flag to pass on to repeatmasker.")
     parser_annotate.add_argument("--nproc", dest="repmproc", type=int, default=1, help="How many processes repeatmasker should use for annotation (-pa flag).")
     parser_annotate.add_argument("--mindiff", dest="mindiff", default=50, type=int, help="Only annotate variants where the difference between the min- and max-allele size is larger or equal to this many bp.")
-    parser_annotate.add_argument("--maxdiff", dest="maxdiff", default=10000, type=int, help="Only annotate variants where the difference between the min- and max-allele size is smaller than this many bp.")
+    parser_annotate.add_argument("--maxdiff", dest="maxdiff", default=100000, type=int, help="Only annotate variants where the difference between the min- and max-allele size is smaller than this many bp.")
     parser_annotate.add_argument("--notrf", dest="trf", default=True, action="store_false", help="Skip the tandem repeat finder for annotation.")
     parser_annotate.add_argument("--norepm", dest="repm", default=True, action="store_false", help="Skip the RepeatMasker for annotation.")
     parser_annotate.add_argument("vcffile", help='Variants from a graph in the vcf file format')
