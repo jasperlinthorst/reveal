@@ -373,6 +373,7 @@ def variants_cmd(args):
             sys.stdout.write("##fileformat=VCFv4.0\n")#?
             sys.stdout.write("##source=REVEAL\n")
             sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+            sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=String,Description=\"Allele size\">\n")
             sys.stdout.write("##INFO=<ID=diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
             sys.stdout.write("##INFO=<ID=source,Number=1,Type=Integer,Description=\"Source of the node pair.\">\n")
             sys.stdout.write("##INFO=<ID=sink,Number=1,Type=Integer,Description=\"Sink of the node pair.\">\n")
@@ -487,12 +488,12 @@ def variants_cmd(args):
                                                                                                             v.source if type(v.source)!=str else '<start>', 
                                                                                                             v.sink if type(v.sink)!=str else '<end>',
                                                                                                             v.vtype),
-                                                                    "GT"
+                                                                    "GT:SZ"
                                                                     ))
 
                 for sample in gori:
                     if sample in v.calls:
-                        sys.stdout.write("\t%s"%v.calls[sample])
+                        sys.stdout.write("\t%s:%d"%(v.calls[sample], len(v.genotypes[v.calls[sample]])))
                     else:
                         sys.stdout.write("\t.")
 
