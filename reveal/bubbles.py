@@ -377,10 +377,12 @@ def variants_cmd(args):
                 sys.stdout.write("##contig=<ID=%s,LENGTH=%d>\n"%(g.graph['id2path'][sid],size))
             sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
             sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=String,Description=\"Allele size\">\n")
-            sys.stdout.write("##INFO=<ID=diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
-            sys.stdout.write("##INFO=<ID=source,Number=1,Type=String,Description=\"Source of the node pair.\">\n")
-            sys.stdout.write("##INFO=<ID=sink,Number=1,Type=String,Description=\"Sink of the node pair.\">\n")
-            sys.stdout.write("##INFO=<ID=type,Number=1,Type=String,Description=\"Simplistic interpretation of the variant.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_source,Number=1,Type=String,Description=\"Source of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_sink,Number=1,Type=String,Description=\"Sink of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_bubbletype,Number=1,Type=String,Description=\"Simplistic interpretation of the variant.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_start,Number=1,Type=String,Description=\"Start position on the specified reference.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_end,Number=1,Type=String,Description=\"End position on the specified reference.\">\n")
             sys.stdout.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT")
             for sample in gori:
                 sys.stdout.write("\t%s"%sample)
@@ -487,10 +489,12 @@ def variants_cmd(args):
                                                                     ",".join(v.genotypes[1:]),
                                                                     ".",
                                                                     "PASS",
-                                                                    "diffsize=%s;source=%s;sink=%s;type=%s"%(maxa-mina, 
+                                                                    "reveal_diffsize=%s;reveal_source=%s;reveal_sink=%s;reveal_bubbletype=%s;reveal_start=%d;reveal_end=%d"%(maxa-mina, 
                                                                                                             v.source if type(v.source)!=str else '<start>', 
                                                                                                             v.sink if type(v.sink)!=str else '<end>',
-                                                                                                            v.vtype),
+                                                                                                            v.vtype,
+                                                                                                            startpos,
+                                                                                                            endpos),
                                                                     "GT:SZ"
                                                                     ))
 
