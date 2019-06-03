@@ -376,7 +376,7 @@ def variants_cmd(args):
                 size=g.graph['id2end'][sid]
                 sys.stdout.write("##contig=<ID=%s,LENGTH=%d>\n"%(g.graph['id2path'][sid],size))
             sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
-            sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=String,Description=\"Allele size\">\n")
+            sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=Integer,Description=\"Allele size\">\n")
             sys.stdout.write("##INFO=<ID=reveal_diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
             sys.stdout.write("##INFO=<ID=reveal_source,Number=1,Type=String,Description=\"Source of the node pair.\">\n")
             sys.stdout.write("##INFO=<ID=reveal_sink,Number=1,Type=String,Description=\"Sink of the node pair.\">\n")
