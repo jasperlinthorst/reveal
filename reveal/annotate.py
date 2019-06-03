@@ -54,11 +54,16 @@ def annotate(args):
             except OSError:
                 pass
 
-        vcf_reader.header.info.add('repm_rfamily', 1, 'String', 'Best match for RepeatMasker - Repeat family.')
-        vcf_reader.header.info.add('repm_rtype', 1, 'String', 'Best match for RepeatMasker - Repeat type.')
-        vcf_reader.header.info.add('repm_rcov', 1, 'Float', 'Best match for RepeatMasker - Fraction of the repeat annotation covered.')
-        vcf_reader.header.info.add('repm_qcov', 1, 'Float', 'Best match for RepeatMasker - Fraction of the indel covered.')
-        vcf_reader.header.info.add('repm_allele', 1, 'Integer', 'The allele that contains the best RepeatMasker match.')
+        if 'repm_rfamily' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('repm_rfamily', 1, 'String', 'Best match for RepeatMasker - Repeat family.')
+        if 'repm_rtype' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('repm_rtype', 1, 'String', 'Best match for RepeatMasker - Repeat type.')
+        if 'repm_rcov' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('repm_rcov', 1, 'Float', 'Best match for RepeatMasker - Fraction of the repeat annotation covered.')
+        if 'repm_qcov' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('repm_qcov', 1, 'Float', 'Best match for RepeatMasker - Fraction of the indel covered.')
+        if 'repm_allele' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('repm_allele', 1, 'Integer', 'The allele that contains the best RepeatMasker match.')
 
     trfd={}
     if args.trf:
@@ -78,17 +83,28 @@ def annotate(args):
             except OSError:
                 pass
 
-        vcf_reader.header.info.add('trf_copynumber', 1, 'Float', 'Best match for TRF - copynumber.')
-        vcf_reader.header.info.add('trf_conssize', 1, 'Integer', 'Best match for TRF - concensus size.')
-        vcf_reader.header.info.add('trf_entropy', 1, 'Float', 'Best match for TRF - entropy.')
-        vcf_reader.header.info.add('trf_pattern', 1, 'String', 'Best match for TRF - pattern.')
-        vcf_reader.header.info.add('trf_start', 1, 'String', 'Best match for TRF - start position of tr.')
-        vcf_reader.header.info.add('trf_end', 1, 'String', 'Best match for TRF - end position of tr.')
-        vcf_reader.header.info.add('trf_gccontent', 1, 'Float', 'Best match for TRF - Fraction of GC bases in the repeat pattern.')
-        vcf_reader.header.info.add('trf_percent_indel', 1, 'Integer', 'Best match for TRF - percentage of indels within the aligned repeat pattern.')
-        vcf_reader.header.info.add('trf_percent_match', 1, 'Integer', 'Best match for TRF - percentage of matches within the aligned repeat pattern.')
-        vcf_reader.header.info.add('trf_cov', 1, 'Float', 'Best match for TRF - fraction of the allele that is masked by this tandem repeat pattern')
-        vcf_reader.header.info.add('trf_allele', 1, 'Integer', 'The allele that contains the best TRF match.')
+        if 'trf_copynumber' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_copynumber', 1, 'Float', 'Best match for TRF - copynumber.')
+        if 'trf_conssize' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_conssize', 1, 'Integer', 'Best match for TRF - concensus size.')
+        if 'trf_entropy' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_entropy', 1, 'Float', 'Best match for TRF - entropy.')
+        if 'trf_pattern' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_pattern', 1, 'String', 'Best match for TRF - pattern.')
+        if 'trf_start' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_start', 1, 'String', 'Best match for TRF - start position of tr.')
+        if 'trf_end' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_end', 1, 'String', 'Best match for TRF - end position of tr.')
+        if 'trf_gccontent' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_gccontent', 1, 'Float', 'Best match for TRF - Fraction of GC bases in the repeat pattern.')
+        if 'trf_percent_indel' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_percent_indel', 1, 'Integer', 'Best match for TRF - percentage of indels within the aligned repeat pattern.')
+        if 'trf_percent_match' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_percent_match', 1, 'Integer', 'Best match for TRF - percentage of matches within the aligned repeat pattern.')
+        if 'trf_cov' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_cov', 1, 'Float', 'Best match for TRF - fraction of the allele that is masked by this tandem repeat pattern')
+        if 'trf_allele' not in vcf_reader.header.info:
+            vcf_reader.header.info.add('trf_allele', 1, 'Integer', 'The allele that contains the best TRF match.')
 
     #clean up
     os.remove(vfile)
@@ -99,9 +115,9 @@ def annotate(args):
         pass
 
     if args.vcffile.endswith('.gz'):
-        outputfile=gzip.open(args.vcffile[:-7]+".annotated.vcf.gz",'w')
+        outputfile=gzip.open(args.vcffile[:-7]+".annotated"+args.vcffile[-7:],'w')
     else:
-        outputfile=open(args.vcffile[:-4]+".annotated.vcf",'w')
+        outputfile=open(args.vcffile[:-4]+".annotated"+args.vcffile[-4:],'w')
 
     vcf_writer = pysam.VariantFile(outputfile, 'w', header=vcf_reader.header)
 
@@ -151,8 +167,10 @@ def annotate(args):
 
             vcf_writer.write(record)
 
+        vcf_writer.close()
+        
     except IOError:
-        pass
+        vcf_writer.close()
 
 
 def load_trf_annotations(trffile,aid2variant):
