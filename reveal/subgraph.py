@@ -51,10 +51,14 @@ def subgraph(args):
                 if v==int(sink):
                     sink_idx=i
                     break
+            else:
+                logging.fatal("Sink node could not be found.")
+                sys.exit(1)
+
             if sink_idx<=source_idx:
                 logging.fatal("Invalid source/sink pair. Topsort indices: %d, %d"%(source_idx,sink_idx))
                 return
-
+            
             for node in topsort[source_idx:sink_idx+1]:
                 nodes.add(int(node))
         else:
@@ -73,14 +77,14 @@ def subgraph(args):
                     startnode=node
         sg.graph['startnodes'].append(startnode)
 
-    for sid in sg.graph['id2path']:
-        end=None
-        for node in sg:
-            if sid in sg.node[node]['offsets']:
-                if end==None or sg.node[node]['offsets'][sid]>end:
-                    end=sg.node[node]['offsets'][sid]
-                    endnode=node
-        sg.graph['endnodes'].append(endnode)
+    # for sid in sg.graph['id2path']:
+    #     end=None
+    #     for node in sg:
+    #         if sid in sg.node[node]['offsets']:
+    #             if end==None or sg.node[node]['offsets'][sid]>end:
+    #                 end=sg.node[node]['offsets'][sid]
+    #                 endnode=node
+    #     sg.graph['endnodes'].append(endnode)
 
     if args.gml:
         write_gml(sg,"",outputfile=args.outfile)
