@@ -22,6 +22,48 @@ def gplot(args):
             sys.exit(1)
     plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
 
+def bedplot(args):
+    from matplotlib import pyplot as plt
+
+    if len(args.fastas)==1:
+        with open(args.fastas[0]) as bedfile:
+            xpoints,rcxpoints=[],[]
+            ypoints,rcypoints=[],[]
+            pref=None
+            xoffset=0
+            for line in bedfile:
+                if line.startswith("#"):
+                    continue
+
+                if pref!=reference:
+                    off
+
+                reference,refbegin,refend,contig,score_cost,orientation,alnstart,alnend=line.rstrip().split()
+                name,ctgidx,lastsegmentidx,ctgbegin,ctgend=contig.split(":")
+                refbegin,refend,alnstart,alnend,ctgbegin,ctgend=[int(v) for v in [refbegin,refend,alnstart,alnend,ctgbegin,ctgend]]
+
+
+                if orientation=='-':
+                    rcxpoints.append(alnstart)
+                    rcxpoints.append(alnend)
+                    rcxpoints.append(None)
+                    rcypoints.append(ctgend)
+                    rcypoints.append(ctgbegin)
+                    rcypoints.append(None)
+                else:
+                    xpoints.append(alnstart)
+                    xpoints.append(alnend)
+                    xpoints.append(None)
+                    ypoints.append(ctgbegin)
+                    ypoints.append(ctgend)
+                    ypoints.append(None)
+
+            print len(xpoints)
+            plt.plot(xpoints,ypoints,'r-')
+            plt.plot(rcxpoints,rcypoints,'g-')
+            plt.plot(1,1)
+            plt.show()
+
 def plot(args):
 
     import matplotlib
@@ -31,7 +73,6 @@ def plot(args):
 
     from matplotlib import pyplot as plt
     from matplotlib import patches as patches
-
 
     vertgaps=[]
     horzgaps=[]
@@ -109,6 +150,9 @@ def plot(args):
             mmems+=idx.getmums(args.minlength)
             logging.info("Done.")
      
+    elif len(args.fastas)==1 and args.fastas[0].endswith(".bed"):
+        bedplot(args)
+        return
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
