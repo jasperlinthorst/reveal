@@ -65,6 +65,9 @@ def chop_cmd(args):
         logging.debug("Done.")
 
 def duplicate_node(G,node):
+    if typ(node)==str:
+        logging.fatal("Attempt to duplicate end/start node, shouldn't happen. Exit.")
+        sys.exit(1)
     logging.debug("Duplicate: node %s"%node)
     offsets=G.node[node]['offsets']
     seq=G.node[node]['seq']
@@ -117,12 +120,20 @@ def checkedges(G,k=100):
             if d['overlap']!=None:
                 continue
 
-            if len(G.node[u]['seq'])>=k-1 and len([e for e in G.in_edges(v,data=True)])==1:
+            if type(u)==str:
+                d['overlap']=u
+                continue
+
+            if type(v)==str:
+                d['overlap']=v
+                continue
+
+            if len(G.node[u]['seq'])>=k-1 and len([e for e in G.in_edges(v)])==1:
                 d['overlap']=u
                 update=True
                 continue #can use k-1 suffix of u as prefix of v
 
-            if len(G.node[v]['seq'])>=k-1 and len([e for e in G.out_edges(u,data=True)])==1:
+            if len(G.node[v]['seq'])>=k-1 and len([e for e in G.out_edges(u)])==1:
                 d['overlap']=v
                 update=True
                 continue #can use k-1 prefix of v as suffix of u
@@ -152,8 +163,8 @@ def checkedges(G,k=100):
         G.remove_edges_from(remove)
 
     for u,v,d in G.edges(data=True):
-        if type(u)==str or type(v)==str:
-            continue
+        # if type(u)==str or type(v)==str:
+        #     continue
         if d['overlap']==None:
             es.append((u,v))
 
@@ -235,7 +246,7 @@ def chop(G,k=100,extend=True):
 
         for u,v in es:
             logging.debug("Edge %s,%s can't be extended yet: %s"%(u,v,G[u][v]))
-        
+
         iteration+=1
 
     if len(es)>0:
