@@ -15,7 +15,7 @@ REVEAL is written in Python and C code. To build it, it needs Python version 2.7
 
 It uses libdivsufsort for suffix array construction and the probcons code for refinement of the graph.
 
-Furthermore it uses the Python packages networkx (version 2), intervaltree and matplotlib.
+Furthermore it uses the Python packages networkx (version 2), intervaltree, pysam and matplotlib.
 
 REVEAL can be installed by executing the following command:
 
@@ -24,6 +24,10 @@ REVEAL can be installed by executing the following command:
 To install without executing the unit tests:
 
 **python setup.py install**
+
+To install in your user directory:
+
+**python setup.py install --user**
 
 ## RUN
 
@@ -119,10 +123,6 @@ To extract a genome/path from the graph:
 
 **reveal extract \<graph\> \<pathname\>**
 
-To reverse complement a graph:
-
-**reveal comp \<graph\>**
-
 To extract a subgraph of the graph, to for instance inspect a complex bubble structure:
 
 **reveal subgraph \<graph\> \<node1\> ...  \<nodeN\>**
@@ -136,8 +136,4 @@ Or to do the opposite, split a graph by its connected components:
 **reveal split \<graph\>**
 
 For the rest, most commands should print a help function, when you specify **reveal \<subcommand\> -h**
-
-How it works:
-
-![Graph alignment using Recursive Exact Matching](https://github.com/jasperlinthorst/reveal/blob/master/reveal.gif)
 
