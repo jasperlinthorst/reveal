@@ -80,6 +80,10 @@ Similar to bubbles, but will print the actual varying sequence.
 
 **reveal variants 1a&#95;1b.gfa**
 
+To output variants to a vcf file:
+
+**reveal variants 1a&#95;1b.gfa --vcf**
+
 To output statistics with respect to the number of nodes, bubbles, variants, aligned sequence etc.:
 
 **reveal stats 1a&#95;1b.gfa**

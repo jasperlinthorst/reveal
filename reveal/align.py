@@ -72,14 +72,14 @@ def align(args):
     if args.refine:
         step+=1
         sys.stdout.write("#(%d) Refine all bubbles in the graph using MSA\n"%step)
-        sys.stdout.write("reveal refine %s.unzipped.gfa --nproc=%d --all --maxsize=10000 --minconf=%d\n"%(args.output,args.nproc,args.minconf))
+        sys.stdout.write("reveal refine %s.unzipped.gfa --nproc=%d --all --maxsize=10000 --minsize=2 --mindiff=0 --minconf=%d\n"%(args.output,args.nproc,args.minconf))
 
     if args.variants:
         step+=1
         sys.stdout.write("#(%d) Output variants\n"%step)
-        sys.stdout.write("reveal variants %s.gfa > %s.anchored.variants\n" %(args.output,args.output))
+        sys.stdout.write("reveal variants %s.gfa --vcf > %s.anchored.vcf\n" %(args.output,args.output))
         if args.unzip:
-            sys.stdout.write("reveal variants %s.unzipped.gfa > %s.unzipped.variants\n" %(args.output,args.output))
+            sys.stdout.write("reveal variants %s.unzipped.gfa --vcf > %s.unzipped.vcf\n" %(args.output,args.output))
         if args.refine:
-            sys.stdout.write("reveal variants %s.unzipped.realigned.gfa > %s.refined.variants\n" %(args.output,args.output))
+            sys.stdout.write("reveal variants %s.unzipped.realigned.gfa --vcf > %s.refined.vcf\n" %(args.output,args.output))
         

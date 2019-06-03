@@ -64,7 +64,7 @@ def main():
     parser_aln.add_argument("--nproc", dest="nproc", default=1, type=int, help="Number of processes to use for the individual steps.")
     parser_aln.add_argument("--order", dest="order", default="simultaneous", choices=["simultaneous","sequential","tree"], help="Order in which graph is constructed.")
     parser_aln.add_argument("--norefine", dest="refine", action="store_false", default=True, help="Do not use consistency based msa, just produce the anchor graph.")
-    parser_aln.add_argument("--minconf", dest="minconf", type=float, default=0, choices=range(0,100), metavar="[0-99]", help="Use cutoff on confidence values during refinement of the graph.")
+    parser_aln.add_argument("--minconf", dest="minconf", type=float, default=90, choices=range(0,100), metavar="[0-99]", help="Use cutoff on confidence values during refinement of the graph.")
     parser_aln.add_argument("--nounzip", dest="unzip", action="store_false", default=True, help="Do not unzip bubbles before refining.")
     parser_aln.add_argument("--notransform", dest="transform", action="store_false", default=True, help="Do not use transform to account for structural events or draft assemblies. Assume colinear alignment of complete genomes.")
     parser_aln.add_argument("--novariants", dest="variants", action="store_false", default=True, help="Do not output bubbles as variants.")
