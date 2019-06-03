@@ -7,11 +7,9 @@ import os
 import math
 import argparse
 import logging
-import numpy as np
 import intervaltree
 import sortedcontainers
 import time
-import matplotlib
 
 def plot(plt,anchors,sep,wait=True,nc='r',rc='g',color=None,edges=False,lines=False,alpha=1,args=None):
     
