@@ -333,27 +333,28 @@ def graph_worker(G,nn,outputq,aworkers,totbubbles):
         if deadworkers==nworkers:
             break
 
-        try:
-            t0=time.time()
-            data=outputq.get(timeout=.5)
-            t1=time.time()
-            if data!=-1:
-                logging.info("Getting chunk of size %d from queue took %.4f seconds."%(len(data),t1-t0))
+        # try:
+        t0=time.time()
+        # data=outputq.get(timeout=.5)
+        data=outputq.get()
+        t1=time.time()
+        if data!=-1:
+            logging.info("Getting chunk of size %d from queue took %.4f seconds."%(len(data),t1-t0))
 
-        except mp.queues.Empty: #nothing to do, check if all workers are still alive...
-
-            for wi in range(len(aworkers)):
-                # p,fn,args=aworkers[wi]
-                p=aworkers[wi]
-                if not p.is_alive() and p.exitcode!=0: #one of the workers was killed! maybe oom...
-                    # if retry: #start a new worker and continue processing whatever is left on the queue
-                    #     logging.error("Worker %d died with exitcode: %d, start a new worker!"%(p.pid,p.exitcode))
-                    #     np=mp.Process(target=fn, args=args)
-                    #     np.start()
-                    #     aworkers[wi]=((np,fn,args)) #update it
-                    # else:
-                    raise Exception("Worker %d died with exitcode: %d. Stop refining."%(p.pid,p.exitcode))
-            continue
+        # except mp.queues.Empty: #nothing to do, check if all workers are still alive...
+        #     logging.info("Empty queue check on workers.")
+        #     for wi in range(len(aworkers)):
+        #         # p,fn,args=aworkers[wi]
+        #         p=aworkers[wi]
+        #         if not p.is_alive() and p.exitcode!=0: #one of the workers was killed! maybe oom...
+        #             # if retry: #start a new worker and continue processing whatever is left on the queue
+        #             #     logging.error("Worker %d died with exitcode: %d, start a new worker!"%(p.pid,p.exitcode))
+        #             #     np=mp.Process(target=fn, args=args)
+        #             #     np.start()
+        #             #     aworkers[wi]=((np,fn,args)) #update it
+        #             # else:
+        #             raise Exception("Worker %d died with exitcode: %d. Stop refining."%(p.pid,p.exitcode))
+        #     continue
 
         if data==-1: #worker was done
             logging.info("Worker signaled that its done.")
@@ -366,6 +367,12 @@ def graph_worker(G,nn,outputq,aworkers,totbubbles):
                 G,nn=replace_bubble(G,bubble,ng,path2start,path2end,nn)
                 t1=time.time()
                 logging.info("Replacing bubble (%d/%d): <%s,%s> took %.4f seconds."%(refinedbubbles,totbubbles,bubble.source,bubble.sink,t1-t0))
+
+        for wi in range(len(aworkers)):
+            p=aworkers[wi]
+            if not p.is_alive() and p.exitcode!=0: #one of the workers was killed! maybe oom...
+                raise Exception("Worker %d died with exitcode: %d. Stop refining."%(p.pid,p.exitcode))
+
 
 def refine_all(G, **kwargs):
     realignbubbles=[]
@@ -450,10 +457,12 @@ def refine_all(G, **kwargs):
         nn=max([node for node in G.nodes() if type(node)==int])+1
 
         if kwargs['nproc']>1:
-            outputq = mp.Queue()
             # inputq = mp.Queue()
 
             nworkers=kwargs['nproc']-1
+
+            outputq = mp.Queue(nworkers*2)
+
             aworkers=[]
 
             shuffle(distinctbubbles) #make sure not all the big telomeric bubbles end up with one worker
@@ -488,11 +497,14 @@ def refine_all(G, **kwargs):
                 p=mp.Process(target=align_worker, args=(Gs,chunk,outputq,kwargs))
                 # p=mp.Process(target=align_worker, args=(G,inputq,outputq,kwargs))
                 # p=mp.Process(target=align_worker, args=(G,i,nworkers,distinctbubbles,outputq,kwargs))
-                p.start()
                 aworkers.append(p) #(p,align_worker,(G,inputq,outputq,kwargs)))
 
             try:
+                for p in aworkers:
+                    p.start()
+
                 graph_worker(G,nn,outputq,aworkers,len(distinctbubbles))
+                
             except Exception, e:
                 logging.fatal("%s"%str(e))
                 # for p,fn,args in aworkers:
@@ -638,13 +650,14 @@ def msa2graph(aobjs,idoffset=0,msa='muscle',parameters="",minconf=0,constrans=2,
             seqs[ng.graph['path2id'][name]]=seq
         confidence=aln[1]
 
-    # for i,seq in enumerate(seqs):
+    for i,seq in enumerate(seqs):
         # if len(seq)>200:
-            # logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
-            # logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
+        #     logging.debug("OUT %s: %s...%s"%(str(i).rjust(4, ' '),seq[0:100],seq[-100:]))
+        #     logging.debug("CONF    : %s...%s"%("".join([str(c/10) for c in confidence[:100]]),"".join([str(c/10) for c in confidence[-100:]])))
         # else:
-            # logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
-            # logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
+        logging.debug("OUT %s: %s"%(str(i).rjust(4, ' '),seq))
+    
+    logging.debug("CONF    : %s"%"".join([str(c/10) for c in confidence]))
     
 
 
