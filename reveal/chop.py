@@ -28,7 +28,10 @@ def chop_cmd(args):
     
     logging.debug("Merging node sequence...")
     for node in G.nodes():
+        if type(node)==str: #skip start/end nodes
+            continue
         G.node[node]['seq']=G.node[node]['prefix']+G.node[node]['seq']+G.node[node]['suffix']
+    
     logging.debug("Done.")
 
     logging.debug("Write overlap graph...")
@@ -39,6 +42,8 @@ def chop_cmd(args):
         logging.debug("Write corresponding fasta file...")
         with open(fof,'w') as ff:
             for node in G.nodes():
+                if type(node)==str: #skip start/end nodes
+                    continue
                 name=">"+str(node)+"\n"
                 seq=G.node[node]['seq']
                 ff.write(name)
@@ -59,40 +64,10 @@ def chop_cmd(args):
                     sys.exit(1)
         logging.debug("Done.")
 
-def contract(G,topsort):
-    newtopsort=[]
-    stretches=[[]]    
-    pnode=topsort[0]
-    newtopsort=[topsort[0]]
-    for i,node in enumerate(topsort[1:]):
-        pred=list(G.predecessors(node))
-        suc=list(G.successors(pnode))
-        if pred==[pnode] and suc==[node]:
-            if len(stretches[-1])==0:
-                stretches[-1].append(pnode)
-            stretches[-1].append(node)
-        else:
-            if len(stretches[-1])!=0:
-                stretches.append([])
-            newtopsort.append(node)
-        pnode=node
-
-    for stretch in stretches:
-        if len(stretch)>0:
-            contract_nodes(G,stretch)
-
-    assert(len(newtopsort)==len(set(newtopsort)))
-
-    return newtopsort
-
-def contract_nodes(G,nodes):
-    logging.debug("Contract: Contracting nodes: %s"%nodes)
-    G.node[nodes[0]]['seq']="".join([G.node[n]['seq'] for n in nodes])
-    for n1,n2,data in G.out_edges(nodes[-1],data=True):
-        G.add_edge(nodes[0],n2,**data)
-    G.remove_nodes_from(nodes[1:])
-
 def duplicate_node(G,node):
+    if typ(node)==str:
+        logging.fatal("Attempt to duplicate end/start node, shouldn't happen. Exit.")
+        sys.exit(1)
     logging.debug("Duplicate: node %s"%node)
     offsets=G.node[node]['offsets']
     seq=G.node[node]['seq']
@@ -130,50 +105,97 @@ def duplicate_node(G,node):
 
     return duplicates
 
+
 def checkedges(G,k=100):
     for u,v,d in G.edges(data=True):
         d['overlap']=None
     es=[]
+    
     update=True
     while update:
         update=False
+        
+        remove=[]
         for u,v,d in G.edges(data=True):
             if d['overlap']!=None:
                 continue
-            if len(G.node[u]['seq'])>=k-1 and len([e for e in G.in_edges(v,data=True) if e[2]['overlap']==None])==1:
+
+            if type(u)==str:
+                d['overlap']=u
+                continue
+
+            if type(v)==str:
+                d['overlap']=v
+                continue
+
+            if len(G.node[u]['seq'])>=k-1 and len([e for e in G.in_edges(v)])==1:
                 d['overlap']=u
                 update=True
                 continue #can use k-1 suffix of u as prefix of v
-            if len(G.node[v]['seq'])>=k-1 and len([e for e in G.out_edges(u,data=True) if e[2]['overlap']==None])==1:
+
+            if len(G.node[v]['seq'])>=k-1 and len([e for e in G.out_edges(u)])==1:
                 d['overlap']=v
                 update=True
                 continue #can use k-1 prefix of v as suffix of u
+
+            #substitute edge by node that contains only pre- and suffix
+            if len(G.node[v]['seq'])>=k-1 and len(G.node[u]['seq'])>=k-1:
+                nid=G.graph['noffset']
+                G.add_node(nid,seq="",offsets=G.nodes[v]['offsets'],prefix="",suffix="")
+                G.graph['noffset']+=1
+                G.add_edge(u,nid,**G[u][v])
+                G[u][nid]['overlap']=u
+                G.add_edge(nid,v,**G[u][v])
+                G[nid][v]['overlap']=v
+                remove.append((u,v))
+                update=True
+
+            # if len(G.node[u]['seq'])>=k-1 and len([e for e in G.in_edges(v,data=True) if e[2]['overlap']==None])==1:
+            #     d['overlap']=u
+            #     update=True
+            #     continue #can use k-1 suffix of u as prefix of v
+
+            # if len(G.node[v]['seq'])>=k-1 and len([e for e in G.out_edges(u,data=True) if e[2]['overlap']==None])==1:
+            #     d['overlap']=v
+            #     update=True
+            #     continue #can use k-1 prefix of v as suffix of u
+
+        G.remove_edges_from(remove)
+
     for u,v,d in G.edges(data=True):
+        # if type(u)==str or type(v)==str:
+        #     continue
         if d['overlap']==None:
             es.append((u,v))
+
     return es
 
 def chop(G,k=100,extend=True):
-    remove=[]
+    # remove=[]
     for node in G.nodes():
         if type(node)==str:
-            remove.append(node)
+            pass
+            # remove.append(node)
         else: #add prefix and suffix attributes
             G.node[node]['prefix']=""
             G.node[node]['suffix']=""
 
-    G.remove_nodes_from(remove)
+    # G.remove_nodes_from(remove)
     iteration=1
 
     es=checkedges(G,k=k)
 
-    while len(es)!=0:
+    maxiter=1e22
+
+    while len(es)!=0 and iteration<maxiter:
         logging.info("Running iteration %d"%iteration)
         
         #determine subgraph for duplication
         sg=nx.DiGraph(es)
+
         nodes=list(sg.nodes())
-        nodes=[node for node in nodes if (len(sg.in_edges(node))>1 or len(sg.out_edges(node))>1)]# and len(G.node[node]['seq'])<k-1]
+
+        nodes=[node for node in nodes if (len(sg.in_edges(node))>1 or len(sg.out_edges(node))>1) and type(node)!=str]# and len(G.node[node]['seq'])<k-1]
         nodes.sort(key=lambda n: len(G.node[n]['seq']))
         d=set()
         dups=[]
@@ -198,26 +220,67 @@ def chop(G,k=100,extend=True):
         logging.info("Duplicating done.")
 
         logging.info("Contracting nodes...")
-        contract(G,list(nx.topological_sort(G)))
+        
+        topsort=list(nx.topological_sort(G))[1:-1]
+        topsort=[v for v in topsort if type(v)!=str]
+        
+        utils.contract(G,topsort)
         logging.info("Contracting done.")
+
+        # es=checkedges(G,k=k)
+        # sg=nx.DiGraph(es)
+        # for u,v,d in sg.edges(data=True):
+        #     if len(sg.in_edges(v))==len(sg.out_edges(u))==1 and len(G.nodes[u]['seq'])>=k-1 and len(G.nodes[v]['seq'])>=k-1:
+        #         nid=G.graph['noffset']
+        #         assert(nid not in G)
+        #         G.add_node(nid,seq="",offsets=G.nodes[v]['offsets'],prefix="",suffix="")
+        #         G.graph['noffset']+=1
+        #         G.add_edge(u,nid,**G[u][v])
+        #         G.add_edge(nid,v,**G[u][v])
+        #         G.remove_edge(u,v)
 
         logging.debug("Checking edges...")
         es=checkedges(G,k=k)
-        logging.debug("Done. %d unextendable edges remain."%len(es))
+
+        logging.info("Done. %d unextendable edges remain."%len(es))
+
+        for u,v in es:
+            logging.debug("Edge %s,%s can't be extended yet: %s"%(u,v,G[u][v]))
 
         iteration+=1
 
+    if len(es)>0:
+        logging.fatal("Error, maxiterations reached, chop did not converge!")
+        sys.exit(1)
+
     if extend:
         logging.info("Extending nodes with prefix/suffix...")
+
         #all edges can now be extended
         for u,v,d in G.edges(data=True):
+            if type(u)==str or type(v)==str:
+                continue
+
             assert(d['overlap']!=None)
+            
             if d['overlap']==u:
+                logging.debug("Add prefix to %s"%v)
+                assert(G.node[v]['prefix']=="")
                 G.node[v]['prefix']=G.node[u]['seq'][-(k-1):]
+                #if we give v a prefix, all other incoming edges of v are also affected, so cigar should be increased on those as well 
+                # for _u,_v,_d in G.in_edges(v,data=True):
+                    # _d['overlap_length']+=(k-1)
             else:
                 assert(d['overlap']==v)
+                logging.debug("Add suffix to %s"%u)
+                assert(G.node[u]['suffix']=="")
                 G.node[u]['suffix']=G.node[v]['seq'][:k-1]
+                #if we give u a suffix, all other outgoing edges of u are also affected, so cigar should be increased on those as well
+                # for _u,_v,_d in G.out_edges(u,data=True):
+                    # _d['overlap_length']+=(k-1)
+
             d['cigar']=str(k-1)+"M"
+
         logging.info("Done.")
     
     # logging.info("Unzipping bubbles...")

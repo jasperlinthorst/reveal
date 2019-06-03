@@ -13,7 +13,7 @@ import logging
 import utils
 import traceback
 from utils import mem2mums
-import numpy as np
+import math
 
 # from matplotlib import pyplot as plt
 
@@ -34,7 +34,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
         sp2mum[mum[2][ref]]=mum
 
     minscore=-1*utils.gapcost([left[2][k] for k in right[2]],[right[2][k] for k in right[2]])
-    # logging.trace("Initial cost is: %d"%minscore)
+    logging.debug("Initial cost is: %d"%minscore)
 
     start=left[2][ref]
     end=right[2][ref]
@@ -44,7 +44,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
     
     active=[left]
     processed=[]
-    
+
     for mum in mums:
         trace=False
         #active=[ep2mum[ep] for ep in utils.range_search(mumeptree,(0,0),[sp-1 for sp in mum[2]])].sort(key=lambda x: score[x], reverse=True)
@@ -68,19 +68,21 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
                 if amum[2][crd]+amum[0]>mum[2][crd]:
                     break
             else:
-                s=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2) ))
+                s=score[amum[2][ref]] + (args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))
 
                 if w!=None:
                     if w > s: #as input is sorted by score
                         break
 
-                penalty=utils.gapcost([amum[2][k] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
+                penalty=utils.gapcost([amum[2][k]+amum[0] for k in mum[2]],[mum[2][k] for k in mum[2]],model=gcmodel)
 
                 assert(penalty>=0)
 
-                tmpw=score[amum[2][ref]]+(wscore*(mum[0]*((mum[1]*(mum[1]-1))/2)))-(wpen*penalty)
+                # tmpw=score[amum[2][ref]] + (args.wscore*(mum[0]*((mum[1]*(mum[1]-1))/2))) - (args.wpen*penalty)
+                tmpw=s - (args.wpen*penalty)
 
                 if tmpw>w or w==None:
+                    logging.trace("mum: %s --> %s = penalty: %d and score at amum: %d, score at mum: %d"%(str(mum),str(amum),penalty,s,tmpw))
                     w=tmpw
                     best=amum
 
@@ -90,7 +92,8 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 
         processed.append(mum)
 
-    assert(score[end]>=minscore)
+    logging.debug("Best score is: %d"%score[end])
+    logging.trace("Min score is: %d"%minscore)
 
     #backtrack
     path=[]
@@ -104,13 +107,7 @@ def chain(mums,left,right,gcmodel="sumofpairs"):
 def segment(mums):
     d=dict()
     for mum in mums:
-        if isinstance(mum[2], dict):
-            k=tuple(sorted(mum[2].keys()))
-        elif isinstance(mum[2],tuple):
-            k=tuple(sorted([sp for gid,sp in mum[2]]))
-        else:
-            logging.fatal("Unknown format: %s"%str(spd))
-
+        k=tuple(sorted([gid for gid,sp in mum[2]]))
         if k in d:
             d[k].append(mum)
         else:
@@ -139,7 +136,9 @@ def lookup(mum):
     qlpoint=dict()
     qrpoint=dict()
     for pos in sp:
-        node=iter(ts[pos]).next()
+        t=ts[pos]
+        assert(len(t)==1)
+        node=iter(t).next()
         ndata=G.node[node]
         nsamples=set([o for o in ndata['offsets'].keys() if not G.graph['id2path'][o].startswith("*")])
         n+=len(nsamples)
@@ -159,21 +158,53 @@ def maptooffsets(mums):
         mapping[tuple(relmum[2].values())]=mum
     return relmums,mapping
 
+def trim_overlap(mums):
+    coords=mums[0][2]
+    for coord in range(len(coords)):
+        if len(mums)<=1: #by definition no more overlaps
+            break
+
+        mums.sort(key=lambda m: (m[2][coord][1],-m[0])) #sort by start position, then -1*size
+
+        #filter the partial matches that are now contained
+        mums=[mum for i,mum in enumerate(mums) if (i==0 and mums[i+1][2][coord][1]+mums[i+1][0] > mum[2][coord][1]+mum[0] ) or mums[i-1][2][coord][1]+mums[i-1][0]<mum[2][coord][1]+mum[0]]
+
+        if len(mums)<=1: #by definition no more overlaps
+            break
+
+        trimmed=[mums[0]]
+        for mum in mums[1:]:
+            pmum=trimmed[-1]
+            overlap = (pmum[2][coord][1]+pmum[0]) - mum[2][coord][1]
+            if overlap>0:
+                if pmum[0]-overlap>0:
+                    trimmed[-1] = (pmum[0]-overlap, pmum[1], pmum[2])
+                else:
+                    del trimmed[-1]
+                if mum[0]-overlap>0:
+                    trimmed.append( (mum[0]-overlap, mum[1], tuple((k,v+overlap) for k,v in mum[2]) ))
+            else:
+                trimmed.append(mum)
+
+        mums=trimmed
+
+    return mums
+
+args=None
 splitchain="largest"
 maxdepth=None #stop recursion when max depth is reached
-maxsize=None #stop recursion when all fragments in a bubble are smaller then maxsize
-# pcutoff=0.01
+
 def graphmumpicker(mums,idx,precomputed=False,minlength=0):
     try:
         if len(mums)==0:
-            return
-
+            return ()
+        
         if not precomputed:
             if maxdepth!=None:
                 if idx.depth>maxdepth:
-                    return
+                    return ()
 
-            if maxsize!=None:
+            if args.maxsize!=None:
                 rpaths=[p for p in G.graph['paths'] if not p.startswith('*')]
 
                 if idx.leftnode==None:
@@ -187,39 +218,26 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                     ro=G.node[idx.rightnode]['offsets']
 
                 for k in set(lo.keys()) & set(ro.keys()):
-                    if ro[k]-lo[k]>maxsize:
+                    if ro[k]-lo[k]>args.maxsize:
                         break
                 else:
-                    return #no break, so all fragments in bubbles are smaller than maxsize
+                    return () #no break, so all fragments in bubbles are smaller than maxsize
 
             logging.debug("Selecting input multimums (for %d samples) out of: %d mums"%(idx.nsamples, len(mums)))
             mmums=[mum for mum in mums if mum[1]==idx.nsamples] #subset only those mums that apply to all indexed genomes/graphs
-
-            if len(mmums)==0:
+            
+            if len(mmums)==0 and idx.nsamples>2:
                 logging.debug("No MUMS that span all input genomes, segment genomes.")
-                # print mums
-                # print idx.nsamples, idx.n
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2],len(mmums)))
 
-            mmums.sort(key=lambda mum: mum[0], reverse=True) #sort by size
-            tmp=[]
-            i=0
-            for mmum in mmums:
-                if i==maxmums and maxmums!=0:
-                    break
-                if len(mmum[2])>mmum[1]: #NON-UNIQUE MATCH, take all combinations
-                    # print "explode mmem to mums"
-                    for _mmum in mem2mums(mmum):
-                        tmp.append(_mmum)
-                        i+=1
-                        if i==maxmums and maxmums!=0:
-                            break
-                else:
-                    tmp.append(mmum)
-                    i+=1
+            if args.trim:
+                logging.debug("Trimming overlap between mums.")
+                mmums=trim_overlap(mmums)
+                if len(mmums)==0:
+                    return ()
 
-            mmums=tmp
+            mmums.sort(key=lambda mum: mum[0], reverse=True) #sort by size
 
             logging.debug("Mapping indexed positions to relative postions within genomes.")
 
@@ -258,70 +276,73 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
             
             if len(relmums)==0:
                 logging.debug("No more significant MUMs.")
-
-            logging.debug("Chaining %d mums"%len(relmums))
-
-            chainedmums=chain(relmums,left,right,gcmodel=gcmodel)[::-1]
-
-            logging.debug("Selected chain of %d mums"%len(chainedmums))
-            if len(chainedmums)==0:
-                return
-
-            if splitchain=="balanced":
-                logging.debug("Selecting MUM from chain on position within chain.")
-                optsplit=None
-                for mum,score in chainedmums: #determine optimal split in chain
-                    lseq=0
-                    rseq=0
-                    for crd in mum[2]:
-                        lseq=mum[2][crd]
-                        assert(lseq>=0)
-                        rseq=right[2][crd]-mum[2][crd]+mum[0]
-                        assert(rseq>=0)
-                    if optsplit==None or abs(lseq-rseq)<optsplit:
-                        optsplit=abs(lseq-rseq)
-                        splitmum=mum
-            elif splitchain=="largest":
-                logging.debug("Selecting MUM from chain based on size.")
-                splitmum=sorted(chainedmums,key=lambda m:m[0][0])[-1][0]
-            else: #select at random
-                logging.debug("Selecting MUM from chain at random.")
-                splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
+                return ()
 
             skipleft=[]
             skipright=[]
-            if seedsize>0:
-                t=skipleft
-                scoreatsplit=0
-                for mum,score in chainedmums:
-                    if mum==splitmum:
-                        scoreatsplit=score
-                        t=skipright
-                        continue
-                    t.append( (mapping[tuple(mum[2].values())], score-scoreatsplit) )
-                    # t.append( mapping[tuple(mum[2].values())] )
-                skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=seedsize]
-                skipright=[(mum,score) for mum,score in skipright if mum[0]>=seedsize]
+
+            if len(relmums)==1:
+                splitmum=relmums[0]
+            else:
+                if len(relmums)>args.maxmums:
+                    logging.debug("Number of MUMs exceeds cap (%d), taking largest %d"%(len(mmums),args.maxmums))
+                    relmums=relmums[-args.maxmums:]
+
+                logging.debug("Chaining %d mums"%len(relmums))
+                chainedmums=chain(relmums,left,right,gcmodel=args.gcmodel)[::-1]
+
+                logging.debug("Selected chain of %d mums"%len(chainedmums))
+                if len(chainedmums)==0:
+                    return ()
+
+                if splitchain=="balanced":
+                    logging.debug("Selecting MUM from chain on position within chain.")
+                    optsplit=None
+                    for mum,score in chainedmums: #determine optimal split in chain
+                        lseq=0
+                        rseq=0
+                        for crd in mum[2]:
+                            lseq=mum[2][crd]
+                            assert(lseq>=0)
+                            rseq=right[2][crd]-mum[2][crd]+mum[0]
+                            assert(rseq>=0)
+                        if optsplit==None or abs(lseq-rseq)<optsplit:
+                            optsplit=abs(lseq-rseq)
+                            splitmum=mum
+                elif splitchain=="largest":
+                    logging.debug("Selecting MUM from chain based on size.")
+                    splitmum=sorted(chainedmums,key=lambda m:m[0][0])[-1][0]
+                else: #select at random
+                    logging.debug("Selecting MUM from chain at random.")
+                    splitmum=chainedmums[random.randint(0,len(chainedmums)-1)][0]
+
+                if args.seedsize>0:
+                    t=skipleft
+                    scoreatsplit=0
+                    for mum,score in chainedmums:
+                        if mum==splitmum:
+                            scoreatsplit=score
+                            t=skipright
+                            continue
+                        t.append( (mapping[tuple(mum[2].values())], score-scoreatsplit) )
+                        # t.append( mapping[tuple(mum[2].values())] )
+                    skipleft=[(mum,score) for mum,score in skipleft if mum[0]>=args.seedsize]
+                    skipright=[(mum,score) for mum,score in skipright if mum[0]>=args.seedsize]
 
             splitmum=mapping[tuple(splitmum[2].values())]
 
-            if minlength==0:
-                
+            if minlength==0: #experimental, use significance to determine valid anchor length when minlength is set to 0
                 o=1
                 for p in left[2]:
                     o=o*(right[2][p]-left[2][p])
-
                 l=splitmum[0]
                 n=splitmum[1]
                 p=((.25**(n-1)))**l #probability of observing this match by random chance
-
                 if p>0:
-                    p=1-np.exp(np.log(1-p) * o) #correct for the number of tests we actually did
-                    
-                # p=1-((1-((.25**(n-1))**l))**o)
-                if p>pcutoff:
+                    p=1-math.exp(math.log(1-p) * o) #correct for the number of tests we actually did
+                if p>args.pcutoff:
                     logging.info("P-value for: %s (n=%d l=%d o=%d) is %.4g"%(str(splitmum),n,l,o,p))
-                    return
+                    return ()
         else:
             logging.debug("Selecting MUM from precomputed chain")
             chainedmums=mums
@@ -337,8 +358,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
         return splitmum,skipleft,skipright
 
     except Exception:
-        print traceback.format_exc()
-        return
+        logging.fatal(traceback.format_exc())
 
 def printSA(index,maxline=100,start=0,end=None,fn="sa.txt"):
     sa=index.SA

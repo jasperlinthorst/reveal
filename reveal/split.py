@@ -11,42 +11,37 @@ def split_cmd(args):
         logging.fatal("Use .gfa as extension of the gfa file.")
         return
     
-    split(args.gfa[0])
+    if args.nocycles:
+        G=nx.DiGraph()
+    else:
+        G=nx.MultiDiGraph()
 
-def split(gfafile):
-    G=nx.DiGraph()
+    split(G,args.gfa[0])
+
+def split(G,gfafile):
+
+    logging.debug("Reading graph...")
     read_gfa(gfafile,None,"",G)
-    
-    for i,sub in enumerate(nx.connected_components(G.to_undirected())):
-        sg=nx.subgraph(G,sub)
+    logging.debug("Done.")
+
+    for i,sg in enumerate(nx.weakly_connected_component_subgraphs(G)):
+        
+        sgpaths=[]
+
         sids=set()
         for node in sg.nodes():
-            for sid in sg.node[node]['offsets']:
-                sids.add(sid)
+            if type(node)!=str:
+                for sid in sg.node[node]['offsets']:
+                    sids.add(sid)
         
-        #determine a mapping
-        mapping=dict()
-        sgsamples=[]
         for sid in sids:
-            mapping[sid]=len(sgsamples)
-            sg.graph['path2id'][G.graph['id2path'][sid]]=len(sgsamples)
-            sgsamples.append(G.graph['id2path'][sid])
-        
-        sg.graph['paths']=sgsamples
-        
-        for e1,e2,d in sg.edges(data=True):
-            np=set()
-            for p in d['paths']:
-                np.add(mapping[p])
-            d['paths']=np
-        
-        for n,d in sg.nodes(data=True):
-            no=dict()
-            for p in d['offsets']:
-                no[mapping[p]]=d['offsets'][p]
-            sg.node[n]['offsets']=no
+            sgpaths.append(sg.graph['id2path'][sid])
 
-        # name="_".join(sg.graph['paths']).replace("|","").replace(" ","")[:200]
-        name=str(i)
-        
+        sg.graph['paths']=sgpaths
+        sg.graph['id2path']={sid:sg.graph['id2path'][sid] for sid in sids}
+        sg.graph['path2id']={path:sg.graph['path2id'][path] for path in sgpaths}
+
+        name="_".join([p for p in sorted(sgpaths) if not p.startswith("*")]).replace("|","_").replace(" ","_")[:200]
+
+        logging.info("Write component (%d, size=%d) to: %s"%(i,len(sg.nodes()),name))
         write_gfa(sg,None,outputfile="%s.gfa"%name)

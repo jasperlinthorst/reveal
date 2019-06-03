@@ -2,6 +2,69 @@
 from utils import *
 import sys
 
+
+def bubbles__(G):
+    stack={}
+    bubblenodestack={}
+    for i,node in enumerate(nx.topological_sort(G)):
+        
+        for (source,source_idx) in stack.keys():
+            bubblenodestack[(source,source_idx)].append(node)
+
+        nei=set(G[node].keys())
+        
+        if len(nei)>1: #potential source
+            stack[(node,i)]=nei
+            bubblenodestack[(node,i)]=[node]
+
+        ine=[v for v,t in G.in_edges(node)]
+        if len(ine)>1: #potential sink
+            for (source,source_idx) in stack.keys():
+                
+                stack[(source,source_idx)].discard(node)
+                for v in ine:
+                    stack[(source,source_idx)].discard(v)
+                
+                # for (source,source_idx) in stack.keys():
+                if stack[(source,source_idx)]==set():
+                    yield Bubble(G,source,node,source_idx,i,bubblenodestack[(source,source_idx)])
+                    del stack[(source,source_idx)]
+                    del bubblenodestack[(source,source_idx)]
+        else:
+            for (source,source_idx) in stack.keys():
+                for v in ine:
+                    stack[(source,source_idx)].discard(v)
+
+def bubbles_(G):
+    outstack={}
+    instack={}
+    bubblenodestack={}
+    for i,node in enumerate(nx.topological_sort(G)):
+        
+        for (source,source_idx) in outstack.keys():
+            bubblenodestack[(source,source_idx)].append(node)
+
+        incoming=set([v for v,t in G.in_edges(node)])
+        outgoing=set([t for v,t in G.out_edges(node)])
+
+        if len(outgoing)>1: #potential source, open a bubble
+            outstack[(node,i)]=outgoing
+            bubblenodestack[(node,i)]=[node]
+
+        for source,source_idx in outstack.keys():
+
+            outstack[(source,source_idx)].discard(node)
+
+            if outstack[(source,source_idx)]==set():
+                # print "bubble: %s <-> %s"%(source,node)
+                yield Bubble(G,source,node,source_idx,i,bubblenodestack[(source,source_idx)])
+
+                del outstack[(source,source_idx)]
+                del bubblenodestack[(source,source_idx)]
+            else:
+                for vo in outgoing:
+                    outstack[(source,source_idx)].add(vo)
+
 def bubbles(G):
     def entrance(G,v):
         for c in G.successors(v):
@@ -23,26 +86,16 @@ def bubbles(G):
     
     def superbubble(G):
         candidates=[]
+        entrance2candidateidx=dict()
         sspairs=[]
         #prevEnt=None
         prevEnti=None
         alternativeEntrance={}
         previousEntrance={}
+
         ordD={}
-        structural_variants=[]
 
-        if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
-            logging.debug("Converting MultiDigraph to DiGraph, before bubble extraction.")
-            orgpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if p.startswith('*')])
-            refpaths=set([G.graph['path2id'][p] for p in G.graph['paths'] if not p.startswith('*')])
-            refpathnames=[p for p in G.graph['paths'] if not p.startswith('*')]
-            for e0,e1,k,d in G.edges(keys=True,data=True):
-                if len(d['paths'] & refpaths)==0: #edge that exclusively represents a structural event 
-                    # logging.debug("STRUCTURAL VARIANT: %s %s %s"%(e0,e1,d))
-                    structural_variants.append((e0,e1,k,d))
-
-            G.remove_edges_from(structural_variants)
-            G.graph['paths']=refpathnames
+        # assert(type(G)==nx.DiGraph)
 
         logging.debug("Topologically sort the graph.")
         ordD_=list(nx.topological_sort(G))
@@ -57,7 +110,7 @@ def bubbles(G):
                 candidates.append((v,1))
             if entrance(G,v):
                 candidates.append((v,0))
-                #prevEnt=v
+                entrance2candidateidx[(v,0)]=len(candidates)-1
                 prevEnti=i
         
         #construct outparent
@@ -83,11 +136,11 @@ def bubbles(G):
             if candidates[-1][1]==0:
                 del candidates[-1]
             else:
-                reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs)
-        
-        return ordD,ordD_,sspairs,structural_variants
+                reportsuperbubble(candidates[0],candidates[-1],candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx)
+
+        return ordD,ordD_,sspairs
     
-    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs):
+    def reportsuperbubble(vstart,vexit,candidates,previousEntrance,alternativeEntrance,G,ordD,ordD_,outchild,outparent,sspairs,entrance2candidateidx):
         
         if (vstart[0] == None) or (vexit[0] == None) or (ordD[vstart[0]] >= ordD[vexit[0]]):
             del candidates[-1]
@@ -119,11 +172,18 @@ def bubbles(G):
 
         if (valid == s):
             sspairs.append((s, vexit[0]))
+
             while (candidates[-1][0] is not s):
                 if candidates[-1][1]==1:
+                    
+                    # ne=None
+                    # for candidate in candidates[entrance2candidateidx[(s,0)]+1:]:
+                    #     if candidate[1]==0:
+                    #         ne=candidate
                     ne=nextentrance(candidates,s)
+
                     if ne!=None:
-                        reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs)
+                        reportsuperbubble(ne, candidates[-1], candidates, previousEntrance, alternativeEntrance, G, ordD, ordD_, outchild, outparent,sspairs,entrance2candidateidx)
                     else:
                         del candidates[-1]
                 else:
@@ -152,67 +212,126 @@ def bubbles(G):
             return ordD_[previousEntrance[ordD_[op]]]
         return startVertex
     
-    ordD,ordD_,sspairs,structural_variants=superbubble(G)
-    
+    ordD,ordD_,sspairs=superbubble(G)
+
     allpairs=[]
-    for v,u,k,d in structural_variants:
-        if d['ofrom']==d['oto'] and (G.has_edge(v,u) or G.has_edge(u,v)):
-            continue
-        allpairs.append((v,u,d))
-
     for pair in sspairs:
-        allpairs.append((pair[0],pair[1],None))
+        allpairs.append((pair[0],pair[1]))
 
-    allpairs.sort(key=lambda a: ordD[a[0]],reverse=True) #sort by topological order of the source
+    allpairs.sort(key=lambda a: ordD[a[0]])#,reverse=True) #sort by topological order of the source
 
-    for v,u,d in allpairs:
-        if d==None:
-            bubblenodes=ordD_[ordD[v]:ordD[u]+1]
-            sourcenode=G.node[v]
-            sourcesamples=set(sourcenode['offsets'].keys())
-            sinknode=G.node[u]
-            sinksamples=set(sinknode['offsets'].keys())
-            if len(bubblenodes)==2: #only source sink, no variation
-                continue
-            yield Bubble(G,v,u,nodes=bubblenodes,ordD=ordD)
-        else:
-            yield v,u,d
+    for v,u in allpairs:
+        bubblenodes=ordD_[ordD[v]:ordD[u]+1]
+        sourcenode=G.node[v]
+        sourcesamples=set(sourcenode['offsets'].keys())
+        sinknode=G.node[u]
+        sinksamples=set(sinknode['offsets'].keys())
+
+        if sinksamples!=sourcesamples:
+            logging.debug("Invalid bubble, between %s and %s"%(v,u))
+            continue
+
+        if len(bubblenodes)==2: #only source sink, no variation
+            continue
+
+        yield Bubble(G,v,u,ordD[v],ordD[u],bubblenodes)
 
 def bubbles_cmd(args):
     if len(args.graph)<1:
         logging.fatal("Specify a gfa file to extract bubbles.")
         return
     
-    G=nx.MultiDiGraph()
-    read_gfa(args.graph[0],None,"",G)
-    
-    allcomplexnodes=[]
+    G=nx.DiGraph()
+    read_gfa(args.graph[0],None,"",G,remap=False)
+
+    # bubbles(G)
+    # sys.exit(0)
+
     sys.stdout.write("#source\tsink\tsubgraph\ttype\n")
-    for b in bubbles(G):
-        if type(b)!=tuple:
-            t=b.issimple()
-            sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source if type(b.source)!=str else '<start>',
-                                                b.sink if type(b.sink)!=str else '<end>',
-                                                ",".join([str(x) for x in b.nodes if type(x)!=str]),
-                                                'simple' if t else 'complex'))
+    for i,g in enumerate(nx.weakly_connected_component_subgraphs(G)):
+        logging.info("Reporting bubbles for subgraph: %d"%i)
+        allcomplexnodes=[]
+        for b in bubbles(g):
+            if type(b)!=tuple:
+                t=b.issimple()
+                sys.stdout.write("%s\t%s\t%s\t%s\n"%(b.source if type(b.source)!=str else '<start>',
+                                                    b.sink if type(b.sink)!=str else '<end>',
+                                                    ",".join([str(x) for x in b.nodes if type(x)!=str]),
+                                                    'simple' if t else 'complex'))
 
-            if not t:
-                if args.exportcomplex:
-                    if args.separate:
-                        sg=G.subgraph(set(b.nodes))
-                        if args.gml:
-                            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".%d.%d.complex.gml"%(b.source,b.sink)),partition=False)
+                if not t:
+                    if args.exportcomplex:
+                        if args.separate:
+                            sg=g.subgraph(set(b.nodes))
+                            if args.gml:
+                                write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".%d.%d.complex.gml"%(b.source,b.sink)),partition=False)
+                            else:
+                                write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa","%d.%d.complex.gfa"%(b.source,b.sink)))
                         else:
-                            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa","%d.%d.complex.gfa"%(b.source,b.sink)))
-                    else:
-                        allcomplexnodes+=b.nodes
+                            allcomplexnodes+=b.nodes
 
-    if args.exportcomplex and not args.separate:
-        sg=G.subgraph(allcomplexnodes)
-        if args.gml:
-            write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+        if args.exportcomplex and not args.separate:
+            sg=g.subgraph(allcomplexnodes)
+            if args.gml:
+                write_gml(sg,None,outputfile=args.graph[0].replace(".gfa",".complex.gml"),partition=False)
+            else:
+                write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+
+def rearrangements_cmd(args):
+
+    G=nx.MultiDiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
+    
+    logging.debug("Reading graph...")
+    read_gfa(args.graph[0],None,"",G)
+    logging.debug("Done.")
+
+    logging.info("Determine rearrangement edges...")
+    if type(G)==nx.MultiDiGraph: #convert to DiGraph first so we can actually toposort it
+        rearrangements=MultiGraphToDiGraph(G)
+    logging.info("Done (%d)."%len(rearrangements))
+
+    gori=sorted([p for p in G.graph['paths'] if not p.startswith('*')])
+
+    if args.reference==None:
+        args.reference=gori[0]
+
+    cds=G.graph['path2id'][args.reference] if args.reference in G.graph['path2id'] else G.graph['path2id'][gori[0]]
+
+    sys.stdout.write("#reference\tapproximate_pos\tcontigs\tsource\tsink\tinvert\tpaths\n")
+
+    for b in rearrangements:
+        v,u,k,d=b
+
+        if type(v)==str or type(u)==str:
+            continue #just start/end
         else:
-            write_gfa(sg,None,remap=False,outputfile=args.graph[0].replace(".gfa",".complex.gfa"))
+            
+            paths=[G.graph['id2path'][sid] for sid in d['paths']] #all paths that go through the rearrangement edge
+
+            for p in G.node[u]['offsets'].keys():
+                if G.graph['id2path'][p].startswith(args.reference):
+                    vcds=p
+                    break
+            else:
+                logging.warn("Edge %s could not be located on reference: %s."% (str((v,u)), args.reference))
+                vcds=G.node[u]['offsets'].keys()[0]
+
+            vpos=G.node[u]['offsets'][vcds]
+
+
+
+            contigs=[]
+            for p in d['paths']:
+                path=G.graph['id2path'][p]
+                if path.startswith("*"):
+                    contigs.append(path)
+
+            sys.stdout.write("%s\t"*7 % (G.graph['id2path'][vcds], vpos, contigs, v, u, d['oto']==d['ofrom'], ",".join(paths)))
+            
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    logging.info("Done")
 
 def variants_cmd(args):
     if len(args.graph)<1:
@@ -220,146 +339,217 @@ def variants_cmd(args):
         return
     
     reference=args.reference
-    G=nx.MultiDiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
+    g=nx.DiGraph() #if we parse a DiGraph, the edges introduced by structural variants will be ignored
     
     logging.debug("Reading graph...")
-    read_gfa(args.graph[0],None,"",G)
+    read_gfa(args.graph[0],None,"",g)
     logging.debug("Done.")
+
     complexbubblenodes=[]
     
-    if 'paths' in G.graph:
-        gori=sorted([p for p in G.graph['paths'] if not p.startswith('*')])
+    if 'paths' in g.graph:
+        gori=sorted([p for p in g.graph['paths'] if not p.startswith('*')])
     else:
         gori=[]
-    
+
     if args.reference==None:
         args.reference=gori[0]
         logging.warn("No reference specified as a coordinate system, use %s where possible."%args.reference)
+        args.reference=g.graph['path2id'][args.reference]
     else:
-        if args.reference in G.graph['path2id']:
-            args.reference=G.graph['path2id'][args.reference]
+        if args.reference in g.graph['path2id']:
+            args.reference=g.graph['path2id'][args.reference]
         else:
-            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(G.graph['paths'])))
+            logging.fatal("Specified reference (%s) not available in graph, graph knows of: %s."%(args.reference,str(g.graph['paths'])))
             sys.exit(1)
     
-    if not args.fastaout:
-        sys.stdout.write("#reference\tpos\tminflanksize\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
-        for sample in gori:
-            sys.stdout.write("\t%s"%sample)
-        sys.stdout.write("\n")
-    
-    for b in bubbles(G):
-        if type(b)!=tuple:
+    try:
+        if not args.fastaout and not args.bedout and not args.vcfout:
+            sys.stdout.write("#reference\tpos_start\tpos_end\tsource_size\tsink_size\tmax_allele_size\tmin_allele_size\tdiff_allele_size\tsource\tsink\tsource_seq\tsink_seq\ttype\tgenotypes")
+            for sample in gori:
+                sys.stdout.write("\t%s"%sample)
+            sys.stdout.write("\n")
+        elif args.vcfout:
+            sys.stdout.write("##fileformat=VCFv4.0\n")#?
+            sys.stdout.write("##source=REVEAL\n")
+            for sid in g.graph['id2path']:
+                size=g.graph['id2end'][sid]
+                sys.stdout.write("##contig=<ID=%s,LENGTH=%d>\n"%(g.graph['id2path'][sid],size))
+            sys.stdout.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
+            sys.stdout.write("##FORMAT=<ID=SZ,Number=1,Type=Integer,Description=\"Allele size\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_diffsize,Number=1,Type=Integer,Description=\"Difference between the shortest and longest allele.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_source,Number=1,Type=String,Description=\"Source of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_sink,Number=1,Type=String,Description=\"Sink of the node pair.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_bubbletype,Number=1,Type=String,Description=\"Simplistic interpretation of the variant.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_start,Number=1,Type=String,Description=\"Start position on the specified reference.\">\n")
+            sys.stdout.write("##INFO=<ID=reveal_end,Number=1,Type=String,Description=\"End position on the specified reference.\">\n")
+            sys.stdout.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT")
+            for sample in gori:
+                sys.stdout.write("\t%s"%sample)
+            sys.stdout.write("\n")
+
+        for bi,b in enumerate(bubbles(g)):
+
             v=Variant(b)
             
-            if v.size<args.minsize:
+            if v.maxsize<args.minsize:
+                continue
+
+            if v.maxsize-v.minsize<args.mindiff:
+                continue
+
+            if args.maxdiff!=None and v.maxsize-v.minsize>args.maxdiff:
                 continue
 
             if v.vtype!=args.type and args.type!='all':
                 continue
             
+            genotypestr=",".join(v.genotypes)
+            
+            if args.nogaps:
+                if v.spans_gap:
+                    continue
+
+            minflank=min([len(g.node[v.source]['seq']),len(g.node[v.sink]['seq'])])
+            
+            if minflank<args.minflank:
+                continue
+
+            if args.reference in v.vpos:
+                cds=args.reference
+            else: #source does not occur on specified reference, pick any other path that does have a location for this variant
+                if args.refonly: #skip the variant if its not positionable on the reference
+                    continue
+                for cds in v.vpos.keys():
+                    if not g.graph['id2path'][cds].startswith('*'): #use ref layout if its there
+                        break
+
+            sourcelen=len(g.node[v.source]['seq'])
+            sinklen=len(g.node[v.sink]['seq'])
+            
+            startpos=g.node[v.source]['offsets'][cds]+sourcelen
+            endpos=g.node[v.sink]['offsets'][cds]
+
             if args.fastaout:
                 if args.split:
                     with open("%s_%s.fasta"%(v.source,v.sink),'w') as of:
                         for i,seq in enumerate(v.genotypes):
                             if seq!='-':
-                                of.write(">%s_%d\n"%(v.source,i))
+                                of.write(">%s:%d-%d_%d\n"%(g.graph['id2path'][cds],startpos,endpos,i))
                                 of.write("%s\n"%seq)
                 else:
                     for i,seq in enumerate(v.genotypes):
                         if seq!='-':
-                            sys.stdout.write(">%s_%d\n"%(v.source,i))
+                            sys.stdout.write(">%s:%d-%d_%d\n"%(g.graph['id2path'][cds],startpos,endpos,i))
                             sys.stdout.write("%s\n"%seq)
                 continue
-            
-            if args.reference in v.vpos:
-                cds=args.reference
-            else:
-                for cds in v.vpos.keys():
-                    if not G.graph['id2path'][cds].startswith('*'): #use ref layout if its there
-                        break
-            
-            minflank=min([len(G.node[v.source]['seq']),len(G.node[v.sink]['seq'])])
-            if minflank<args.minflank:
+
+            if args.bedout:
+                sys.stdout.write("%s\t%d\t%s\t%s\n"%(g.graph['id2path'][cds],startpos,endpos,v.vtype))
                 continue
 
-            sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],v.vpos[cds],minflank,
+            allelesizes=[]
+
+            for gt in v.genotypes:
+                if gt=='-':
+                    allelesizes.append(0)
+                else:
+                    allelesizes.append(len(gt))
+            
+            maxa=max(allelesizes)
+            mina=min(allelesizes)
+
+            if args.vcfout:
+                startpos+=1
+                if maxa-mina>0:
+                    startpos-=1
+                    genotypes=[]
+                    for gt in v.genotypes:
+                        if gt=='-':
+                            gt=""
+                        genotypes.append(g.node[v.source]['seq'][-1:]+gt)
+                    v.genotypes=genotypes
+
+                if v.calls[g.graph['id2path'][cds]]!=0: #for vcf output flip alleles to make reference allele 0
+                    v.genotypes[0],v.genotypes[v.calls[g.graph['id2path'][cds]]]=v.genotypes[v.calls[g.graph['id2path'][cds]]],v.genotypes[0]
+                _calls=dict()
+                for sample in v.calls:
+                    if v.calls[sample]==v.calls[g.graph['id2path'][cds]]: #same allele as ref, so make 0
+                        _calls[sample]=0
+                    elif v.calls[sample]==0:
+                        _calls[sample]=v.calls[g.graph['id2path'][cds]]
+                    else:
+                        _calls[sample]=v.calls[sample]
+                v.calls=_calls
+
+                sys.stdout.write("%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
+                                                                    startpos,
+                                                                    ".",
+                                                                    v.genotypes[0],
+                                                                    ",".join(v.genotypes[1:]),
+                                                                    ".",
+                                                                    "PASS",
+                                                                    "reveal_diffsize=%s;reveal_source=%s;reveal_sink=%s;reveal_bubbletype=%s;reveal_start=%d;reveal_end=%d"%(maxa-mina, 
+                                                                                                            v.source if type(v.source)!=str else '<start>', 
+                                                                                                            v.sink if type(v.sink)!=str else '<end>',
+                                                                                                            v.vtype,
+                                                                                                            startpos,
+                                                                                                            endpos),
+                                                                    "GT:SZ"
+                                                                    ))
+
+                for sample in gori:
+                    if sample in v.calls:
+                        sys.stdout.write("\t%s:%d"%(v.calls[sample], len(v.genotypes[v.calls[sample]])))
+                    else:
+                        sys.stdout.write("\t.")
+
+            else:
+                sys.stdout.write("%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (g.graph['id2path'][cds],
+                                                                    startpos,
+                                                                    endpos,
+                                                                    sourcelen,
+                                                                    sinklen,
+                                                                    maxa,
+                                                                    mina,
+                                                                    maxa-mina,
                                                                     v.source if type(v.source)!=str else '<start>',
                                                                     v.sink if type(v.sink)!=str else '<end>',
-                                                                    G.node[v.source]['seq'][-20:] if v.source in G else '-',
-                                                                    G.node[v.sink]['seq'][:20] if v.sink in G else '-',
+                                                                    g.node[v.source]['seq'][-20:] if v.source in g else '-',
+                                                                    g.node[v.sink]['seq'][:20] if v.sink in g else '-',
                                                                     v.vtype,
-                                                                    ",".join(v.genotypes)))
-            for sample in gori:
-                if sample in v.calls:
-                    sys.stdout.write("\t%s"%v.calls[sample])
-                else:
-                    sys.stdout.write("\t-")
+                                                                    genotypestr))
+                for sample in gori:
+                    if sample in v.calls:
+                        sys.stdout.write("\t%s"%v.calls[sample])
+                    else:
+                        sys.stdout.write("\t-")
             
             sys.stdout.write("\n")
 
-        else: #structural variant, handle output differently
-            v,u,d=b
-            if type(v)==str or type(u)==str:
-                continue #just start
-            else:
-                if args.reference in G.node[v]['offsets']:
-                    cds=args.reference
-                else:
-                    for p in d['paths']:
-                        cds=p
-                        break
-
-                minflank=min([len(G.node[v]['seq']),len(G.node[u]['seq'])])
-                sys.stdout.write("%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s"% (G.graph['id2path'][cds],G.node[v]['offsets'][cds]+len(G.node[v]['seq']),minflank,
-                                                                    v,
-                                                                    u,
-                                                                    G.node[v]['seq'][-20:] if v in G else '-',
-                                                                    G.node[u]['seq'][:20] if u in G else '-',
-                                                                    'struct_inv' if d['ofrom']!=d['oto'] else 'struct',
-                                                                    "N/A"))
-                for sample in gori:
-                    if G.graph['path2id'][sample] in d['paths']:
-                        sys.stdout.write("\t1")
-                    else:
-                        sys.stdout.write("\t0")
-                
-                sys.stdout.write("\n")
+            sys.stdout.flush()
+    except IOError:
+        pass
 
 class InvalidBubble(Exception):
     pass
 
 class Bubble:
-    def __init__(self,G,source,sink,nodes=None,ordD=None):
+    def __init__(self,G,source,sink,source_idx,sink_idx,nodes):
         self.source=source
         self.sink=sink
+        self.source_idx=source_idx
+        self.sink_idx=sink_idx
         self.G=G
-
-        if ordD==None or nodes==None:
-            ordD_=list(nx.topological_sort(G))
-
-        if ordD!=None:
-            self.ordD=ordD
-        else:
-            self.ordD={}
-            for i,v in enumerate(ordD_):
-                self.ordD[v]=i
-        
-        if nodes!=None:
-            self.nodes=nodes
-        else:
-            if self.ordD[source]>=self.ordD[sink]:
-                raise InvalidBubble("Sink comes before Source, flip source and sink to form valid bubble.")
-            self.nodes=ordD_[self.ordD[source]:self.ordD[sink]+1]
+        self.nodes=nodes
+        self.ordD={node:i for i,node in enumerate(nodes)}
 
         if len(self.nodes)<=2:
             raise InvalidBubble("Not a valid source sink pair as bubble")
 
         self.simple=None
         
-        #TODO: use source/sink offsets to calculate this!!
-
-        self.paths=set(G.node[self.source]['offsets'].keys()) & set(G.node[self.sink]['offsets'].keys())
+        self.paths=set([k for k in G.node[self.source]['offsets'].keys() if not G.graph['id2path'][k].startswith("*")]) & set([k for k in G.node[self.sink]['offsets'].keys() if not G.graph['id2path'][k].startswith("*")])
 
         if 'seq' in G.node[self.source]:
             l=len(G.node[self.source]['seq'])
@@ -370,6 +560,8 @@ class Bubble:
 
         self.minsize=min(self.allelesizes)
         # self.minsize=min([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
+
+        assert(self.minsize>=0)
 
         # self.maxsize=max([len(G.node[node]['seq']) for node in self.nodes[1:-1]])
         self.maxsize=max(self.allelesizes)
@@ -441,64 +633,77 @@ class Bubble:
         
         return (minwiggle,minwiggle)
 
-        # return (0,0)
-
 class Variant(Bubble):
     def __init__(self,bubble):
 
-        Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.nodes,bubble.ordD)
+        Bubble.__init__(self,bubble.G,bubble.source,bubble.sink,bubble.source_idx,bubble.sink_idx,bubble.nodes)
         
         self.genotypes=[] #list of variant sequence
         self.vtype='undefined' #type definition of the variant
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
-        self.size=1 #length of the largest allele
-        
-        gt=list(self.G.successors(self.source))
-        gt.sort(key=lambda l: self.ordD[l])
+        self.spans_gap=False
 
-        if self.issimple():
-            for v in gt:
-                if v==self.sink:
-                    self.genotypes.append('-')
-                else:
-                    s=self.G.node[v]['seq']
-                    self.genotypes.append(s)
-                    if len(s)>self.size:
-                        self.size=len(s)
-            #self.genotypes.sort()
-        else:
-            for v in gt:
-                self.genotypes.append('N')
+        gt=list(set(self.G.successors(self.source)) & set(self.nodes))
+        gt.sort(key=lambda l: self.ordD[l])
+        bsamples=set(self.G.node[self.source]['offsets'].keys())&set(self.G.node[self.sink]['offsets'].keys())
+
+        # bsamplestmp=bsamples.copy()
+        # if self.issimple():
+        #     for i,v in enumerate(gt):
+        #         if v==self.sink:
+        #             self.genotypes.append('-')
+        #         else:
+        #             s=self.G.node[v]['seq']
+        #             self.genotypes.append(s)
+
+        #         for sampleid in self.G.node[v]['offsets'].keys():
+        #             if sampleid in bsamplestmp:
+        #                 self.calls[bubble.G.graph['id2path'][sampleid]]=i
+        #                 bsamplestmp.discard(sampleid)
+        # else:
+        
+        self.vtype="complex"
+
+        seqd=dict()
+        for sid in bsamples:
+            seq=""
+            for v in self.nodes[1:-1]: #determine sequence through the complex bubble; use the entire path as genotype
+                if sid in self.G.node[v]['offsets']:
+                    seq+=self.G.node[v]['seq']
+
+            if seq=="":
+                seq="-"
+
+            if seq in seqd:
+                seqd[seq].append(sid)
+            else:
+                seqd[seq]=[sid]
+
+        self.genotypes=list(seqd.keys())
+        for i,k in enumerate(self.genotypes):
+            for sid in seqd[k]:
+                self.calls[bubble.G.graph['id2path'][sid]]=i
         
         if self.issimple():
             if self.G.has_edge(self.source,self.sink):
                 self.vtype='indel'
             elif len(self.genotypes)==2:
                 if len(self.genotypes[0])==1 and len(self.genotypes[1])==1:
-                    self.vtype='snp'
+                    self.vtype='snv'
                 else:
                     self.vtype='region'
             else:
                 self.vtype='multi-allelic'
-        
-        n=self.G.node[self.source]
-        
-        for s in n['offsets']:
-            self.vpos[s]=n['offsets'][s]+len(n['seq'])+1
 
-        #make call, associate sample with the numerical value of the genotype
-        sourcesamples=set(self.G.node[self.source]['offsets'].keys())
-        tmpsource=sourcesamples.copy()
-        
-        for i,node in enumerate(gt):
-            n=self.G.node[node]
-            #for sample in n['offsets'].keys():
-            for sampleid in n['offsets'].keys():
-                #if sample not in tmpsource:
-                if sampleid not in tmpsource:
-                    continue
-                #self.calls[sample]=i
-                self.calls[bubble.G.graph['id2path'][sampleid]]=i
-                #tmpsource.discard(sample)
-                tmpsource.discard(sampleid)
+        for node in self.nodes:
+            if 'N' in self.G.node[node]['seq']:
+                self.spans_gap=True
+                self.vtype="gap"
+                break
+
+        v=self.G.node[self.source]
+        t=self.G.node[self.sink]
+        o=set(v['offsets'].keys())&set(t['offsets'].keys())
+        for s in o:
+            self.vpos[s]=v['offsets'][s]+len(v['seq'])+1

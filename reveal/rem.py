@@ -11,12 +11,6 @@ import reveallib64
 import schemes
 import bubbles
 
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 def breaknode(node,pos,l):
     att=G.node[node]
 
@@ -395,57 +389,57 @@ def prune_nodes(G,T=""):
                 continue
 
             for run in [0,1]:
-                if type(node)==str or data['aligned']!=0:
-                    if run==0:
-                        if type(G)==nx.MultiDiGraph:
-                            neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                        else:
-                            neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                # if type(node)==str or data['aligned']!=0:
+                if run==0:
+                    if type(G)==nx.MultiDiGraph:
+                        neis=[n2 for n1,n2,k,d in G.out_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
                     else:
-                        if type(G)==nx.MultiDiGraph:
-                            neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                        else:
-                            neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
-                    
-                    seqs={}
-                    for nei in neis:
-                        if 'seq' not in G.node[nei]:
-                            if not isinstance(nei,Interval):
-                                continue
-                            seq=T[nei.begin:nei.end]
-                        else:
-                            seq=G.node[nei]['seq']
-                        if seq in seqs:
-                            seqs[seq].append(nei)
-                        else:
-                            seqs[seq]=[nei]
+                        neis=[n2 for n1,n2,d in G.out_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                else:
+                    if type(G)==nx.MultiDiGraph:
+                        neis=[n1 for n1,n2,k,d in G.in_edges(node,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                    else:
+                        neis=[n1 for n1,n2,d in G.in_edges(node,data=True) if d['ofrom']=='+' and d['oto']=='+']
+                
+                seqs={}
+                for nei in neis:
+                    if 'seq' not in G.node[nei]:
+                        if not isinstance(nei,Interval):
+                            continue
+                        seq=T[nei.begin:nei.end]
+                    else:
+                        seq=G.node[nei]['seq']
+                    if seq in seqs:
+                        seqs[seq].append(nei)
+                    else:
+                        seqs[seq]=[nei]
 
-                    for key in seqs:
-                        group=seqs[key]
-                        if len(group)>1:
-                            merge=True
-                            for v in group:
-                                if run==0:
-                                    if type(G)==nx.MultiDiGraph:
-                                        if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                            merge=False
-                                            break
-                                    else:
-                                        if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
-                                            merge=False
-                                            break
+                for key in seqs:
+                    group=seqs[key]
+                    if len(group)>1:
+                        merge=True
+                        for v in group:
+                            if run==0:
+                                if type(G)==nx.MultiDiGraph:
+                                    if len([n1 for n1,n2,k,d in G.in_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                        merge=False
+                                        break
                                 else:
-                                    if type(G)==nx.MultiDiGraph:
-                                        if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                            merge=False
-                                            break
-                                    else:
-                                        if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
-                                            merge=False
-                                            break
-                            if merge:
-                                mergenodes(G,group)
-                                converged=False
+                                    if len([n1 for n1,n2,d in G.in_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'])>1:
+                                        merge=False
+                                        break
+                            else:
+                                if type(G)==nx.MultiDiGraph:
+                                    if len( [n2 for n1,n2,k,d in G.out_edges(v,keys=True,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                        merge=False
+                                        break
+                                else:
+                                    if len( [n2 for n1,n2,d in G.out_edges(v,data=True) if d['ofrom']=='+' and d['oto']=='+'] )>1:
+                                        merge=False
+                                        break
+                        if merge:
+                            mergenodes(G,group)
+                            converged=False
 
 def align_cmd(args):
     G,idx=align_genomes(args)
@@ -498,7 +492,7 @@ def align_cmd(args):
     if args.gml:
         graph=write_gml(G,T, hwm=args.hwm, outputfile=args.output, partition=False)
     else:
-        write_gfa(G,T,nometa=args.nometa, outputfile=args.output)
+        write_gfa(G,T, outputfile=args.output)
         graph=args.output
 
     logging.info("Done.")
@@ -531,14 +525,8 @@ def align_genomes(args):
     G=nx.MultiDiGraph()
 
     o=0
-    schemes.maxmums=args.maxmums
-    schemes.gcmodel=args.gcmodel
-    schemes.wscore=args.wscore
-    schemes.wpen=args.wpen
-    schemes.seedsize=args.seedsize
-    schemes.pcutoff=args.pcutoff
-    schemes.maxsize=args.maxsize
-
+    schemes.args=args
+    
     graph=False
     
     for i,sample in enumerate(args.inputfiles):
@@ -551,12 +539,13 @@ def align_genomes(args):
             if i==0:
                 read_gfa(sample,idx,t,G,minsamples=args.minsamples,
                                         maxsamples=args.maxsamples,
-                                        targetsample=args.targetsample)
+                                        targetsample=args.targetsample,
+                                        remap=True)
             else:
-                read_gfa(sample,idx,t,G)
+                read_gfa(sample,idx,t,G,remap=True)
 
         else: #consider it to be a fasta file
-            read_fasta(sample,idx,t,G,contigs=args.contigs)
+            read_fasta(sample,idx,t,G,contigs=args.contigs,toupper=args.toupper)
     
     logging.debug("Graph contains the following paths: %s"%G.graph['paths'])
 
@@ -620,15 +609,22 @@ def align_genomes(args):
 
     return G,idx
 
-def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs",maxsize=None):
-    #seq should be a list of objects that can be (multi-) aligned by reveal:
-    #   - tuple of the form (name,seq)
+
+#seq should be a list of objects that can be (multi-) aligned by reveal:
+#   - tuple of the form (name,seq)
+def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsample=None,maxsamples=None,\
+                maxmums=10000,wpen=1,wscore=1,sa64=False,pcutoff=1e-8,gcmodel="sumofpairs",maxsize=None,\
+                trim=True):
+    
+    kwargs = dict(locals()) #hack the kwargs into a dict so we can pass it to schemes as if it were the argparsed args object
+    class dict2class(object):
+        def __init__(self, d):
+            self.__dict__ = d
+    args=dict2class(kwargs)
+    schemes.args=args
     
     #global variables to simplify callbacks from c extension
     global t,G
-
-    # global reference
-    # reference=ref
 
     t=IntervalTree()
 
@@ -638,21 +634,12 @@ def align(aobjs,ref=None,minlength=20,minn=2,seedsize=None,threads=0,targetsampl
         idx=reveallib.index()
     
     G=nx.DiGraph()
-    # H=G
 
     G.graph['paths']=[]
     G.graph['path2id']=dict()
     G.graph['id2path']=dict()
     G.graph['id2end']=dict()
     o=0
-
-    schemes.gcmodel=gcmodel
-    schemes.maxmums=maxmums
-    schemes.seedsize=seedsize
-    schemes.wpen=wpen
-    schemes.wscore=wscore
-    schemes.pcutoff=pcutoff
-    schemes.maxsize=maxsize
 
     graph=False
     

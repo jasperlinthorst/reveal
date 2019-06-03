@@ -2,12 +2,6 @@ import reveallib
 import reveallib64
 from utils import *
 
-try:
-    from matplotlib import pyplot as plt
-    from matplotlib import patches as patches
-except:
-    pass
-
 def gplot(args):
     G=nx.DiGraph()
     read_gfa(args.graph,None,None,G)
@@ -28,7 +22,58 @@ def gplot(args):
             sys.exit(1)
     plotgraph(G, args.x, args.y, interactive=args.interactive, region=args.region, minlength=args.minlength)
 
+def bedplot(args):
+    from matplotlib import pyplot as plt
+
+    if len(args.fastas)==1:
+        with open(args.fastas[0]) as bedfile:
+            xpoints,rcxpoints=[],[]
+            ypoints,rcypoints=[],[]
+            pref=None
+            xoffset=0
+            for line in bedfile:
+                if line.startswith("#"):
+                    continue
+
+                if pref!=reference:
+                    off
+
+                reference,refbegin,refend,contig,score_cost,orientation,alnstart,alnend=line.rstrip().split()
+                name,ctgidx,lastsegmentidx,ctgbegin,ctgend=contig.split(":")
+                refbegin,refend,alnstart,alnend,ctgbegin,ctgend=[int(v) for v in [refbegin,refend,alnstart,alnend,ctgbegin,ctgend]]
+
+
+                if orientation=='-':
+                    rcxpoints.append(alnstart)
+                    rcxpoints.append(alnend)
+                    rcxpoints.append(None)
+                    rcypoints.append(ctgend)
+                    rcypoints.append(ctgbegin)
+                    rcypoints.append(None)
+                else:
+                    xpoints.append(alnstart)
+                    xpoints.append(alnend)
+                    xpoints.append(None)
+                    ypoints.append(ctgbegin)
+                    ypoints.append(ctgend)
+                    ypoints.append(None)
+
+            print len(xpoints)
+            plt.plot(xpoints,ypoints,'r-')
+            plt.plot(rcxpoints,rcypoints,'g-')
+            plt.plot(1,1)
+            plt.show()
+
 def plot(args):
+
+    import matplotlib
+
+    if not args.interactive:
+        matplotlib.use('Agg')
+
+    from matplotlib import pyplot as plt
+    from matplotlib import patches as patches
+
     vertgaps=[]
     horzgaps=[]
     vertgapsizes=[]
@@ -90,57 +135,24 @@ def plot(args):
         qrylength=qrylength-1
         idx.construct()
         
-        print "Extracting mums..."
-        #mmems=[(mem[0],mem[1],mem[2].values(),0) for mem in idx.getmums(args.minlength)]
-        mmems=[(mem[0],mem[1],[sp for gid,sp in mem[2]],0) for mem in idx.getmums(args.minlength)]
+        logging.info("Extracting mums...")
+        mmems=idx.getmums(args.minlength)
+        logging.info("Done.")
         
         sep=idx.nsep[0]
 
         if args.rc:
-            #get mmems for reverse orientation
-            if args.sa64:
-                idx=reveallib64.index()
-            else:
-                idx=reveallib.index()
             
-            sample=args.fastas[0]
-            idx.addsample(sample)
-            for name,seq in fasta_reader(sample):
-                idx.addsequence(seq.upper())
+            #get mums for reverse orientation
+            idx.construct(rc=True)
             
-            sample=args.fastas[1]
-            idx.addsample(sample)
-
-            qryintvs=[]
-            for name,seq in fasta_reader(sample):
-                intv=idx.addsequence(rc(seq.upper()))
-                qryintvs.append(intv)
-            
-            idx.construct()
-            
-            print "Extracting RC mums..."
-            tmp=idx.getmums(args.minlength)
-            
-            vi=iter(qryintvs)
-            v=vi.next()
-            
-            #tmp=[(m[0],m[1],sorted(m[2].values())) for m in tmp] #make sure start positions are sorted
-            tmp=[(m[0],m[1],sorted([sp for gid,sp in m[2]])) for m in tmp] #make sure start positions are sorted
-            tmp.sort(key=lambda l: l[2][1]) #sort by query pos
-            
-            nmmems=[]
-            for mem in tmp:
-                if mem[2][1]>v[1]:
-                    v=vi.next()
-                start,end=v
-                newqstart=end-(mem[2][1]-start)-mem[0]
-                ntup=(mem[0],mem[1],(mem[2][0],newqstart),1)
-                nmmems.append(ntup)
-            
-            mmems+=nmmems
-            
-            print "done."
+            logging.info("Extracting RC mums...")
+            mmems+=idx.getmums(args.minlength)
+            logging.info("Done.")
      
+    elif len(args.fastas)==1 and args.fastas[0].endswith(".bed"):
+        bedplot(args)
+        return
     else:
         logging.fatal("Can only create mumplot for 2 sequences or self plot for 1 sequence.")
         return
@@ -156,22 +168,45 @@ def plot(args):
         mmems.sort(key=lambda mem: mem[0],reverse=True) #sort by size
         mmems=mmems[:args.maxmums] #take the n largest
     
-    print "Drawing",len(mmems),"matches."
+    logging.info("Drawing %d matches."%len(mmems))
+    
+    xlist,rcxlist = [],[]
+    ylist,rcylist = [],[]
     
     for mem in mmems:
-        sps=sorted(mem[2])
+        # sps=sorted(mem[2])
+        sps=mem[1]
         l=mem[0]
+        
         sp1=sps[0]
         sp2=sps[1]-(sep+1)
         ep1=sp1+l
         ep2=sp2+l
         
         if sp1>=start and ep1<=end:
-            if mem[3]==0:
-                plt.plot([sp1,ep1],[sp2,ep2],'r-')
+            
+            if mem[2]==0:
+                xlist.append(sp1)
+                xlist.append(ep1)
+                ylist.append(sp2)
+                ylist.append(ep2)
+                xlist.append(None)
+                ylist.append(None)    
             else:
-                plt.plot([ep1,sp1],[sp2,ep2],'g-')
+                rcxlist.append(ep1)
+                rcxlist.append(sp1)
+                rcylist.append(sp2)
+                rcylist.append(ep2)
+                rcxlist.append(None)
+                rcylist.append(None)
+
+    plt.plot(xlist,ylist,'r-')
+    plt.plot(rcxlist,rcylist,'g-')
     
+    if args.endpoints:
+        plt.plot(xlist,ylist,'b*')
+        plt.plot(rcxlist,rcylist,'y*')
+
     for p in ctgoffsets:
         plt.axhline(y=p,linewidth=.5,color='black',linestyle='solid')
     
@@ -188,7 +223,7 @@ def plot(args):
                     alpha=.1
                 )
             )
-         
+        
         for p,l in zip(vertgaps,vertgapsizes):
             ax.add_patch(
                 patches.Rectangle(
@@ -211,22 +246,59 @@ def plot(args):
     plt.autoscale(enable=False)
     
     if args.xregion!=None:
+        xregions=[]
+
         for region in args.xregion.split(","):
-            rstart,rend=region.split(":") #should be rectangle with alfa here
-            plt.axvline(x=int(rstart),linewidth=3,color='b',linestyle='dashed')
-            plt.axvline(x=int(rend),linewidth=3,color='b',linestyle='dashed')
+
+            if region.count("-")==1:
+                rstart,rend=region.split("-") #should be rectangle with alfa here
+            elif region.count(":")==1:
+                rstart,rend=region.split(":") #should be rectangle with alfa here
+            else:
+                logging.fatal("Invalid region specification, use - : <start>-<end>")
+                sys.exit(1)
+
+            xregions.append((int(rstart),int(rend)))
+            plt.axvline(x=int(rstart),linewidth=1,color='b',linestyle='dashed')
+            plt.axvline(x=int(rend),linewidth=1,color='b',linestyle='dashed')
 
     if args.yregion!=None:
+        yregions=[]
+
         for region in args.yregion.split(","):
-            rstart,rend=region.split(":") #should be rectangle with alfa here
-            plt.axhline(y=int(rstart),linewidth=3,color='b',linestyle='dashed')
-            plt.axhline(y=int(rend),linewidth=3,color='b',linestyle='dashed')
+            
+            if region.count("-")==1:
+                rstart,rend=region.split("-") #should be rectangle with alfa here
+            elif region.count(":")==1:
+                rstart,rend=region.split(":") #should be rectangle with alfa here
+            else:
+                logging.fatal("Invalid region specification, use - : <start>-<end>")
+                sys.exit(1)
+
+            yregions.append((int(rstart),int(rend)))
+            plt.axhline(y=int(rstart),linewidth=1,color='b',linestyle='dashed')
+            plt.axhline(y=int(rend),linewidth=1,color='b',linestyle='dashed')
 
     if args.interactive:
         plt.show()
     else:
         b1=os.path.basename(args.fastas[0])
         b2=os.path.basename(args.fastas[1])
-        fn1=b1[0:args.fastas[0].rfind('.')] if b1.find('.')!=-1 else b1
-        fn2=b2[0:args.fastas[1].rfind('.')] if b2.find('.')!=-1 else b2
-        plt.savefig(fn1+"_"+fn2+"."+args.extension)
+        
+        fn1=b1[:b1.rfind('.')] if b1.find('.')!=-1 else b1
+        fn2=b2[:b2.rfind('.')] if b2.find('.')!=-1 else b2
+
+        if args.xregion!=None and args.yregion!=None:
+            assert(len(xregions)==len(yregions))
+            
+            if args.flanksize!=None:
+                flanksizes=[int(v) for v in args.flanksize.split(",")]
+            else:
+                flanksizes=[0]*len(xregions)
+
+            for xregion,yregion,flanksize in zip(xregions,yregions,flanksizes):
+                plt.xlim(xregion[0]-flanksize,xregion[1]+flanksize)
+                plt.ylim(yregion[0]-flanksize,yregion[1]+flanksize)
+                plt.savefig(fn1+"_"+str(xregion[0])+"-"+str(xregion[1])+"_"+fn2+"_"+str(yregion[0])+"-"+str(yregion[1])+"."+args.extension)
+        else:
+            plt.savefig(fn1+"_"+fn2+"."+args.extension)

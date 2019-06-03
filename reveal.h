@@ -22,12 +22,14 @@ typedef struct
     saidx_t          * SAi; //Inverse of suffix array
     lcp_t            * LCP; //LCP array, lcp[0]==-1
     uint16_t         * SO;  //Array indicating for each suffix which sample it originated from (max 2**16 samples!)
-    saidx_t            n;   //length of T
+    saidx_t            n;   //length of SA and LCP after extract
+    saidx_t            nT;   //length of the original input text T
     saidx_t          * nsep;    //array of integers pointing to sentinels that seperate samples within the input T
     int depth; //depth within the hierarchical alignment tree
     int nsamples; //number of samples in T
     char* safile;
     char* lcpfile;
+    int rc; //whether the index use the reverse complement of the qry part
     int cache; //whether to store the suffix array and lcp array after construction, so they can be reused
     PyObject * main; //main index
     PyObject * samples; //list of sample names that are contained in the index
@@ -67,6 +69,7 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * getmultimems(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * getmums(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * splitindex(RevealIndex *index, PyObject *args, PyObject *keywds);
+PyObject * extract(RevealIndex *index, PyObject *args, PyObject *keywds);
 PyObject * getscoredmums(RevealIndex *index, PyObject *args, PyObject *keywds);
 
 #endif

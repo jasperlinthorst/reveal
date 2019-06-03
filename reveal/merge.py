@@ -9,7 +9,7 @@ def merge_cmd(args):
     G=nx.DiGraph()
     for graph in args.graphs:
         logging.info("Adding %s ..." %graph)
-        read_gfa(graph,None,"",G)
+        read_gfa(graph,None,"",G,remap=True)
     
     if args.outprefix!=None:
         write_gfa(G,"",outputfile=args.outprefix+".gfa")

@@ -9,11 +9,12 @@ def unzip(args):
         logging.fatal("Invalid gfa file.")
         return
 
-    G=nx.MultiDiGraph()
+    # G=nx.MultiDiGraph()
+    G=nx.DiGraph()
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
 
     if args.source==None and args.sink==None:
-        unzip_graph(G,minunzip=args.minunzip)
+        unzip_graph(G,args,minunzip=args.minunzip)
     else:
         b=bubbles.Bubble(G,args.source,args.sink)
         unzip_bubble(G,b,minunzip=args.minunzip,idoffset=max([n for n in G.nodes() if type(n)==int])+1)
@@ -26,12 +27,22 @@ def unzip(args):
     utils.write_gfa(G,None,outputfile=of)
 
 #determine uncertainty about bubble positions
-def unzip_graph(G,minunzip=0):
+def unzip_graph(G,args,minunzip=0):
     nid=max([n for n in G.nodes() if type(n)==int])
     nid+=1
 
     for b in bubbles.bubbles(G):
-        nid=unzip_bubble(G,b,minunzip=minunzip,idoffset=nid)
+        
+        if b.maxsize-b.minsize<args.mindiff:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is smaller than mindiff=%d."%(str(b.nodes),b.maxsize-b.minsize,args.mindiff))
+            continue
+
+        if args.maxdiff and b.maxsize-b.minsize>args.maxdiff:
+            logging.debug("Skipping bubble %s, diff between smallest and largest allele (%dbp) is larger than maxdiff=%d."%(str(b.nodes),b.maxsize-b.minsize,args.maxdiff))
+            continue
+
+        if isinstance(b,bubbles.Bubble):
+            nid=unzip_bubble(G,b,minunzip=minunzip,idoffset=nid)
 
 def unzip_bubble(G,b,minunzip=0,idoffset=0):
     
@@ -77,8 +88,10 @@ def unzip_bubble(G,b,minunzip=0,idoffset=0):
         if ls!="":
             for n in successors:
                 if len(list(G.predecessors(n)))>1:
-                    G.add_node(idoffset,seq=ls if n!=b.sink else ls+rs,offsets={p:(G.node[b.source]['offsets'][p]+srcl)-len(ls) for p in G[b.source][n].values()[0]['paths']})
-                    props=G[b.source][n].values()[0].copy() #TODO: consider possibilty of structural variant paths!
+                    # G.add_node(idoffset,seq=ls if n!=b.sink else ls+rs,offsets={p:(G.node[b.source]['offsets'][p]+srcl)-len(ls) for p in G[b.source][n].values()[0]['paths']})
+                    G.add_node(idoffset,seq=ls if n!=b.sink else ls+rs,offsets={p:(G.node[b.source]['offsets'][p]+srcl)-len(ls) for p in G[b.source][n]['paths']})
+                    # props=G[b.source][n].values()[0].copy() #TODO: consider possibilty of structural variant paths!
+                    props=G[b.source][n]
                     G.remove_edge(b.source,n)
                     G.add_edge(b.source,idoffset,**props)
                     G.add_edge(idoffset,n,**props)
@@ -92,8 +105,10 @@ def unzip_bubble(G,b,minunzip=0,idoffset=0):
                 if n==b.source and ls!="":
                     continue #was already handled by looping over successors
                 if len(list(G.successors(n)))>1:
-                    G.add_node(idoffset,seq=rs if n!=b.source else ls+rs,offsets={p:(G.node[b.sink]['offsets'][p])-len(rs) for p in G[n][b.sink].values()[0]['paths']})
-                    props=G[n][b.sink].values()[0].copy() #TODO: consider possibilty of structural variant paths!
+                    # G.add_node(idoffset,seq=rs if n!=b.source else ls+rs,offsets={p:(G.node[b.sink]['offsets'][p])-len(rs) for p in G[n][b.sink].values()[0]['paths']})
+                    G.add_node(idoffset,seq=rs if n!=b.source else ls+rs,offsets={p:(G.node[b.sink]['offsets'][p])-len(rs) for p in G[n][b.sink]['paths']})
+                    # props=G[n][b.sink].values()[0].copy() #TODO: consider possibilty of structural variant paths!
+                    props=G[n][b.sink]
                     G.remove_edge(n,b.sink)
                     G.add_edge(n,idoffset,**props)
                     G.add_edge(idoffset,b.sink,**props)

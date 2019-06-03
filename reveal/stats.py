@@ -16,8 +16,12 @@ def stats_cmd(args):
 
 def stats(gfafile):
     stats=dict()
-    G=nx.DiGraph()
+    
+    G=nx.MultiDiGraph()
     read_gfa(gfafile,None,"",G)
+
+    struct=MultiGraphToDiGraph(G)
+
     samples=G.graph['paths']
     nsamples=len(samples)
     
@@ -25,51 +29,56 @@ def stats(gfafile):
     stats["Number of samples"]=nsamples
     for i,sample in enumerate(samples):
         stats["Sample %d"%i]=sample
-    stats["Number of nodes"]=G.number_of_nodes()
-    stats["Number of edges"]=G.number_of_edges()    
-    
+
+    stats["Number of rearrangement edges"]=len(struct)
+
     stats["Number of connected components"]=0
-    stats["A count"]=0
-    stats["C count"]=0
-    stats["G count"]=0
-    stats["T count"]=0
-    stats["N count"]=0
+    
+    stats["Count A"]=0
+    stats["Count C"]=0
+    stats["Count G"]=0
+    stats["Count T"]=0
+    stats["Count N"]=0
     for node,data in G.nodes(data=True):
-        stats["A count"]+=data['seq'].count('A')
-        stats["C count"]+=data['seq'].count('C')
-        stats["G count"]+=data['seq'].count('G')
-        stats["T count"]+=data['seq'].count('T')
-        stats["N count"]+=data['seq'].count('N')
+        stats["Count A"]+=data['seq'].count('A')
+        stats["Count C"]+=data['seq'].count('C')
+        stats["Count G"]+=data['seq'].count('G')
+        stats["Count T"]+=data['seq'].count('T')
+        stats["Count N"]+=data['seq'].count('N')
+
+    seqperngenomes=dict()
+    
+    i=1
+    for sample in G.graph['paths']:
+        seqperngenomes[i]=0
+        i+=1
+    
+    for node,data in G.nodes(data=True):
+        seqperngenomes[len([o for o in data['offsets'] if not G.graph['id2path'][o].startswith("*")])]+=len(data['seq'])
+
+    for n in seqperngenomes:
+        stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
 
     #for each connected component
-    for sgi,sub in enumerate(nx.connected_components(G.to_undirected())):
+    for sgi,sub in enumerate(nx.weakly_connected_component_subgraphs(G)):
         stats["Number of connected components"]+=1
         sg=G.subgraph(sub)
         
         #determine samples in subgraph
         nsgsamples=1
         sgsamples=set()
+        sgsampleids=set()
         for node,data in sg.nodes(data=True):
             if len(data['offsets'])>nsgsamples:
-                nsgsamples=len(data['offsets'])
+                nsgsamples=len([o for o in data['offsets'] if not sg.graph['id2path'][o].startswith("*")])
+
             for sid in data['offsets']:
-                sgsamples.add(G.graph['id2path'][sid])
+                if not sg.graph['id2path'][sid].startswith("*"):
+                    sgsamples.add(G.graph['id2path'][sid])
+                    sgsampleids.add(sid)
         
         stats["Composition of component %d"%sgi]=",".join(sgsamples)
 
-        seqperngenomes=dict()
-        
-        i=1
-        for sample in sg.graph['paths']:
-            seqperngenomes[i]=0
-            i+=1
-        
-        for node,data in sg.nodes(data=True):
-            seqperngenomes[len(data['offsets'])]+=len(data['seq'])
-
-        for n in seqperngenomes:
-            stats["Sequence observed in %d genomes"%n]=seqperngenomes[n]
-        
         #count bubble stats
         complexbubbles=0
         simplebubbles=0
@@ -119,28 +128,39 @@ def stats(gfafile):
                 continue
             offsets=data['offsets']
             l=len(data['seq'])
-            if len(offsets)==nsgsamples:
+            if set(offsets.keys())==sgsampleids:
                 coords=tuple([offsets[k] for k in sorted(offsets.keys())])
                 chain.append((coords,l))
                 chainweight+=l*((len(offsets)*(len(offsets)-1))/2) #sumofpairs score!
                 chainlengthbp+=l
                 chainlength+=1
         
-        chain.sort(key=lambda l: l[0])
-        
-        ppoint=tuple([c+chain[0][1] for c in chain[0][0]])
-        for point,length in chain[1:]:
-            for i in range(len(point)):
-                assert(point[i]>=ppoint[i])
-            p=gapcost(ppoint,point) #sumofpairs penalty!
-            ppoint=tuple([c+length for c in point])
-            chainpenalty+=p
+        if len(chain)>0:
+            chain.sort(key=lambda l: l[0])
+            
+            ppoint=tuple([c+chain[0][1] for c in chain[0][0]])
+            for point,length in chain[1:]:
+                for i in range(len(point)):
+                    assert(point[i]>=ppoint[i])
+                p=gapcost(ppoint,point) #sumofpairs penalty!
+                ppoint=tuple([c+length for c in point])
+                chainpenalty+=p
         
         stats["Chain length in component %d"%sgi]=chainlength
         stats["Chain length basepairs in component %d"%sgi]=chainlengthbp
         stats["Chain weight (sum-of-pairs) in component %d"%sgi]=chainweight
         stats["Chain penalty (sum-of-pairs) in component %d"%sgi]=chainpenalty
         stats["Chain score in component %d"%sgi]=chainweight-chainpenalty
-    
+
+    remove=[]
+    for node in G.nodes():
+        if type(node)==str:
+            remove.append(node)
+    G.remove_nodes_from(remove)
+
+    stats["Number of nodes"]=G.number_of_nodes()
+    stats["Number of edges"]=G.number_of_edges()
+
     for label in sorted(stats.keys()):
         sys.stdout.write("%s:\t%s\n"%(label.ljust(50),str(stats[label]).rjust(50)))
+

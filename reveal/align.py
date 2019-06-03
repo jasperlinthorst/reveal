@@ -13,7 +13,7 @@ def align(args):
         sys.stdout.write("#(%d) Convert draft assemblies to graphs (address rearrangements)\n"%step)
         for file in args.inputfiles:
             graph=os.path.splitext(file)[0]+'.gfa'
-            sys.stdout.write("reveal transform %s --nproc=%d %s %s -o %s\n"% ("--64" if args.sa64 else "", args.nproc, args.reference[0], file, graph))
+            sys.stdout.write("reveal transform %s %s %s -o %s\n"% ("--64" if args.sa64 else "", args.reference[0], file, graph))
             graphs.append(graph)
     else:
         graphs=args.reference+args.inputfiles
