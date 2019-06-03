@@ -78,12 +78,10 @@ def dag_longest_path_custom(G, weight='weight', default_weight=1):
 
 
 def extract(G,sample):
-    logging.debug("Extracting path: %s from graph (%s) of size: (%d,%d)"%(sample,type(G),G.number_of_nodes(),G.number_of_edges()))
-
+    logging.info("Extracting path: %s from graph (%s) of size: (%d,%d)"%(sample,type(G),G.number_of_nodes(),G.number_of_edges()))
+    
     if sample == "_longest_":
         #shortcut to extract the "longest" path in terms of sequence
-
-        logging.info("Number of nodes: %d edges: %d"%(G.number_of_nodes(),G.number_of_edges()))
 
         if type(G)==nx.MultiDiGraph:
             sv=utils.MultiGraphToDiGraph(G)
