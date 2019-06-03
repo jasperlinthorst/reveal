@@ -2,13 +2,6 @@
 
 REVEAL (REcursiVe Exact-matching ALigner) can be used to (multi) align whole genomes.
 
-Preprint can be found here: [Scalable multi whole-genome alignment using recursive exact matching](http://www.biorxiv.org/content/early/2015/07/17/022715)
-
-## LATEST CHANGES
-
-- New subcommands: rem, transform, refine and unzip (to substitute align, finish and realign)
-- Package ProbCons code for refining bubbles
-
 ## INSTALL
 
 REVEAL is written in Python and C code. To build it, it needs Python version 2.7 and a GCC compiler.
