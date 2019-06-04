@@ -3,9 +3,9 @@
 #include <pthread.h>
 
 #ifdef SA64
-#include "divsufsort/divsufsort64.h"
+#include "divsufsort64.h"
 #else
-#include "divsufsort/divsufsort.h"
+#include "divsufsort.h"
 #endif
 
 static PyObject *RevealError;

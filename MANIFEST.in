@@ -1,0 +1,3 @@
+include reveallib/*.h
+include divsufsort/*.h
+include probcons/*.h
