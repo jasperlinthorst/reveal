@@ -10,7 +10,11 @@ It uses libdivsufsort for suffix array construction and the probcons code for re
 
 Furthermore it uses the Python packages networkx (version 2), intervaltree, pysam and matplotlib.
 
-REVEAL can be installed by executing the following command:
+A version of REVEAL can be installed through [pip](https://pypi.org/project/reveal/):
+
+**pip install reveal**
+
+Or through cloning this repository on github and executing the following command:
 
 **python setup.py test install**
 
