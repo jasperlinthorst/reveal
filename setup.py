@@ -9,7 +9,7 @@ ez_setup.use_setuptools()
 
 from setuptools import setup, Extension
 
-setup(name="reveal", version="0.1",
+setup(name="reveal", version="0.2.1",
         install_requires=['intervaltree','networkx==2','pysam'],
         packages = ['reveal'],
         test_suite = 'nose.collector',
