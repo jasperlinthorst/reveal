@@ -9,7 +9,7 @@ ez_setup.use_setuptools()
 
 from setuptools import setup, Extension
 
-setup(name="reveal", author="Jasper Linthorst", author_email="jasper.linthorst@gmail.com", version="0.2.1",
+setup(name="reveal", author="Jasper Linthorst", author_email="jasper.linthorst@gmail.com", version="0.2.2",
         url="https://github.com/jasperlinthorst/reveal", description="Graph based multi genome aligner",
         install_requires=['intervaltree','networkx==2','pysam','matplotlib'],
         packages = ['reveal'],
