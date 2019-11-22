@@ -65,7 +65,7 @@ def chop_cmd(args):
         logging.debug("Done.")
 
 def duplicate_node(G,node):
-    if typ(node)==str:
+    if type(node)==str:
         logging.fatal("Attempt to duplicate end/start node, shouldn't happen. Exit.")
         sys.exit(1)
     logging.debug("Duplicate: node %s"%node)

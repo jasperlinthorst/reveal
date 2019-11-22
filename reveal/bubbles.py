@@ -640,6 +640,7 @@ class Variant(Bubble):
         
         self.genotypes=[] #list of variant sequence
         self.vtype='undefined' #type definition of the variant
+        self.gap='undefined'
         self.calls=dict() #key is sample, value is index within genotypes
         self.vpos=dict() #key is sample, value is position within sample
         self.spans_gap=False
@@ -690,7 +691,7 @@ class Variant(Bubble):
                 self.vtype='indel'
             elif len(self.genotypes)==2:
                 if len(self.genotypes[0])==1 and len(self.genotypes[1])==1:
-                    self.vtype='snv'
+                    self.vtype='snp'
                 else:
                     self.vtype='region'
             else:
@@ -699,7 +700,10 @@ class Variant(Bubble):
         for node in self.nodes:
             if 'N' in self.G.node[node]['seq']:
                 self.spans_gap=True
-                self.vtype="gap"
+                if self.issimple():
+                    self.gap="simplegap"
+                else:
+                    self.gap="complexgap"
                 break
 
         v=self.G.node[self.source]

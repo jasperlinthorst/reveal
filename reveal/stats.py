@@ -86,6 +86,8 @@ def stats(gfafile):
         indelcount=0
         multicount=0
         regioncount=0
+        sgapcount=0
+        cgapcount = 0
         unknowncount=0
         
         for bubble in bubbles(sg):
@@ -106,6 +108,11 @@ def stats(gfafile):
                 regioncount+=1
             else:
                 unknowncount+=1
+
+            if v.gap=='simplegap':
+                sgapcount+= 1
+            elif v.gap=='complexgap':
+                cgapcount+=1
         
         stats["Number of bubbles in component %d (total)"%sgi]=complexbubbles+simplebubbles
         stats["Number of bubbles in component %d (simple)"%sgi]=simplebubbles
@@ -115,6 +122,9 @@ def stats(gfafile):
         stats["Number of variants in component %d (multi-allelic)"%sgi]=multicount
         stats["Number of variants in component %d (complex)"%sgi]=unknowncount
         stats["Number of variants in component %d (regions)"%sgi]=regioncount
+        stats["Number of variants in component %d (simple gaps)"%sgi]=sgapcount
+        stats["Number of variants in component %d (complex gaps)"%sgi]=cgapcount
+
 
         #chain stats
         chain=[]

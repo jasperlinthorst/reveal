@@ -8,6 +8,7 @@ import math
 import argparse
 import logging
 import intervaltree
+import matplotlib
 import sortedcontainers
 import time
 
@@ -276,8 +277,11 @@ def transform(args,qry):
 
     if args.cluster:
         logging.info("Cluster rc mums by anti-diagonals.")
-        rcblocks=clustermumsbydiagonal(rcmums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=True)
-        logging.info("Done, %d rc clusters."%len(rcblocks))
+        if len(rcmums)==0:
+            rcblocks = [(mum[1][0], mum[1][0] + mum[0], mum[1][1], mum[1][1] + mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in rcmums]
+        else:
+            rcblocks=clustermumsbydiagonal(rcmums,maxdist=args.maxdist,minclustsize=args.mincluster,rcmums=True)
+            logging.info("Done, %d rc clusters."%len(rcblocks))
     else:
         rcblocks=[(mum[1][0], mum[1][0]+mum[0], mum[1][1], mum[1][1]+mum[0], mum[2], mum[0], mum[3], mum[4]) for mum in rcmums]
     
@@ -551,7 +555,6 @@ def transform(args,qry):
         logging.info("No mappable contigs.")
 
 def clustermumsbydiagonal(mums,maxdist=90,minclustsize=65,rcmums=True):
-    
     logging.debug("Sorting anchors by diagonals...")
     if rcmums:
         mums.sort(key=lambda m: (m[1][0]+(m[1][1]+m[0]), m[1][0]-(m[1][1]+m[0])) ) #sort mums by anti-diagonal, then diagonal
