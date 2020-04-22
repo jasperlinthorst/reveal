@@ -77,6 +77,7 @@ def MultiGraphToDiGraph(G):
     return structural_variants
 
 def fasta_reader(fn,truncN=False,toupper=True,cutN=0,keepdash=False):
+    print toupper
     seq=""
     gapseq=""
     sub=0

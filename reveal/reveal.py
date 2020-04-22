@@ -294,6 +294,7 @@ def main():
     parser_finish.add_argument("--ml", dest="minlocallength", type=int, default=20, help="Min size of locally unique mums.")
     
     parser_finish.add_argument("--nounmapped", dest="outputunmapped", action="store_false", default=True, help="Do not output unmappable sequence to a separate fasta file.")
+    parser_finish.add_argument("--softmask", dest="softmask", action="store_false", default=True, help="Do not consider softmasked (lower case) bases for match finding.")
     parser_finish.set_defaults(func=transformold.transform)
 
 

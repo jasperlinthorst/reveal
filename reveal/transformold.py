@@ -139,15 +139,15 @@ def transform(args):
         rcmums = async_result2.get()
         logging.debug("Done. MUMS in reverse complemented orientation: %d."%len(rcmums))
     else:
-        mums=getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn)
-        rcmums=getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn)
+        mums=getmums(args.reference,args.contigs,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn,softmask=args.softmask)
+        rcmums=getmums(args.reference,args.contigs,revcomp=True,sa64=args.sa64,minlength=args.minlength,cutN=args.cutn,softmask=args.softmask)
 
     reffile=os.path.basename(args.reference)
     ctgfile=os.path.basename(args.contigs)
     
     ref2length=dict()
     ref2seq=dict()
-    for name,seq in fasta_reader(args.reference):
+    for name,seq in fasta_reader(args.reference,toupper=args.softmask):
         ref2length[name]=len(seq)
         ref2seq[name]=seq
     
@@ -155,7 +155,7 @@ def transform(args):
     contig2seq=dict()
     
     totl=0
-    for name,seq in fasta_reader(args.contigs,cutN=args.cutn):
+    for name,seq in fasta_reader(args.contigs,cutN=args.cutn,toupper=args.softmask):
         l=len(seq)
         contig2length[name]=l
         totl+=l
@@ -1111,7 +1111,7 @@ def mapmumstocontig(mums):#,filtermums=False,mineventsize=1500,minchainsum=1000)
     
     return ctg2mums
 
-def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000):
+def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000, softmask=False):
     if sa64:
         idx=reveallib64.index()
     else:
@@ -1123,14 +1123,14 @@ def getmums(reference, query, revcomp=False, sa64=False, minlength=20, cutN=1000
 
     idx.addsample(reffile)
 
-    for name,seq in fasta_reader(reference):
+    for name,seq in fasta_reader(reference,toupper=softmask):
         intv=idx.addsequence(seq)
         intv=Interval(intv[0],intv[1],name)
         t.add(intv)
     
     idx.addsample(ctgfile)
 
-    for name,seq in fasta_reader(query,cutN=cutN):
+    for name,seq in fasta_reader(query,cutN=cutN,toupper=softmask):
         if revcomp:
             rcseq=rc(seq)
             intv=idx.addsequence(rcseq)
