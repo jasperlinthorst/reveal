@@ -224,9 +224,9 @@ int getlongestmum(RevealIndex *index, RevealMultiMUM *mum){
     return 0;
 }
 
-int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
+int ismultimum(RevealIndex * idx, lcp_t l, saidx_t lb, saidx_t ub, int * flag_so) {
     if (l>0){
-        int j;
+        saidx_t j;
         memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
         
         if (((RevealIndex *) idx->main)->nsamples==2){ //dont need SO in case of only two samples
@@ -235,6 +235,8 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
             }
         } else {
             for (j=lb; j<ub+1; j++) { //has to occur in all samples once
+                assert(j>=0);
+                assert(j<idx->n);
                 if (flag_so[idx->SO[idx->SA[j]]]==0){
                     flag_so[idx->SO[idx->SA[j]]]=1;
                 } else {
@@ -258,9 +260,9 @@ int ismultimum(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
     return 0;
 }
 
-int ismultimem(RevealIndex * idx, lcp_t l, int lb, int ub, int * flag_so) {
+int ismultimem(RevealIndex * idx, lcp_t l, saidx_t lb, saidx_t ub, int * flag_so) {
     if (l>0){
-        int j;
+        saidx_t j;
         memset(flag_so,0,((RevealIndex *) idx->main)->nsamples * sizeof(int));
         
         if (((RevealIndex *) idx->main)->nsamples==2){ //dont need SO in case of only two samples
