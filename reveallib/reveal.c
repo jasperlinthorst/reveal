@@ -235,8 +235,6 @@ int ismultimum(RevealIndex * idx, lcp_t l, saidx_t lb, saidx_t ub, int * flag_so
             }
         } else {
             for (j=lb; j<ub+1; j++) { //has to occur in all samples once
-                assert(j>=0);
-                assert(j<idx->n);
                 if (flag_so[idx->SO[idx->SA[j]]]==0){
                     flag_so[idx->SO[idx->SA[j]]]=1;
                 } else {
