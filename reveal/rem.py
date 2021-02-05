@@ -453,7 +453,7 @@ def align_cmd(args):
             else:
                 pref.append(bn)
         args.output="_".join(pref)
-        args.output+=".gfa"
+        args.output+=".gfa.gz"
     
     logging.info("Merging nodes...")
     T=idx.T
@@ -531,7 +531,7 @@ def align_genomes(args):
     
     for i,sample in enumerate(args.inputfiles):
         
-        if sample.endswith(".gfa"):
+        if sample.endswith(".gfa") or sample.endswith(".gfa.gz"):
             idx.addsample(os.path.basename(sample))
             graph=True
 

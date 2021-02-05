@@ -144,8 +144,14 @@ def fasta_reader(fn,truncN=False,toupper=True,cutN=0,keepdash=False):
                 yield name,seq
 
 def fasta_writer(fn,name_seq,lw=100):
+
+    if fn.endswith(".gz"):
+        fopen=gzip.open
+    else:
+        fopen=open
+
     seq=""
-    with open(fn,'w') as ff:
+    with fopen(fn,'w') as ff:
         for name,seq in name_seq:
             if not name.startswith(">"):
                 name=">"+name+"\n"
@@ -369,7 +375,13 @@ def read_fasta(fasta, index, tree, graph, contigs=True, toupper=True):
             graph.add_edge(Intv,endnode,paths=set([sid]),ofrom='+',oto='+')
 
 def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targetsample=None, revcomp=False, remap=False):
-    f=open(gfafile,'r')
+    
+    if gfafile.endswith(".gz"):
+        fopen=gzip.open
+    else:
+        fopen=open
+
+    f=fopen(gfafile,'r')
     sep=";"
     nmapping={} #temp mapping object for nodeids in gfa file
     edges=[] #tmp list for edges
@@ -665,8 +677,14 @@ def read_gfa(gfafile, index, tree, graph, minsamples=1, maxsamples=None, targets
         graph.reverse(copy=False)
 
 #simply write sequence without the graph topology
-def write_fasta(G,T,outputfile="reference.fasta"):
-    f=open(outputfile,'wb')
+def write_fasta(G,T,outputfile="reference.fasta.gz"):
+    
+    if outputfile.endswith(".gz"):
+        fopen=gzip.open
+    else:
+        fopen=open
+
+    f=fopen(outputfile,'wb')
     for i,node in enumerate(nx.topological_sort(G)):
         if isinstance(node,str):
             continue
@@ -691,10 +709,15 @@ def write_fasta(G,T,outputfile="reference.fasta"):
 
 def write_gfa(G,T,outputfile="reference.gfa", paths=True, remap=True, toupper=False):
     
-    if not outputfile.endswith(".gfa"):
-        outputfile+=".gfa"
+    if not outputfile.endswith(".gfa") and not outputfile.endswith(".gfa.gz") :
+        outputfile+=".gfa.gz"
     
-    f=open(outputfile,'wb')
+    if outputfile.endswith(".gz"):
+        fopen=gzip.open
+    else:
+        fopen=open
+    
+    f=fopen(outputfile,'wb')
     sep=';'
     f.write('H\tVN:Z:1.0\tCL:Z:%s\n'%" ".join(sys.argv))
     

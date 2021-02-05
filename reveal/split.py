@@ -7,7 +7,7 @@ def split_cmd(args):
         logging.fatal("Specify 1 gfa file.")
         return
     
-    if not args.gfa[0].endswith('.gfa'):
+    if not args.gfa[0].endswith('.gfa') and not args.gfa[0].endswith('.gfa.gz'):
         logging.fatal("Use .gfa as extension of the gfa file.")
         return
     
@@ -44,4 +44,4 @@ def split(G,gfafile):
         name="_".join([p for p in sorted(sgpaths) if not p.startswith("*")]).replace("|","_").replace(" ","_")[:200]
 
         logging.info("Write component (%d, size=%d) to: %s"%(i,len(sg.nodes()),name))
-        write_gfa(sg,None,outputfile="%s.gfa"%name)
+        write_gfa(sg,None,outputfile="%s.gfa.gz"%name)

@@ -1,6 +1,7 @@
 import sys
 import os
 import uuid
+import logging
 
 def align(args):
 

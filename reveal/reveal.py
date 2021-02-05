@@ -72,7 +72,7 @@ def main():
 
     parser_rem = subparsers.add_parser('rem',prog="reveal rem", description="Use recursive exact matching to obtain a graph from multiple input genomes or other graphs.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_rem.add_argument('inputfiles', nargs='+', help='Fasta or gfa files specifying either assembly/alignment graphs (.gfa) or sequences (.fasta).')
-    parser_rem.add_argument("-o", "--output", dest="output", help="Prefix of the alignment graph.")
+    parser_rem.add_argument("-o", "--output", dest="output", help="Filename to output the alignment graph (if no .gfa or .gfa.gz extension it's added).")
     parser_rem.add_argument("-t", "--threads", dest="threads", type=int, default=0, help = "The number of threads to use for the alignment.")
     parser_rem.add_argument("-m", dest="minlength", type=int, default=20, help="Min length of an exact match.")
     parser_rem.add_argument("-p", dest="pcutoff", type=float, default=1e-08, help="Use this significance threshold for exact matches, when -m=0")
@@ -102,7 +102,7 @@ def main():
     parser_unzip = subparsers.add_parser('unzip',prog="reveal unzip", description="Opens up bubbles to account for uncertainty of indel placement and edge-wander. Specify --source and --sink to unzip a specific bubble.", formatter_class=argparse.ArgumentDefaultsHelpFormatter, parents=[global_parser])
     parser_unzip.add_argument("graph", nargs=1, help='Graph in gfa format for which bubbles should be unzipped.')
     parser_unzip.add_argument("-u", dest="minunzip", type=int, default=0, help="Try to unzip all bubbles at least this many bases.")
-    parser_unzip.add_argument("-o", "--output", dest="output", default=None, help="Prefix for the filename of the resulting graph.")
+    parser_unzip.add_argument("-o", "--output", dest="output", default=None, help="Filename to output the alignment graph (if no .gfa or .gfa.gz extension it's added).")
     parser_unzip.add_argument("--mindiff", dest="mindiff", default=1, type=int, help="Only unzip bubbles where the difference between the min- and max-allele size is larger than this many bp, by default 1, so don't unzip SNPs.")
     parser_unzip.add_argument("--maxdiff", dest="maxdiff", default=10000, type=int, help="Only unzip bubbles where the difference between the min- and max-allele size is smaller than this many bp.")
     parser_unzip.add_argument("--source", dest="source", type=int, default=None, help="Source for specific bubble.")

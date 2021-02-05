@@ -4,22 +4,28 @@ import networkx as nx
 import os
 import logging
 import sys
+import gzip
 
 def chop_cmd(args):
-    if not args.graph[0].endswith(".gfa"):
-        logging.fatal("Invalid gfa file.")
+    
+    if args.graph[0].endswith(".gfa"):
+        prefix=args.graph[0].replace(".gfa","")
+    elif args.graph[0].endswith(".gfa.gz"):
+        prefix=args.graph[0].replace(".gfa.gz","")
+    else:
+        logging.fatal("Specify a graph with gfa(.gz) extension.")
         return
 
     G=nx.DiGraph()
     utils.read_gfa(args.graph[0], None, None, G, remap=False)
-    
+
     # assert(len(G.edges())==0)
     if args.output==None:
-        fof=os.path.splitext(args.graph[0])[0]+".chopped.fasta"
-        gof=os.path.splitext(args.graph[0])[0]+".chopped.gfa"
+        fof=prefix+".chopped.fasta.gz"
+        gof=prefix+".chopped.gfa.gz"
     else:
-        fof=args.output+".fasta"
-        gof=args.output+".gfa"
+        fof=args.output+".fasta.gz"
+        gof=args.output+".gfa.gz"
 
     if args.check:
         Gorg=G.copy()
@@ -40,6 +46,9 @@ def chop_cmd(args):
 
     if args.fasta:
         logging.debug("Write corresponding fasta file...")
+        if fof.endswith(".gz"):
+            open=gzip.open
+
         with open(fof,'w') as ff:
             for node in G.nodes():
                 if type(node)==str: #skip start/end nodes

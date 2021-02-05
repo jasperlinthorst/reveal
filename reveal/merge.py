@@ -12,6 +12,6 @@ def merge_cmd(args):
         read_gfa(graph,None,"",G,remap=True)
     
     if args.outprefix!=None:
-        write_gfa(G,"",outputfile=args.outprefix+".gfa")
+        write_gfa(G,"",outputfile=args.outprefix+".gfa.gz")
     else:
-        write_gfa(G,"",outputfile="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.graphs])+".gfa")
+        write_gfa(G,"",outputfile="_".join([os.path.basename(f)[:os.path.basename(f).rfind('.')] for f in args.graphs])+".gfa.gz")

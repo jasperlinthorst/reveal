@@ -8,7 +8,7 @@ def stats_cmd(args):
         logging.fatal("Specify 1 gfa file.")
         return
     
-    if not args.gfa[0].endswith('.gfa'):
+    if not args.gfa[0].endswith('.gfa') and not args.gfa[0].endswith('.gfa.gz'):
         logging.fatal("Use .gfa as extension of the gfa file.")
         return
     

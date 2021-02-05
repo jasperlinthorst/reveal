@@ -17,7 +17,7 @@ def convert(args):
         g.graph['path2id']=dict()
         g.graph['id2path']=dict()
 
-        if graph.endswith(".gfa"): #gfa to gml/gfa
+        if graph.endswith(".gfa") or graph.endswith(".gfa.gz"): #gfa to gml/gfa
             utils.read_gfa(graph,None,None,g,minsamples=args.minsamples,
                                  maxsamples=args.maxsamples,
                                  targetsample=args.targetsample,
@@ -27,7 +27,7 @@ def convert(args):
                 graph=utils.write_gfa(g,"", outputfile=fn)
                 logging.info("gfa graph written to: %s"%fn)
             elif args.type=="gml":
-                fn=utils.write_gml(g,"", hwm=args.hwm, outputfile=graph.replace(".gfa",""), partition=args.partition)
+                fn=utils.write_gml(g,"", hwm=args.hwm, outputfile=graph.replace(".gfa","").replace(".gz",""), partition=args.partition)
                 logging.info("gml graph written to: %s"%fn)
             elif args.type=="maf":
                 logging.info("Converting graph to maf..")

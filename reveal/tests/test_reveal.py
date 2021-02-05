@@ -9,12 +9,12 @@ import sys
 import os
 
 def teardown():
-    os.remove("1a_1b.gfa")
-    os.remove("1c_1d.gfa")
-    os.remove("1a_1b_1c.gfa")
-    os.remove("1c_1a_1b.gfa")
-    os.remove("1a_1b_1c_1d.gfa")
-    os.remove("123a_123b.gfa")
+    os.remove("1a_1b.gfa.gz")
+    os.remove("1c_1d.gfa.gz")
+    os.remove("1a_1b_1c.gfa.gz")
+    os.remove("1c_1a_1b.gfa.gz")
+    os.remove("1a_1b_1c_1d.gfa.gz")
+    os.remove("123a_123b.gfa.gz")
 
 @with_setup(None, teardown)
 class TestReveal(TestCase):
@@ -44,42 +44,42 @@ class TestReveal(TestCase):
     def test02_fastapair_align_cmd(self):
         sys.argv=['reveal','rem','tests/1a.fa','tests/1b.fa']
         reveal.main()
-        self.assertTrue(os.path.exists("1a_1b.gfa"))
+        self.assertTrue(os.path.exists("1a_1b.gfa.gz"))
     
     @with_setup(setup, teardown)
     def test03_64_fastapair_align_cmd(self):
         sys.argv=['reveal','rem','--64','tests/1c.fa','tests/1d.fa']
         reveal.main()
-        self.assertTrue(os.path.exists("1c_1d.gfa"))
+        self.assertTrue(os.path.exists("1c_1d.gfa.gz"))
     
     @with_setup(setup, teardown)
     def test04_fastamulti_align_cmd(self):
         sys.argv=['reveal','rem','tests/1a.fa','tests/1b.fa','tests/1c.fa']
         reveal.main()
-        self.assertTrue(os.path.exists("1a_1b_1c.gfa"))
+        self.assertTrue(os.path.exists("1a_1b_1c.gfa.gz"))
     
     @with_setup(setup, teardown)
     def test05_graph2graph_align_cmd(self):
-        sys.argv=['reveal','rem','1a_1b.gfa','1c_1d.gfa']
+        sys.argv=['reveal','rem','1a_1b.gfa.gz','1c_1d.gfa.gz']
         reveal.main()
-        self.assertTrue(os.path.exists("1a_1b_1c_1d.gfa"))
+        self.assertTrue(os.path.exists("1a_1b_1c_1d.gfa.gz"))
     
     @with_setup(setup, teardown)
     def test06_fasta2graph_align_cmd(self):
-        sys.argv=['reveal','rem','tests/1c.fa','1a_1b.gfa']
+        sys.argv=['reveal','rem','tests/1c.fa','1a_1b.gfa.gz']
         reveal.main()
-        self.assertTrue(os.path.exists("1c_1a_1b.gfa"))
+        self.assertTrue(os.path.exists("1c_1a_1b.gfa.gz"))
 
     @with_setup(setup, teardown)
     def test07_multifastapair_align_cmd(self):
         sys.argv=['reveal','rem','tests/123a.fa','tests/123b.fa','-m1000']
         reveal.main()
-        self.assertTrue(os.path.exists("123a_123b.gfa"))
+        self.assertTrue(os.path.exists("123a_123b.gfa.gz"))
     
     @with_setup(setup, teardown)
     def test08_bubbles_cmd(self):
         sys.stdout=StringIO()
-        sys.argv=['reveal','bubbles','1a_1b_1c.gfa']
+        sys.argv=['reveal','bubbles','1a_1b_1c.gfa.gz']
         reveal.main()
         v=sys.stdout.getvalue()
         lines=v.split('\n')
@@ -90,7 +90,7 @@ class TestReveal(TestCase):
     @with_setup(setup, teardown)
     def test09_variants_cmd(self):
         sys.stdout=StringIO()
-        sys.argv=['reveal','variants','1a_1b_1c.gfa']
+        sys.argv=['reveal','variants','1a_1b_1c.gfa.gz']
         reveal.main()
         v=sys.stdout.getvalue()
         lines=v.split('\n')
@@ -100,7 +100,7 @@ class TestReveal(TestCase):
     @with_setup(setup, teardown)
     def test10_stats_cmd(self):
         sys.stdout=StringIO()
-        sys.argv=['reveal','stats','1a_1b_1c.gfa']
+        sys.argv=['reveal','stats','1a_1b_1c.gfa.gz']
         reveal.main()
         v=sys.stdout.getvalue()
         lines=v.split('\n')
@@ -116,26 +116,26 @@ class TestReveal(TestCase):
     
     @with_setup(setup, teardown)
     def test12_split_cmd(self):
-        sys.argv=['reveal','split','123a_123b.gfa']
+        sys.argv=['reveal','split','123a_123b.gfa.gz']
         reveal.main()
-        self.assertTrue(os.path.exists("ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa"))
-        self.assertTrue(os.path.exists("ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa"))
-        self.assertTrue(os.path.exists("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa"))
-        os.remove("ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa")
-        os.remove("ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa")
-        os.remove("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa")
+        self.assertTrue(os.path.exists("ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa.gz"))
+        self.assertTrue(os.path.exists("ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa.gz"))
+        self.assertTrue(os.path.exists("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa.gz"))
+        os.remove("ACJE01000020_BB_An18_A_niger_CBS_513_88.gfa.gz")
+        os.remove("ACJE01000011_BB_An19_A_niger_CBS_513_88.gfa.gz")
+        os.remove("ACJE01000004_BB_An01_A_niger_CBS_513_88.gfa.gz")
 
     @with_setup(setup, teardown)
     def test13_refine_cmd(self):
         print self.pair
-        sys.argv=['reveal','refine','1a_1b_1c.gfa','--all','-n2']
+        sys.argv=['reveal','refine','1a_1b_1c.gfa.gz','--all','-n2']
         reveal.main()
-        self.assertTrue(os.path.exists('1a_1b_1c.realigned.gfa'))
+        self.assertTrue(os.path.exists('1a_1b_1c.realigned.gfa.gz'))
     
     @with_setup(setup, teardown)
     def test14_complexbubble_cmd(self):
         sys.stdout=StringIO()
-        sys.argv=['reveal','bubbles','1a_1b_1c.realigned.gfa']
+        sys.argv=['reveal','bubbles','1a_1b_1c.realigned.gfa.gz']
         reveal.main()
         found=True #not the case anymore, test always succeeds
         v=sys.stdout.getvalue()
@@ -145,12 +145,12 @@ class TestReveal(TestCase):
                 found=True
                 break
         self.assertTrue(found)
-        os.remove('1a_1b_1c.realigned.gfa')
+        os.remove('1a_1b_1c.realigned.gfa.gz')
     
     @with_setup(setup, teardown)
     def test15_extract_cmd(self):
         sys.stdout=StringIO()
-        sys.argv=['reveal','extract','1a_1b.gfa','ACJE01000011_BB']
+        sys.argv=['reveal','extract','1a_1b.gfa.gz','ACJE01000011_BB']
         reveal.main()
         for name,seq in utils.fasta_reader("tests/1a.fa"):
             pass
@@ -179,7 +179,7 @@ class TestReveal(TestCase):
     #     os.remove("1a_1b_1c.chain.gfa")
     
     def test19_convert_cmd(self):
-        sys.argv=['reveal','convert','1a_1b.gfa','123a_123b.gfa']
+        sys.argv=['reveal','convert','1a_1b.gfa.gz','123a_123b.gfa.gz']
         reveal.main()
         self.assertTrue(os.path.exists("1a_1b.gml"))
         self.assertTrue(os.path.exists("123a_123b.gml"))
@@ -187,10 +187,10 @@ class TestReveal(TestCase):
         os.remove("123a_123b.gml")
     
     def test20_merge_cmd(self):
-        sys.argv=['reveal','merge','1a_1b.gfa','1c_1d.gfa','-o','merged']
+        sys.argv=['reveal','merge','1a_1b.gfa.gz','1c_1d.gfa.gz','-o','merged']
         reveal.main()
-        self.assertTrue(os.path.exists("merged.gfa"))
-        os.remove("merged.gfa")
+        self.assertTrue(os.path.exists("merged.gfa.gz"))
+        os.remove("merged.gfa.gz")
     
     def test21_plot_cmd(self):
         pass

@@ -218,6 +218,11 @@ def transform(args,qry):
     if args.output==None:
         prefix=os.path.splitext(os.path.basename(qry))[0]
     else:
+        if args.output.endswith(".gfa.gz"):
+            args.output=args.output.replace(".gfa.gz","")
+        elif args.output.endswith(".gfa"):
+            args.output=args.output.replace(".gfa","")
+
         prefix=args.output
     
     refnames=[]
@@ -549,7 +554,7 @@ def transform(args,qry):
         mappablectgs.add(refid)
 
     if len(mappablectgs)!=0:
-        logging.info("Write breakpoint graph to: %s.gfa"%prefix)
+        logging.info("Write breakpoint graph to: %s"%prefix)
         write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,prefix)
     else:
         logging.info("No mappable contigs.")
@@ -703,7 +708,7 @@ def write_breakpointgraph(syntenyblocks,T,refnames,ctgnames,mappablectgs,outputp
 
         G.add_edge(pnid,end,paths=set([ctgid]),ofrom="+" if o==0 else "-", oto="+")
 
-    write_gfa(G,None,outputfile=outputprefix if outputprefix.endswith(".gfa") else outputprefix+".gfa")
+    write_gfa(G,None,outputfile=outputprefix if (outputprefix.endswith(".gfa") or outputprefix.endswith(".gfa.gz") ) else outputprefix+".gfa.gz")
 
 def merge_consecutive(syntenyblocks):
     if len(syntenyblocks)<2:

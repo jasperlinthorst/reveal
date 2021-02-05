@@ -5,7 +5,7 @@ import os
 import logging
 
 def unzip(args):
-    if not args.graph[0].endswith(".gfa"):
+    if not args.graph[0].endswith(".gfa") and not args.graph[0].endswith(".gfa.gz"):
         logging.fatal("Invalid gfa file.")
         return
 
