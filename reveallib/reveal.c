@@ -454,8 +454,9 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     int maxdepth=1000;
     int *flag_so=calloc(mainidx->nsamples,sizeof *flag_so);
     lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
-    lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
+    saidx_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
+    saidx_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
+    
     lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
@@ -509,6 +510,9 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
         if (index->LCP[i] > stack_lcp[depth]){
             depth++;
             if (depth>=maxdepth){
+#ifdef REVEALDEBUG
+                fprintf(stderr,"Increase LCP interval stack size!\n");
+#endif
                 maxdepth=maxdepth+1000;
                 stack_lcp=realloc(stack_lcp,maxdepth * sizeof *stack_lcp);
                 if (stack_lcp==NULL){
@@ -757,15 +761,11 @@ void *aligner(void *arg) {
         if (hasindex==1) {
 
             #ifdef REVEALDEBUG
-            // fprintf(stderr,"Initial.\n");
-            //checkindex(idx);
             fprintf(stderr,"Starting alignment cycle (threadid=%d)\n", rw->threadid);
             fprintf(stderr,"samples=%d\n",idx->nsamples);
             fprintf(stderr,"depth=%d\n",idx->depth);
             fprintf(stderr,"n=%d\n",idx->n);
             fprintf(stderr,"minl=%d\n", rw->minl);
-            // fprintf(stderr,"wpen=%d...\n", rw->wpen);
-            // fprintf(stderr,"wscore=%d...\n", rw->wscore);
             #endif
             assert(idx->nsamples>0);
 
@@ -1346,7 +1346,7 @@ void *aligner(void *arg) {
 void checkindex(RevealIndex* idx){
     saidx_t i=0;
     int l=0, j=0;
-
+    fprintf(stderr,"Checking index sanity...\n");
     for (i=0; i<idx->n; i++) {
         l=idx->LCP[i];
         assert(l>=0);
@@ -1380,6 +1380,7 @@ void checkindex(RevealIndex* idx){
             assert(idx->T[idx->SA[i]+j]>64); //check it does not contain sentinel
         //}
     }
+    fprintf(stderr,"All good, continue.\n");
 }
 
 
