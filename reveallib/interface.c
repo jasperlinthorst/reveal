@@ -269,9 +269,18 @@ static PyObject *construct(RevealIndex *self, PyObject *args, PyObject *keywds)
             return NULL;
          };
     }
-    
-    //TODO: sanity check!
-    
+
+#ifdef REVEALDEBUG
+//    int j=0;
+//    for (i=1; i<self->n; i++){
+//        for (j=0; i<self->LCP[i]; j++){
+//            assert(self->T[self->SA[i]+j]!='$'); //Make sure lcp intervals dont span sentinels
+//            assert(self->T[self->SA[i-1]+j]!='$');
+//        }
+//    }
+//
+//    //TODO: sanity check!
+#endif
     //if caching is specified write sa and lcp to disk
     if (self->cache==1){
         fprintf(stderr,"Writing LCP and SA to disk...");

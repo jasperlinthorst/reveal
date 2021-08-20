@@ -323,16 +323,24 @@ def graphalign(index,mum):
         isize=index.n
         mns=[]
         topop=[]
-        logging.debug("Nodes in subgraph:")
-        for node in nodes:
-            logging.debug("%s"%str(node))
+        #logging.debug("Nodes in subgraph:")
+        #for node in nodes:
+        #    logging.debug("%s"%str(node))
 
         sp=[sp for gid,sp in spd]
         matching=set()
         for pos in sp:
             matching.add((pos,pos+l))
-            # logging.debug("Lookup node for sp=%d"%pos)
+            logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
+            logging.debug("Node=%s"%str(old))
+            
+            if old.end-pos<l:
+                import pickle
+                open("T.txt",'w').write(index.T)
+                pickle.dump(index.LCP,open("LCP.pickle",'w'))
+                pickle.dump(t,open("tree.pickle",'w'))
+
             assert(old.end-old.begin>=l)
             mn,other=breaknode(old,pos,l)
             mns.append(mn)
@@ -566,7 +574,6 @@ def align_genomes(args):
     
     logging.info("Constructing index...")
     idx.construct()
-    
     logging.info("Done.")
     
     if len(args.inputfiles)==2 and not graph:

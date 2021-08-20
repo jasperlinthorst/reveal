@@ -137,6 +137,20 @@ def lookup(mum):
     qrpoint=dict()
     for pos in sp:
         t=ts[pos]
+        if len(t)!=1:
+            import pickle
+            logging.debug("Dumping tree to file...")
+            pickle.dump(ts, open('tree.pickle','w'))
+            logging.debug("mum: %s"%str(mum))
+            print(type(pos))
+            print(ts[pos+1])
+            print(ts[pos-1])
+            logging.debug("l: %s"%str(l))
+            logging.debug("pos: %s"%str(pos))
+            logging.debug("sp: %s"%str(sp))
+            logging.debug("t: %s"%str(t))
+            #logging.debug("ts: %s"%str(ts))
+        
         assert(len(t)==1)
         node=iter(t).next()
         ndata=G.node[node]
@@ -230,7 +244,7 @@ def graphmumpicker(mums,idx,precomputed=False,minlength=0):
                 logging.debug("No MUMS that span all input genomes, segment genomes.")
                 mmums=segment(mums)
                 logging.debug("Segmented genomes/graphs into %s, now %d MUMS for chaining."%(mmums[0][2],len(mmums)))
-
+            
             if args.trim:
                 logging.debug("Trimming overlap between mums.")
                 mmums=trim_overlap(mmums)

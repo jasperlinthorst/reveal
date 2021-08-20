@@ -309,8 +309,8 @@ PyObject * getmultimems(RevealIndex *index, PyObject *args, PyObject *keywds) {
     int maxdepth=1000;
     int *flag_so=calloc(mainidx->nsamples,sizeof *flag_so);
     lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
-    lcp_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
-    lcp_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
+    saidx_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
+    saidx_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
     lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
@@ -456,7 +456,6 @@ PyObject * getmultimums(RevealIndex *index, PyObject *args, PyObject *keywds) {
     lcp_t *stack_lcp=malloc(maxdepth * sizeof *stack_lcp);
     saidx_t *stack_lb=malloc(maxdepth * sizeof *stack_lb);
     saidx_t *stack_ub=malloc(maxdepth * sizeof *stack_ub);
-    
     lcp_t i_lcp;
     int depth=0;
     saidx_t i,lb,i_lb,i_ub;
