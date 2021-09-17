@@ -137,20 +137,6 @@ def lookup(mum):
     qrpoint=dict()
     for pos in sp:
         t=ts[pos]
-        if len(t)!=1:
-            import pickle
-            logging.debug("Dumping tree to file...")
-            pickle.dump(ts, open('tree.pickle','w'))
-            logging.debug("mum: %s"%str(mum))
-            print(type(pos))
-            print(ts[pos+1])
-            print(ts[pos-1])
-            logging.debug("l: %s"%str(l))
-            logging.debug("pos: %s"%str(pos))
-            logging.debug("sp: %s"%str(sp))
-            logging.debug("t: %s"%str(t))
-            #logging.debug("ts: %s"%str(ts))
-        
         assert(len(t)==1)
         node=iter(t).next()
         ndata=G.node[node]

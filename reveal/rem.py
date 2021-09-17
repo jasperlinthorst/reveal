@@ -331,16 +331,10 @@ def graphalign(index,mum):
         matching=set()
         for pos in sp:
             matching.add((pos,pos+l))
-            logging.debug("Lookup node for sp=%d"%pos)
+            #logging.debug("Lookup node for sp=%d"%pos)
             old=t[pos].pop()
-            logging.debug("Node=%s"%str(old))
+            #logging.debug("Node=%s"%str(old))
             
-            if old.end-pos<l:
-                import pickle
-                open("T.txt",'w').write(index.T)
-                pickle.dump(index.LCP,open("LCP.pickle",'w'))
-                pickle.dump(t,open("tree.pickle",'w'))
-
             assert(old.end-old.begin>=l)
             mn,other=breaknode(old,pos,l)
             mns.append(mn)
